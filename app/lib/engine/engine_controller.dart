@@ -551,8 +551,16 @@ class EngineController extends ChangeNotifier {
       if (s.playing || s.framePosition > 0)
         'Metrónomo: ${s.bpm.toStringAsFixed(0)} BPM · '
             '${(s.playSeconds / 60).toStringAsFixed(1)} min · cortes: $xrunsSincePlay',
-      if (s.loopState.hasLoop)
-        'Loop: ${s.loopBars.toStringAsFixed(0)} compases · ${s.loopLayers} capa(s)',
+      // Cortes desde que se abrió el audio (el buffer sube si los hay)
+      if (s.xrunCount >= 0) 'Cortes desde que se abrió el audio: ${s.xrunCount}',
+      'Loop: ${switch (s.loopState) {
+        LoopState.empty => 'vacío',
+        LoopState.armed => 'cuenta de entrada',
+        LoopState.recording => 'grabando',
+        LoopState.playing => 'sonando',
+        LoopState.overdubbing => 'overdub',
+        LoopState.stopped => 'parado',
+      }}${s.loopState.hasLoop ? ' · ${s.loopBars.toStringAsFixed(0)} compases · ${s.loopLayers} capa(s) · ${loopMode.label}' : ''}',
     ].join('\n');
   }
 
