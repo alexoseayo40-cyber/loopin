@@ -53,6 +53,8 @@ typedef struct {
   int32_t output_channels;
   int32_t input_preset;       // LOOPIN_PRESET_* que está usando la entrada
   int32_t preset_fallback;    // 1 si el modo pedido falló y se usó otro
+  int32_t input_device_id;    // id del dispositivo de entrada en uso (Android)
+  int32_t output_device_id;   // id del dispositivo de salida en uso
   int32_t xrun_count;         // cortes de la salida (-1 si no se sabe)
   int32_t disconnected;       // 1 si se desconectó un dispositivo
   double output_latency_ms;   // estimación de Oboe (-1 si no se sabe)
@@ -97,6 +99,10 @@ FFI_PLUGIN_EXPORT void loopin_set_click_volume(float volume);
 // Por defecto LOOPIN_PRESET_UNPROCESSED: sin control automático de ganancia ni
 // filtros, lo mejor para grabar un instrumento.
 FFI_PLUGIN_EXPORT void loopin_set_input_preset(int32_t preset);
+// Dispositivo de entrada (id de AudioDeviceInfo de Android). 0 = el que elija
+// Android. Se aplica al abrir el audio. Si ese dispositivo ya no existe, se usa
+// el de Android.
+FFI_PLUGIN_EXPORT void loopin_set_input_device(int32_t device_id);
 // Ganancia lineal aplicada a la entrada (1.0 = 0 dB), antes del monitor y de
 // lo que se grabe.
 FFI_PLUGIN_EXPORT void loopin_set_input_gain(float gain);

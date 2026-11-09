@@ -38,9 +38,10 @@ oboe::Result AudioEngine::openAudio() {
   //    filtros), que es lo que mejor recoge una guitarra por el micrófono. Si
   //    el móvil no lo admite, se vuelve a VoiceRecognition, que es el que
   //    Oboe recomienda para baja latencia.
-  auto openInput = [&](oboe::InputPreset preset) {
+  auto openInput = [&](oboe::InputPreset preset, int32_t deviceId) {
     oboe::AudioStreamBuilder in;
     in.setDirection(oboe::Direction::Input)
+        ->setDeviceId(deviceId > 0 ? deviceId : oboe::kUnspecified)
         ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
         ->setSharingMode(oboe::SharingMode::Exclusive)
         ->setFormat(oboe::AudioFormat::Float)
@@ -54,12 +55,17 @@ oboe::Result AudioEngine::openAudio() {
   };
   presetFallback_ = false;
   const auto wanted = static_cast<oboe::InputPreset>(requestedPreset_);
-  result = openInput(wanted);
+  result = openInput(wanted, requestedInputDevice_);
+  if (result != oboe::Result::OK && requestedInputDevice_ > 0) {
+    LOGE("Entrada %d no disponible (%s); uso la de Android", requestedInputDevice_,
+         oboe::convertToText(result));
+    result = openInput(wanted, 0);
+  }
   if (result != oboe::Result::OK && wanted != oboe::InputPreset::VoiceRecognition) {
     LOGE("Modo de micrófono %d no disponible (%s); uso VoiceRecognition", requestedPreset_,
          oboe::convertToText(result));
     presetFallback_ = true;
-    result = openInput(oboe::InputPreset::VoiceRecognition);
+    result = openInput(oboe::InputPreset::VoiceRecognition, 0);
   }
   if (result != oboe::Result::OK) {
     LOGE("No se pudo abrir la entrada: %s", oboe::convertToText(result));

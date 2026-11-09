@@ -121,6 +121,20 @@ class LoopinEngineBindings {
   late final _loopin_set_input_preset = _loopin_set_input_presetPtr
       .asFunction<void Function(int)>();
 
+  /// Dispositivo de entrada (id de AudioDeviceInfo de Android). 0 = el que elija
+  /// Android. Se aplica al abrir el audio. Si ese dispositivo ya no existe, se usa
+  /// el de Android.
+  void loopin_set_input_device(int device_id) {
+    return _loopin_set_input_device(device_id);
+  }
+
+  late final _loopin_set_input_devicePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+        'loopin_set_input_device',
+      );
+  late final _loopin_set_input_device = _loopin_set_input_devicePtr
+      .asFunction<void Function(int)>();
+
   /// Ganancia lineal aplicada a la entrada (1.0 = 0 dB), antes del monitor y de
   /// lo que se grabe.
   void loopin_set_input_gain(double gain) {
@@ -224,6 +238,14 @@ final class LoopinStatus extends ffi.Struct {
   /// 1 si el modo pedido falló y se usó otro
   @ffi.Int32()
   external int preset_fallback;
+
+  /// id del dispositivo de entrada en uso (Android)
+  @ffi.Int32()
+  external int input_device_id;
+
+  /// id del dispositivo de salida en uso
+  @ffi.Int32()
+  external int output_device_id;
 
   /// cortes de la salida (-1 si no se sabe)
   @ffi.Int32()

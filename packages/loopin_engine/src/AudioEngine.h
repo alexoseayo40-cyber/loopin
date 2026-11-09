@@ -20,6 +20,7 @@ class AudioEngine : public oboe::FullDuplexStream, public oboe::AudioStreamError
   void closeAudio();
   EngineCore& core() { return core_; }
   void setInputPreset(int32_t preset) { requestedPreset_ = preset; }
+  void setInputDevice(int32_t deviceId) { requestedInputDevice_ = deviceId; }
   bool presetFallback() const { return presetFallback_; }
 
   bool running() const { return running_.load(std::memory_order_acquire); }
@@ -45,6 +46,7 @@ class AudioEngine : public oboe::FullDuplexStream, public oboe::AudioStreamError
   std::shared_ptr<oboe::AudioStream> input_;
   int32_t requestedPreset_ = static_cast<int32_t>(oboe::InputPreset::Unprocessed);
   bool presetFallback_ = false;
+  int32_t requestedInputDevice_ = 0;  // 0 = el que elija Android
   std::atomic<bool> running_{false};
   std::atomic<bool> disconnected_{false};
 };

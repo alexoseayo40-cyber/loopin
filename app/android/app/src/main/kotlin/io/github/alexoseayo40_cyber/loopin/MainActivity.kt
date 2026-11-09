@@ -4,6 +4,7 @@ package io.github.alexoseayo40_cyber.loopin
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
@@ -30,6 +31,7 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "requestMicrophone" -> requestMicrophone(result)
                     "audioInfo" -> result.success(audioInfo())
+                    "audioDevices" -> result.success(audioDevices())
                     else -> result.notImplemented()
                 }
             }
@@ -47,6 +49,22 @@ class MainActivity : FlutterActivity() {
             "lowLatency" to packageManager.hasSystemFeature(PackageManager.FEATURE_AUDIO_LOW_LATENCY),
             "proAudio" to packageManager.hasSystemFeature(PackageManager.FEATURE_AUDIO_PRO),
         )
+    }
+
+    // Entradas y salidas de audio conectadas. El id es el que usa Oboe.
+    private fun audioDevices(): Map<String, Any> {
+        val am = getSystemService(AUDIO_SERVICE) as AudioManager
+        fun describe(d: AudioDeviceInfo): Map<String, Any> = mapOf(
+            "id" to d.id,
+            "type" to d.type,
+            "name" to (d.productName?.toString() ?: ""),
+            "address" to (if (Build.VERSION.SDK_INT >= 28) d.address else ""),
+        )
+        val inputs = am.getDevices(AudioManager.GET_DEVICES_INPUTS)
+            .filter { it.type in INPUT_TYPES }
+            .map(::describe)
+        val outputs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS).map(::describe)
+        return mapOf("inputs" to inputs, "outputs" to outputs)
     }
 
     // Devuelve "granted", "denied" o "permanentlyDenied"
@@ -80,5 +98,18 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val MIC_REQUEST = 4201
+
+        // Entradas que sirven para tocar (fuera teléfono, radio FM, eco…)
+        private val INPUT_TYPES = setOf(
+            15, // TYPE_BUILTIN_MIC
+            3,  // TYPE_WIRED_HEADSET
+            5,  // TYPE_LINE_ANALOG
+            6,  // TYPE_LINE_DIGITAL
+            7,  // TYPE_BLUETOOTH_SCO
+            11, // TYPE_USB_DEVICE
+            12, // TYPE_USB_ACCESSORY
+            22, // TYPE_USB_HEADSET
+            26, // TYPE_BLE_HEADSET
+        )
     }
 }

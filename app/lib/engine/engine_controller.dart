@@ -29,6 +29,11 @@ class EngineController extends ChangeNotifier {
   bool clickEnabled = true;
   double clickVolume = 0.8;
   InputPreset inputPreset = InputPreset.unprocessed;
+
+  /// Entrada elegida (id de Android). -1 = aún sin elegir; 0 = la de Android.
+  int inputDeviceId = -1;
+  List<AudioDevice> inputDevices = const [];
+  List<AudioDevice> outputDevices = const [];
   double inputGainDb = 0;
   bool monitorEnabled = false;
   double monitorVolume = 1.0;
@@ -72,6 +77,7 @@ class EngineController extends ChangeNotifier {
         // no pasa nada: solo es informativo
       }
     }
+    await refreshDevices();
     _wantRunning = true;
     _openStream();
     _poll ??= Timer.periodic(const Duration(milliseconds: 33), (_) => _tick());
@@ -91,6 +97,7 @@ class EngineController extends ChangeNotifier {
 
   bool _openStream() {
     _engine.setInputPreset(inputPreset);
+    _engine.setInputDevice(inputDeviceId < 0 ? 0 : inputDeviceId);
     final code = _engine.start();
     if (code != 0) {
       error = LoopinEngine.describeError(code);
@@ -122,7 +129,8 @@ class EngineController extends ChangeNotifier {
     // Si se desconecta algo (auriculares, interfaz USB), se reabre solo.
     if (_wantRunning && !status.running && !_restarting) {
       _restarting = true;
-      Future.delayed(const Duration(milliseconds: 300), () {
+      Future.delayed(const Duration(milliseconds: 300), () async {
+        await refreshDevices(); // se ha enchufado o quitado algo
         if (_wantRunning) _openStream();
         _restarting = false;
       });
@@ -203,6 +211,49 @@ class EngineController extends ChangeNotifier {
 
   // ---------- Entrada ----------
 
+  /// Lee las entradas y salidas conectadas. Si la entrada elegida ya no está,
+  /// vuelve al micrófono del móvil (el de abajo, que es el principal).
+  Future<void> refreshDevices() async {
+    try {
+      final m = await _permissions.invokeMapMethod<String, Object?>('audioDevices');
+      if (m == null) return;
+      List<AudioDevice> parse(Object? l) => [
+            for (final e in (l as List? ?? const []))
+              AudioDevice.fromMap(e as Map<Object?, Object?>),
+          ];
+      inputDevices = parse(m['inputs']);
+      outputDevices = parse(m['outputs']);
+    } on PlatformException {
+      return;
+    }
+    final stillThere = inputDeviceId == 0 || inputDevices.any((d) => d.id == inputDeviceId);
+    if (inputDeviceId < 0 || !stillThere) {
+      final mics = inputDevices.where((d) => d.isBuiltinMic).toList();
+      final bottom = mics.where((d) => d.address.toLowerCase().contains('bottom'));
+      inputDeviceId = bottom.isNotEmpty
+          ? bottom.first.id
+          : (mics.isNotEmpty ? mics.first.id : 0);
+    }
+    notifyListeners();
+  }
+
+  void setInputDevice(int id) {
+    inputDeviceId = id;
+    if (_wantRunning) {
+      _engine.stop();
+      _openStream();
+    }
+    notifyListeners();
+  }
+
+  String deviceLabel(int id, {required bool input}) {
+    if (id <= 0) return '—';
+    for (final d in input ? inputDevices : outputDevices) {
+      if (d.id == id) return d.label;
+    }
+    return 'dispositivo $id';
+  }
+
   /// Cambiar el modo del micrófono obliga a reabrir el audio.
   void setInputPreset(InputPreset preset) {
     inputPreset = preset;
@@ -256,6 +307,8 @@ class EngineController extends ChangeNotifier {
       'Loopin · prototipo de audio',
       'Móvil: $model · Android $android · baja latencia: ${yesNo(deviceInfo['lowLatency'])} · '
           'pro audio: ${yesNo(deviceInfo['proAudio'])}',
+      'Entrada: ${deviceLabel(s.inputDeviceId, input: true)} · '
+          'salida: ${deviceLabel(s.outputDeviceId, input: false)}',
       'Micrófono: ${s.inputPreset?.label ?? '—'}${s.presetFallback ? ' (el modo pedido falló)' : ''} · '
           'sin procesar admitido: ${yesNo(deviceInfo['unprocessed'])} · ganancia +${inputGainDb.toStringAsFixed(0)} dB',
       'API: $api · ${s.sampleRate} Hz · bloque ${s.framesPerBurst} · '

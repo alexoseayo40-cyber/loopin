@@ -248,6 +248,25 @@ class _MonitorCard extends StatelessWidget {
     return _Section(
       title: 'Guitarra (entrada)',
       children: [
+        DropdownButtonFormField<int>(
+          key: ValueKey('in-${c.inputDeviceId}-${c.inputDevices.length}'),
+          initialValue: c.inputDeviceId < 0 ? 0 : c.inputDeviceId,
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: 'Entrada'),
+          onTap: c.refreshDevices,
+          items: [
+            const DropdownMenuItem(value: 0, child: Text('Automática (la elige Android)')),
+            for (final d in c.inputDevices)
+              DropdownMenuItem(
+                value: d.id,
+                child: Text(d.label, overflow: TextOverflow.ellipsis),
+              ),
+          ],
+          onChanged: (id) {
+            if (id != null) c.setInputDevice(id);
+          },
+        ),
+        const SizedBox(height: 8),
         DropdownButtonFormField<InputPreset>(
           initialValue: c.inputPreset,
           decoration: const InputDecoration(labelText: 'Modo del micrófono'),
@@ -262,7 +281,9 @@ class _MonitorCard extends StatelessWidget {
         const SizedBox(height: 6),
         if (s.running)
           Text(
-            'En uso: ${s.inputPreset?.label ?? '—'}'
+            'Entra por: ${c.deviceLabel(s.inputDeviceId, input: true)}\n'
+            'Sale por: ${c.deviceLabel(s.outputDeviceId, input: false)}\n'
+            'Modo: ${s.inputPreset?.label ?? '—'}'
             '${s.presetFallback ? ' (el modo elegido no funciona en este móvil)' : ''}'
             '${unprocessed == null ? '' : ' · sin procesar admitido: ${unprocessed == true ? 'sí' : 'no'}'}',
             style: Theme.of(context).textTheme.bodySmall,
@@ -367,8 +388,9 @@ class _LatencyCard extends StatelessWidget {
         },
         const SizedBox(height: 8),
         Text(
-          'Con el micrófono: quita los auriculares, sube el volumen y que haya silencio.\n'
-          'Con interfaz USB: une con un cable la salida de auriculares y la entrada.',
+          'Altavoz y micro: sin cascos, volumen alto y en silencio.\n'
+          'Cascos y micro: pon un auricular pegado al micro de abajo del móvil.\n'
+          'Interfaz USB: une con un cable la salida de auriculares y la entrada.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
       ],

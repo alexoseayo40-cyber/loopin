@@ -30,6 +30,43 @@ enum InputPreset {
   }
 }
 
+/// Un dispositivo de audio de Android (entrada o salida).
+class AudioDevice {
+  const AudioDevice({required this.id, required this.type, this.name = '', this.address = ''});
+
+  factory AudioDevice.fromMap(Map<Object?, Object?> m) => AudioDevice(
+        id: (m['id'] as num).toInt(),
+        type: (m['type'] as num).toInt(),
+        name: (m['name'] as String?) ?? '',
+        address: (m['address'] as String?) ?? '',
+      );
+
+  final int id;
+  final int type; // AudioDeviceInfo.TYPE_*
+  final String name;
+  final String address;
+
+  bool get isBuiltinMic => type == 15;
+
+  /// Nombre para mostrar, en español.
+  String get label {
+    final extra = address.isNotEmpty ? ' ($address)' : '';
+    return switch (type) {
+      15 => 'Micrófono del móvil$extra',
+      2 => 'Altavoz del móvil',
+      1 => 'Auricular de llamada',
+      3 => 'Auriculares con cable (micro)',
+      4 => 'Auriculares con cable',
+      5 || 6 => 'Entrada de línea',
+      7 || 26 => 'Bluetooth: $name (con retardo)',
+      8 || 27 => 'Bluetooth: $name (con retardo)',
+      11 || 12 => 'USB: $name',
+      22 => 'Cascos USB: $name',
+      _ => name.isNotEmpty ? name : 'Dispositivo $type',
+    };
+  }
+}
+
 /// Estado del test de latencia.
 enum LatencyState { idle, running, done, failed }
 
@@ -48,6 +85,8 @@ class EngineStatus {
     this.outputChannels = 0,
     this.inputPreset,
     this.presetFallback = false,
+    this.inputDeviceId = 0,
+    this.outputDeviceId = 0,
     this.xrunCount = -1,
     this.outputLatencyMs = -1,
     this.inputLatencyMs = -1,
@@ -81,6 +120,10 @@ class EngineStatus {
 
   /// true si el modo pedido no funcionó y se usó «Reconocimiento de voz».
   final bool presetFallback;
+
+  /// Ids de Android de los dispositivos en uso (0 si no se sabe).
+  final int inputDeviceId;
+  final int outputDeviceId;
 
   /// Cortes de la salida desde que arrancó el stream (-1 si no se sabe).
   final int xrunCount;
@@ -139,6 +182,10 @@ class LoopinEngine {
   /// Se aplica la próxima vez que se abra el audio ([start]).
   void setInputPreset(InputPreset preset) => _b.loopin_set_input_preset(preset.code);
 
+  /// Dispositivo de entrada (id de Android; 0 = el que elija Android).
+  /// Se aplica la próxima vez que se abra el audio.
+  void setInputDevice(int id) => _b.loopin_set_input_device(id);
+
   /// Ganancia lineal de la entrada (1.0 = 0 dB).
   void setInputGain(double gain) => _b.loopin_set_input_gain(gain);
 
@@ -166,6 +213,8 @@ class LoopinEngine {
       outputChannels: s.output_channels,
       inputPreset: InputPreset.fromCode(s.input_preset),
       presetFallback: s.preset_fallback != 0,
+      inputDeviceId: s.input_device_id,
+      outputDeviceId: s.output_device_id,
       xrunCount: s.xrun_count,
       outputLatencyMs: s.output_latency_ms,
       inputLatencyMs: s.input_latency_ms,
