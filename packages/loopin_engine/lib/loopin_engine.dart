@@ -70,6 +70,37 @@ class AudioDevice {
 /// Estado del test de latencia.
 enum LatencyState { idle, running, done, failed }
 
+/// Estado del looper (mismo orden que LOOPIN_LOOP_*).
+enum LoopState {
+  /// Sin loop.
+  empty,
+
+  /// Cuenta de entrada o esperando al siguiente compás para grabar.
+  armed,
+
+  /// Grabando el primer loop.
+  recording,
+  playing,
+  overdubbing,
+
+  /// Hay loop pero está todo parado.
+  stopped;
+
+  bool get hasLoop => this == playing || this == overdubbing || this == stopped;
+}
+
+/// Modo de grabación del primer loop (mismo orden que LOOPIN_MODE_*).
+enum LoopMode {
+  /// Cuenta de entrada y se cierra solo tras N compases.
+  sync('Sincronizado'),
+
+  /// Se cierra al pulsar, en el compás más cercano.
+  manual('Manual');
+
+  const LoopMode(this.label);
+  final String label;
+}
+
 /// Copia inmutable del estado del motor en un instante.
 class EngineStatus {
   const EngineStatus({
@@ -102,6 +133,22 @@ class EngineStatus {
     this.latencyProgress = 0,
     this.latencyFrames = 0,
     this.latencyMs = 0,
+    this.inputFramesPerBurst = 0,
+    this.inputBufferFrames = 0,
+    this.inputExclusive = false,
+    this.inputLowLatency = false,
+    this.inputMaxRead = 0,
+    this.loopState = LoopState.empty,
+    this.loopMode = LoopMode.sync,
+    this.loopSyncBars = 4,
+    this.loopLayers = 0,
+    this.loopCanUndo = false,
+    this.loopLatencyFrames = 0,
+    this.loopLength = 0,
+    this.loopPosition = 0,
+    this.loopRecorded = 0,
+    this.loopTarget = 0,
+    this.loopBarFrames = 0,
   });
 
   final bool running;
@@ -145,6 +192,45 @@ class EngineStatus {
   final int latencyProgress;
   final int latencyFrames;
   final double latencyMs;
+
+  // Entrada (diagnóstico)
+  final int inputFramesPerBurst;
+  final int inputBufferFrames;
+  final bool inputExclusive;
+  final bool inputLowLatency;
+
+  /// Máximo de muestras de entrada leídas en un callback (últimos ~2 s).
+  final int inputMaxRead;
+
+  // Looper
+  final LoopState loopState;
+  final LoopMode loopMode;
+  final int loopSyncBars;
+
+  /// Capas que suenan (el loop base cuenta como 1).
+  final int loopLayers;
+  final bool loopCanUndo;
+
+  /// Compensación de latencia que está usando la grabación (muestras).
+  final int loopLatencyFrames;
+
+  /// Longitud del loop en muestras (0 = sin loop).
+  final int loopLength;
+  final int loopPosition;
+
+  /// Armado: negativo (muestras que faltan para grabar). Grabando: grabadas.
+  final int loopRecorded;
+
+  /// Grabando: longitud a la que se cerrará (0 = aún abierta).
+  final int loopTarget;
+  final int loopBarFrames;
+
+  /// Compases del loop (o grabados hasta ahora).
+  double get loopBars {
+    if (loopBarFrames <= 0) return 0;
+    final frames = loopState.hasLoop ? loopLength : loopRecorded;
+    return frames / loopBarFrames;
+  }
 
   /// Segundos que lleva sonando el metrónomo.
   double get playSeconds => sampleRate > 0 ? framePosition / sampleRate : 0;
@@ -193,6 +279,19 @@ class LoopinEngine {
   void setMonitorVolume(double v) => _b.loopin_set_monitor_volume(v);
   void measureLatency() => _b.loopin_measure_latency();
 
+  // Looper
+  void loopPress() => _b.loopin_loop_press();
+  void loopHold() => _b.loopin_loop_hold();
+  void loopDoubleTap() => _b.loopin_loop_double_tap();
+  void loopUndo() => _b.loopin_loop_undo();
+  void loopClear() => _b.loopin_loop_clear();
+  void setLoopMode(LoopMode mode) => _b.loopin_set_loop_mode(mode.index);
+  void setSyncBars(int bars) => _b.loopin_set_sync_bars(bars);
+  void setLoopVolume(double v) => _b.loopin_set_loop_volume(v);
+
+  /// Latencia de ida y vuelta (muestras) que se compensa al grabar.
+  void setLatencyCompensation(int frames) => _b.loopin_set_latency_compensation(frames);
+
   EngineStatus status() {
     _b.loopin_get_status(_status);
     final s = _status.ref;
@@ -230,6 +329,22 @@ class LoopinEngine {
       latencyProgress: s.latency_progress,
       latencyFrames: s.latency_frames,
       latencyMs: s.latency_ms,
+      inputFramesPerBurst: s.input_frames_per_burst,
+      inputBufferFrames: s.input_buffer_frames,
+      inputExclusive: s.input_exclusive != 0,
+      inputLowLatency: s.input_low_latency != 0,
+      inputMaxRead: s.input_max_read,
+      loopState: LoopState.values[s.loop_state.clamp(0, LoopState.values.length - 1)],
+      loopMode: LoopMode.values[s.loop_mode.clamp(0, LoopMode.values.length - 1)],
+      loopSyncBars: s.loop_sync_bars,
+      loopLayers: s.loop_layers,
+      loopCanUndo: s.loop_can_undo != 0,
+      loopLatencyFrames: s.loop_latency_frames,
+      loopLength: s.loop_length,
+      loopPosition: s.loop_position,
+      loopRecorded: s.loop_recorded,
+      loopTarget: s.loop_target,
+      loopBarFrames: s.loop_bar_frames,
     );
   }
 

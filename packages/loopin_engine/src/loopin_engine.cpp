@@ -48,6 +48,18 @@ void loopin_set_input_device(int32_t device_id) { engine().setInputDevice(device
 void loopin_set_input_gain(float gain) { post(Command::Type::kSetInputGain, gain); }
 void loopin_measure_latency(void) { post(Command::Type::kMeasureLatency); }
 
+void loopin_loop_press(void) { post(Command::Type::kLoopPress); }
+void loopin_loop_hold(void) { post(Command::Type::kLoopHold); }
+void loopin_loop_double_tap(void) { post(Command::Type::kLoopDoubleTap); }
+void loopin_loop_undo(void) { post(Command::Type::kLoopUndo); }
+void loopin_loop_clear(void) { post(Command::Type::kLoopClear); }
+void loopin_set_loop_mode(int32_t mode) { post(Command::Type::kSetLoopMode, mode); }
+void loopin_set_sync_bars(int32_t bars) { post(Command::Type::kSetSyncBars, bars); }
+void loopin_set_loop_volume(float volume) { post(Command::Type::kSetLoopVolume, volume); }
+void loopin_set_latency_compensation(int32_t frames) {
+  post(Command::Type::kSetLatencyFrames, frames);
+}
+
 void loopin_get_status(LoopinStatus* out) {
   if (out == nullptr) return;
   *out = LoopinStatus{};
@@ -85,6 +97,12 @@ void loopin_get_status(LoopinStatus* out) {
     out->preset_fallback = e.presetFallback() ? 1 : 0;
     auto lat = input->calculateLatencyMillis();
     if (lat) out->input_latency_ms = lat.value();
+    out->input_frames_per_burst = input->getFramesPerBurst();
+    out->input_buffer_frames = input->getBufferSizeInFrames();
+    out->input_exclusive = input->getSharingMode() == oboe::SharingMode::Exclusive ? 1 : 0;
+    out->input_low_latency =
+        input->getPerformanceMode() == oboe::PerformanceMode::LowLatency ? 1 : 0;
+    out->input_max_read = e.inputMaxRead();
   }
 
   out->playing = c.playing ? 1 : 0;
@@ -99,6 +117,18 @@ void loopin_get_status(LoopinStatus* out) {
   out->latency_progress = c.latencyProgress;
   out->latency_frames = c.latencyFrames;
   out->latency_ms = out->sample_rate > 0 ? 1000.0 * c.latencyFrames / out->sample_rate : 0.0;
+
+  out->loop_state = c.loopState;
+  out->loop_mode = c.loopMode;
+  out->loop_sync_bars = c.loopSyncBars;
+  out->loop_layers = c.loopLayers;
+  out->loop_can_undo = c.loopCanUndo;
+  out->loop_latency_frames = c.loopLatencyFrames;
+  out->loop_length = c.loopLength;
+  out->loop_position = c.loopPosition;
+  out->loop_recorded = c.loopRecorded;
+  out->loop_target = c.loopTarget;
+  out->loop_bar_frames = c.loopBarFrames;
 }
 
 }  // extern "C"

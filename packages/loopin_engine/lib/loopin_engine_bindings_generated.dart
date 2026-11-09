@@ -183,6 +183,105 @@ class LoopinEngineBindings {
   late final _loopin_measure_latency = _loopin_measure_latencyPtr
       .asFunction<void Function()>();
 
+  /// Looper. El botón principal hace de pedal:
+  /// toque: graba → reproduce → overdub → reproduce → overdub…
+  /// mantener (llamar a loopin_loop_hold tras el toque): deshacer la última capa
+  /// doble toque (en el 2º toque llamar a loopin_loop_double_tap en vez de
+  /// loopin_loop_press): parar / arrancar todo
+  /// Hold y double_tap interpretan lo que hizo el toque anterior y lo corrigen.
+  void loopin_loop_press() {
+    return _loopin_loop_press();
+  }
+
+  late final _loopin_loop_pressPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function()>>('loopin_loop_press');
+  late final _loopin_loop_press = _loopin_loop_pressPtr
+      .asFunction<void Function()>();
+
+  void loopin_loop_hold() {
+    return _loopin_loop_hold();
+  }
+
+  late final _loopin_loop_holdPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function()>>('loopin_loop_hold');
+  late final _loopin_loop_hold = _loopin_loop_holdPtr
+      .asFunction<void Function()>();
+
+  void loopin_loop_double_tap() {
+    return _loopin_loop_double_tap();
+  }
+
+  late final _loopin_loop_double_tapPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function()>>(
+        'loopin_loop_double_tap',
+      );
+  late final _loopin_loop_double_tap = _loopin_loop_double_tapPtr
+      .asFunction<void Function()>();
+
+  void loopin_loop_undo() {
+    return _loopin_loop_undo();
+  }
+
+  late final _loopin_loop_undoPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function()>>('loopin_loop_undo');
+  late final _loopin_loop_undo = _loopin_loop_undoPtr
+      .asFunction<void Function()>();
+
+  void loopin_loop_clear() {
+    return _loopin_loop_clear();
+  }
+
+  late final _loopin_loop_clearPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function()>>('loopin_loop_clear');
+  late final _loopin_loop_clear = _loopin_loop_clearPtr
+      .asFunction<void Function()>();
+
+  void loopin_set_loop_mode(int mode) {
+    return _loopin_set_loop_mode(mode);
+  }
+
+  late final _loopin_set_loop_modePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+        'loopin_set_loop_mode',
+      );
+  late final _loopin_set_loop_mode = _loopin_set_loop_modePtr
+      .asFunction<void Function(int)>();
+
+  void loopin_set_sync_bars(int bars) {
+    return _loopin_set_sync_bars(bars);
+  }
+
+  late final _loopin_set_sync_barsPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+        'loopin_set_sync_bars',
+      );
+  late final _loopin_set_sync_bars = _loopin_set_sync_barsPtr
+      .asFunction<void Function(int)>();
+
+  void loopin_set_loop_volume(double volume) {
+    return _loopin_set_loop_volume(volume);
+  }
+
+  late final _loopin_set_loop_volumePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Float)>>(
+        'loopin_set_loop_volume',
+      );
+  late final _loopin_set_loop_volume = _loopin_set_loop_volumePtr
+      .asFunction<void Function(double)>();
+
+  /// Compensación de latencia de la grabación: la latencia de ida y vuelta en
+  /// muestras (la que da loopin_measure_latency para la entrada y salida en uso).
+  void loopin_set_latency_compensation(int frames) {
+    return _loopin_set_latency_compensation(frames);
+  }
+
+  late final _loopin_set_latency_compensationPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+        'loopin_set_latency_compensation',
+      );
+  late final _loopin_set_latency_compensation =
+      _loopin_set_latency_compensationPtr.asFunction<void Function(int)>();
+
   /// Copia el estado actual en *out.
   void loopin_get_status(ffi.Pointer<LoopinStatus> out) {
     return _loopin_get_status(out);
@@ -307,6 +406,66 @@ final class LoopinStatus extends ffi.Struct {
   /// resultado en ms
   @ffi.Double()
   external double latency_ms;
+
+  /// Entrada (diagnóstico de latencia)
+  @ffi.Int32()
+  external int input_frames_per_burst;
+
+  @ffi.Int32()
+  external int input_buffer_frames;
+
+  @ffi.Int32()
+  external int input_exclusive;
+
+  @ffi.Int32()
+  external int input_low_latency;
+
+  /// máx. muestras leídas en un callback (últimos ~2 s)
+  @ffi.Int32()
+  external int input_max_read;
+
+  /// LOOPIN_LOOP_*
+  @ffi.Int32()
+  external int loop_state;
+
+  /// LOOPIN_MODE_*
+  @ffi.Int32()
+  external int loop_mode;
+
+  /// compases del modo sincronizado
+  @ffi.Int32()
+  external int loop_sync_bars;
+
+  /// capas que suenan (el loop base cuenta como 1)
+  @ffi.Int32()
+  external int loop_layers;
+
+  @ffi.Int32()
+  external int loop_can_undo;
+
+  /// compensación que se está aplicando
+  @ffi.Int32()
+  external int loop_latency_frames;
+
+  /// muestras (0 = sin loop)
+  @ffi.Int64()
+  external int loop_length;
+
+  /// posición de reproducción en muestras
+  @ffi.Int64()
+  external int loop_position;
+
+  /// armado: negativo (falta para grabar); grabando: grabado
+  @ffi.Int64()
+  external int loop_recorded;
+
+  /// grabando: longitud a la que se cerrará (0 = abierta)
+  @ffi.Int64()
+  external int loop_target;
+
+  /// muestras por compás del loop
+  @ffi.Int64()
+  external int loop_bar_frames;
 }
 
 const int LOOPIN_LATENCY_IDLE = 0;
@@ -326,6 +485,22 @@ const int LOOPIN_PRESET_VOICE_RECOGNITION = 6;
 const int LOOPIN_PRESET_UNPROCESSED = 9;
 
 const int LOOPIN_PRESET_VOICE_PERFORMANCE = 10;
+
+const int LOOPIN_LOOP_EMPTY = 0;
+
+const int LOOPIN_LOOP_ARMED = 1;
+
+const int LOOPIN_LOOP_RECORDING = 2;
+
+const int LOOPIN_LOOP_PLAYING = 3;
+
+const int LOOPIN_LOOP_OVERDUBBING = 4;
+
+const int LOOPIN_LOOP_STOPPED = 5;
+
+const int LOOPIN_MODE_SYNC = 0;
+
+const int LOOPIN_MODE_MANUAL = 1;
 
 const int LOOPIN_API_UNKNOWN = 0;
 

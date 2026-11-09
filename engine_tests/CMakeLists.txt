@@ -13,8 +13,10 @@ set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/../packages/loopin_engine/src)
 
 add_executable(loopin_engine_tests
   tests.cpp
+  looper_tests.cpp
   ${SRC}/EngineCore.cpp
   ${SRC}/LatencyMeter.cpp
+  ${SRC}/Looper.cpp
   ${SRC}/Metronome.cpp
   ${SRC}/Transport.cpp
 )

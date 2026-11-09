@@ -35,6 +35,7 @@ void Transport::play() {
   samplesPerBeat_ = computeSamplesPerBeat(sampleRate_, bpm_);
   beatsPerBar_ = pendingBeatsPerBar_;
   posInBeat_ = 0;
+  posInBar_ = 0;
   currentBeat_ = 0;
   currentBar_ = 0;
   framePosition_ = 0;
@@ -43,11 +44,20 @@ void Transport::play() {
 
 void Transport::stop() { playing_ = false; }
 
+int64_t Transport::framesToNextBar() const {
+  if (!playing_ || posInBar_ == 0) return 0;
+  // Lo que queda del tiempo actual (ya con su tempo) y los tiempos que faltan
+  // del compás, que irán con el tempo pendiente.
+  const int64_t nextSpb = computeSamplesPerBeat(sampleRate_, pendingBpm_);
+  return int64_t(samplesPerBeat_ - posInBeat_) + int64_t(beatsPerBar_ - 1 - currentBeat_) * nextSpb;
+}
+
 void Transport::advanceBeat() {
   posInBeat_ = 0;
   ++currentBeat_;
   if (currentBeat_ >= beatsPerBar_) {
     currentBeat_ = 0;
+    posInBar_ = 0;
     ++currentBar_;
     beatsPerBar_ = pendingBeatsPerBar_;
   }

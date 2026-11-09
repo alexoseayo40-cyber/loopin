@@ -2,7 +2,22 @@
 
 Looper de guitarra libre para Android: varias pistas que cuadran al compás, metrónomo y backing tracks.
 
-> **Estado:** Etapa 1, prototipo de audio. De momento la app es una pantalla de prueba: metrónomo, escucharte en directo y medir la latencia del móvil.
+> **Estado:** Etapa 2, looper de una pista: grabar, reproducir, overdub, deshacer y borrar, sincronizado con el metrónomo y con la latencia compensada.
+
+## Cómo se usa
+
+El botón grande hace de pedal (actúa al pulsar, no al soltar):
+
+- **Toque:** grabar → reproducir → overdub → reproducir → overdub…
+- **Mantener:** deshacer la última capa.
+- **Doble toque:** parar / arrancar todo.
+
+Modos de grabación:
+
+- **Sincronizado:** 1 compás de cuenta de entrada (si el metrónomo estaba parado) o espera al siguiente compás, y graba 1, 2, 4 u 8 compases.
+- **Manual:** vuelve a tocar para cerrar; el loop se ajusta al compás más cercano (si pulsas tarde se recorta, si pulsas pronto sigue hasta el final del compás). Si empiezas a grabar un poco tarde (hasta ¼ de compás), empieza en el compás que acaba de pasar.
+
+Mide la latencia una vez por cada combinación de entrada y salida (Ajustes › Audio y latencia): se guarda y se aplica sola.
 
 Licencia: [GPLv3](LICENSE).
 
@@ -14,6 +29,7 @@ packages/loopin_engine/     Plugin FFI: puente Dart ↔ motor C++
   src/                      Motor C++ (Oboe)
   src/third_party/oboe/     Oboe 1.11.0 (submódulo de git)
 engine_tests/               Tests del motor que se ejecutan en el PC
+app/test/                   Tests de la interfaz (flutter test)
 .github/workflows/          Compila y pasa los tests en cada push
 ```
 
@@ -48,4 +64,7 @@ build\engine_tests\Release\loopin_engine_tests.exe
 - Un stream full-duplex de Oboe: la entrada se lee dentro del callback de salida, así que las dos van a la par.
 - Dentro del callback no se reserva memoria, no hay bloqueos y no se lee ningún archivo. Las órdenes llegan por una cola SPSC y el estado sale por variables atómicas.
 - Todo se cuenta en muestras enteras: un tiempo dura exactamente `round(fs × 60 / BPM)` muestras, así que compases y loops son múltiplos exactos y no hay deriva.
-- La latencia se mide emitiendo un pulso y detectándolo en la entrada, contando muestras de salida y de entrada. Es el mismo valor que usará el looper para compensar la grabación.
+- La latencia se mide emitiendo un pulso y detectándolo en la entrada, con los índices absolutos de las muestras de salida y de entrada. Es el mismo valor que usa el looper para compensar la grabación.
+- En cada callback se lee **toda** la entrada que haya llegado (no un bloque fijo, como hace `oboe::FullDuplexStream`), así no se acumula retraso. Entrada y salida se cuentan por separado y no necesitan bloques iguales.
+- El looper decide todo (inicio, fin, overdub) en índices de salida, que es lo que oye el músico. La muestra de entrada *j* se tocó mientras sonaba la salida *j − latencia*, y se escribe en esa posición del loop: la escritura va con retraso, a medida que llega la entrada (un anillo de 6 s guarda lo último).
+- Cada overdub va a una capa aparte para poder deshacerlo. Al acabar el siguiente overdub, la capa anterior se suma al loop base poco a poco en segundo plano; como lo que suena es la suma de todo, no se nota.

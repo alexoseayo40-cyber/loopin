@@ -35,6 +35,18 @@ extern "C" {
 #define LOOPIN_PRESET_UNPROCESSED 9
 #define LOOPIN_PRESET_VOICE_PERFORMANCE 10
 
+// Estado del looper
+#define LOOPIN_LOOP_EMPTY 0
+#define LOOPIN_LOOP_ARMED 1      // cuenta de entrada / esperando al compás
+#define LOOPIN_LOOP_RECORDING 2
+#define LOOPIN_LOOP_PLAYING 3
+#define LOOPIN_LOOP_OVERDUBBING 4
+#define LOOPIN_LOOP_STOPPED 5
+
+// Modo de grabación
+#define LOOPIN_MODE_SYNC 0    // cuenta de entrada y N compases
+#define LOOPIN_MODE_MANUAL 1  // se cierra al pulsar, en el compás más cercano
+
 // API de audio que Oboe ha elegido
 #define LOOPIN_API_UNKNOWN 0
 #define LOOPIN_API_OPENSLES 1
@@ -77,6 +89,26 @@ typedef struct {
   int32_t latency_progress;   // clics detectados hasta ahora
   int32_t latency_frames;     // resultado en muestras
   double latency_ms;          // resultado en ms
+
+  // Entrada (diagnóstico de latencia)
+  int32_t input_frames_per_burst;
+  int32_t input_buffer_frames;
+  int32_t input_exclusive;
+  int32_t input_low_latency;
+  int32_t input_max_read;     // máx. muestras leídas en un callback (últimos ~2 s)
+
+  // Looper (una pista)
+  int32_t loop_state;         // LOOPIN_LOOP_*
+  int32_t loop_mode;          // LOOPIN_MODE_*
+  int32_t loop_sync_bars;     // compases del modo sincronizado
+  int32_t loop_layers;        // capas que suenan (el loop base cuenta como 1)
+  int32_t loop_can_undo;
+  int32_t loop_latency_frames;  // compensación que se está aplicando
+  int64_t loop_length;        // muestras (0 = sin loop)
+  int64_t loop_position;      // posición de reproducción en muestras
+  int64_t loop_recorded;      // armado: negativo (falta para grabar); grabando: grabado
+  int64_t loop_target;        // grabando: longitud a la que se cerrará (0 = abierta)
+  int64_t loop_bar_frames;    // muestras por compás del loop
 } LoopinStatus;
 
 // Abre los streams de entrada y salida y empieza a procesar audio.
@@ -113,6 +145,24 @@ FFI_PLUGIN_EXPORT void loopin_set_monitor_volume(float volume);
 
 // Mide la latencia de ida y vuelta emitiendo clics y detectándolos en la entrada.
 FFI_PLUGIN_EXPORT void loopin_measure_latency(void);
+
+// Looper. El botón principal hace de pedal:
+//   toque: graba → reproduce → overdub → reproduce → overdub…
+//   mantener (llamar a loopin_loop_hold tras el toque): deshacer la última capa
+//   doble toque (en el 2º toque llamar a loopin_loop_double_tap en vez de
+//   loopin_loop_press): parar / arrancar todo
+// Hold y double_tap interpretan lo que hizo el toque anterior y lo corrigen.
+FFI_PLUGIN_EXPORT void loopin_loop_press(void);
+FFI_PLUGIN_EXPORT void loopin_loop_hold(void);
+FFI_PLUGIN_EXPORT void loopin_loop_double_tap(void);
+FFI_PLUGIN_EXPORT void loopin_loop_undo(void);
+FFI_PLUGIN_EXPORT void loopin_loop_clear(void);
+FFI_PLUGIN_EXPORT void loopin_set_loop_mode(int32_t mode);
+FFI_PLUGIN_EXPORT void loopin_set_sync_bars(int32_t bars);
+FFI_PLUGIN_EXPORT void loopin_set_loop_volume(float volume);
+// Compensación de latencia de la grabación: la latencia de ida y vuelta en
+// muestras (la que da loopin_measure_latency para la entrada y salida en uso).
+FFI_PLUGIN_EXPORT void loopin_set_latency_compensation(int32_t frames);
 
 // Copia el estado actual en *out.
 FFI_PLUGIN_EXPORT void loopin_get_status(LoopinStatus* out);

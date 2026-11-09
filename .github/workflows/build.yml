@@ -31,11 +31,12 @@ jobs:
           flutter-version: '3.47.9'
           cache: true
 
-      - name: Analizar Dart
+      - name: Analizar Dart y tests de la interfaz
         working-directory: app
         run: |
           flutter pub get
           flutter analyze
+          flutter test
 
       - name: Compilar APK
         working-directory: app

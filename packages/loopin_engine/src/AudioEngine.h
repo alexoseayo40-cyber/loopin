@@ -6,14 +6,18 @@
 
 #include <atomic>
 #include <memory>
+#include <vector>
 
 #include "EngineCore.h"
 
 namespace loopin {
 
-// Stream full-duplex: la salida lleva el callback y lee la entrada en el
-// mismo callback (oboe::FullDuplexStream), así entrada y salida van a la par.
-class AudioEngine : public oboe::FullDuplexStream, public oboe::AudioStreamErrorCallback {
+// Full-duplex: la salida lleva el callback y en él se lee TODA la entrada que
+// haya llegado (sin esperar). No usamos oboe::FullDuplexStream porque lee como
+// mucho un bloque por callback: si la entrada se adelanta, lo que sobra se
+// queda acumulado para siempre y suma latencia. El núcleo cuenta entrada y
+// salida por separado, así que no necesita bloques iguales.
+class AudioEngine : public oboe::AudioStreamDataCallback, public oboe::AudioStreamErrorCallback {
  public:
   // Hilo de la interfaz
   oboe::Result openAudio();
@@ -31,9 +35,11 @@ class AudioEngine : public oboe::FullDuplexStream, public oboe::AudioStreamError
   // Hilo de audio
   oboe::DataCallbackResult onAudioReady(oboe::AudioStream* stream, void* audioData,
                                         int32_t numFrames) override;
-  oboe::DataCallbackResult onBothStreamsReady(const void* inputData, int numInputFrames,
-                                              void* outputData,
-                                              int numOutputFrames) override;
+
+  // Diagnóstico: máximo de muestras de entrada leídas en un callback durante
+  // los últimos ~2 s (si es mucho mayor que el bloque, la entrada llega a
+  // trompicones).
+  int32_t inputMaxRead() const { return inputMaxReadPublished_.load(std::memory_order_relaxed); }
 
   // Hilo de errores de Oboe (p. ej. se desenchufan los auriculares)
   void onErrorAfterClose(oboe::AudioStream* stream, oboe::Result error) override;
@@ -51,6 +57,15 @@ class AudioEngine : public oboe::FullDuplexStream, public oboe::AudioStreamError
   int32_t requestedInputDevice_ = 0;  // 0 = el que elija Android
   std::atomic<bool> running_{false};
   std::atomic<bool> disconnected_{false};
+
+  // Callbacks del arranque en los que se tira la entrada (ver onAudioReady)
+  static constexpr int32_t kWarmupCallbacks = 20;
+  int32_t warmupLeft_ = 0;
+  std::vector<float> inBuf_;
+  int32_t inBufFrames_ = 0;
+  int32_t inputMaxRead_ = 0;
+  int32_t diagCallbacks_ = 0;
+  std::atomic<int32_t> inputMaxReadPublished_{0};
 };
 
 }  // namespace loopin

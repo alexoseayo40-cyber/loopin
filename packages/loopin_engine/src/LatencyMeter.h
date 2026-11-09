@@ -7,9 +7,9 @@
 
 namespace loopin {
 
-// Emite un pulso por la salida y busca cuándo llega a la entrada. Cuenta en
-// muestras de salida y de entrada por separado, que es justo lo que el looper
-// necesitará para compensar: «la muestra de salida N vuelve como la muestra de
+// Emite un pulso por la salida y busca cuándo llega a la entrada. Usa los
+// índices absolutos de salida y de entrada del motor, que es justo lo que el
+// looper usa para compensar: «la muestra de salida N vuelve como la muestra de
 // entrada N + latencia». Hace kRounds rondas y se queda con la mediana.
 class LatencyMeter {
  public:
@@ -21,8 +21,10 @@ class LatencyMeter {
   bool active() const { return state_ == State::kRunning; }
 
   // Llamar una vez por bloque, con la entrada (mono) y la salida (mono) del
-  // bloque. Escribe el pulso en outMono (se suma).
-  void process(const float* inMono, int32_t inFrames, float* outMono, int32_t outFrames);
+  // bloque y el índice absoluto de su primera muestra. Escribe el pulso en
+  // outMono (se suma).
+  void process(const float* inMono, int32_t inFrames, int64_t inStart, float* outMono,
+               int32_t outFrames, int64_t outStart);
 
   State state() const { return state_; }
   int32_t detectedRounds() const { return successes_; }
@@ -37,8 +39,9 @@ class LatencyMeter {
   State state_ = State::kIdle;
   Phase phase_ = Phase::kListen;
 
-  int64_t outFrames_ = 0;  // muestras de salida desde start()
-  int64_t inFrames_ = 0;   // muestras de entrada desde start()
+  bool justStarted_ = false;
+  int64_t outFrames_ = 0;  // índice absoluto de la primera muestra de salida del bloque
+  int64_t inFrames_ = 0;   // ídem de entrada
   int64_t phaseEndOut_ = 0;
   int64_t emitAt_ = 0;     // índice de salida del pulso
   int32_t pulseIndex_ = -1;

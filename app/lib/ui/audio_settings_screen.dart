@@ -1,4 +1,4 @@
-// Loopin — pantalla de prueba de la Etapa 1
+// Loopin — ajustes de audio: entrada, monitor y latencia
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,8 +6,8 @@ import 'package:loopin_engine/loopin_engine.dart';
 
 import '../engine/engine_controller.dart';
 
-class PrototypeScreen extends StatelessWidget {
-  const PrototypeScreen({super.key, required this.controller});
+class AudioSettingsScreen extends StatelessWidget {
+  const AudioSettingsScreen({super.key, required this.controller});
 
   final EngineController controller;
 
@@ -19,16 +19,15 @@ class PrototypeScreen extends StatelessWidget {
         final s = controller.status;
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Loopin · prueba de audio'),
+            title: const Text('Audio y latencia'),
             actions: [
               IconButton(
                 tooltip: 'Copiar resultados',
                 icon: const Icon(Icons.copy_all),
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: controller.report()));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Resultados copiados')),
-                  );
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(const SnackBar(content: Text('Resultados copiados')));
                 },
               ),
             ],
@@ -37,7 +36,6 @@ class PrototypeScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
             children: [
               _AudioCard(controller: controller, s: s),
-              _MetronomeCard(controller: controller, s: s),
               _MonitorCard(controller: controller, s: s),
               _LatencyCard(controller: controller, s: s),
             ],
@@ -96,140 +94,22 @@ class _AudioCard extends StatelessWidget {
         ),
         if (controller.error != null) ...[
           const SizedBox(height: 8),
-          Text(controller.error!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          Text(controller.error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
         ],
         if (s.running) ...[
           const SizedBox(height: 8),
           Text('$api · ${s.sampleRate} Hz · bloque ${s.framesPerBurst} muestras'),
-          Text('${s.exclusive ? 'Exclusivo' : 'Compartido'} · '
-              '${s.lowLatency ? 'baja latencia' : 'SIN baja latencia'} · '
-              'entrada ${s.inputChannels == 1 ? 'mono' : '${s.inputChannels} canales'}'),
-        ],
-      ],
-    );
-  }
-}
-
-class _MetronomeCard extends StatelessWidget {
-  const _MetronomeCard({required this.controller, required this.s});
-  final EngineController controller;
-  final EngineStatus s;
-
-  String _mmss(double seconds) {
-    final t = seconds.floor();
-    return '${(t ~/ 60).toString().padLeft(2, '0')}:${(t % 60).toString().padLeft(2, '0')}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final bpm = controller.bpm;
-    final xruns = controller.xrunsSincePlay;
-    final stable = s.playSeconds >= 300 && xruns == 0;
-    return _Section(
-      title: 'Metrónomo',
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            IconButton.filledTonal(
-              onPressed: () => controller.setBpm(bpm - 1),
-              icon: const Icon(Icons.remove),
-            ),
-            SizedBox(
-              width: 140,
-              child: Text(
-                '${bpm.toStringAsFixed(0)} BPM',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-            ),
-            IconButton.filledTonal(
-              onPressed: () => controller.setBpm(bpm + 1),
-              icon: const Icon(Icons.add),
-            ),
-          ],
-        ),
-        Slider(
-          min: 40,
-          max: 240,
-          value: bpm,
-          onChanged: controller.setBpm,
-        ),
-        Row(
-          children: [
-            Expanded(
-              child: SegmentedButton<int>(
-                segments: [
-                  for (final e in kTimeSignatures.entries)
-                    ButtonSegment(value: e.key, label: Text(e.value)),
-                ],
-                selected: {controller.beatsPerBar},
-                onSelectionChanged: (v) => controller.setBeatsPerBar(v.first),
-              ),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton(
-              onPressed: controller.tapTempo,
-              child: const Text('Tap'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        // Tiempos del compás
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            for (var i = 0; i < s.beatsPerBar; i++)
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 5),
-                width: 18,
-                height: 18,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: s.playing && s.beat == i
-                      ? (i == 0 ? cs.primary : cs.secondary)
-                      : cs.surfaceContainerHighest,
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        FilledButton.tonalIcon(
-          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-          onPressed: s.running ? controller.togglePlay : null,
-          icon: Icon(s.playing ? Icons.stop : Icons.play_arrow),
-          label: Text(s.playing ? 'Parar' : 'Arrancar metrónomo'),
-        ),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Clic'),
-          value: controller.clickEnabled,
-          onChanged: controller.setClickEnabled,
-        ),
-        Row(
-          children: [
-            const Icon(Icons.volume_up, size: 20),
-            Expanded(
-              child: Slider(value: controller.clickVolume, onChanged: controller.setClickVolume),
-            ),
-          ],
-        ),
-        if (s.playing)
-          Row(
-            children: [
-              Icon(stable ? Icons.check_circle : Icons.timer_outlined,
-                  color: stable ? Colors.green : null, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Sonando ${_mmss(s.playSeconds)} · compás ${s.bar + 1} · '
-                  'cortes: ${xruns < 0 ? 'no disponible' : xruns}',
-                ),
-              ),
-            ],
+          Text(
+            '${s.exclusive ? 'Exclusivo' : 'Compartido'} · '
+            '${s.lowLatency ? 'baja latencia' : 'SIN baja latencia'} · '
+            'entrada ${s.inputChannels == 1 ? 'mono' : '${s.inputChannels} canales'}',
           ),
+          if (s.playing)
+            Text(
+              'Cortes desde que arrancó el metrónomo: '
+              '${controller.xrunsSincePlay < 0 ? 'no disponible' : controller.xrunsSincePlay}',
+            ),
+        ],
       ],
     );
   }
@@ -269,10 +149,14 @@ class _MonitorCard extends StatelessWidget {
         const SizedBox(height: 8),
         DropdownButtonFormField<InputPreset>(
           initialValue: c.inputPreset,
+          isExpanded: true,
           decoration: const InputDecoration(labelText: 'Modo del micrófono'),
           items: [
             for (final p in InputPreset.values)
-              DropdownMenuItem(value: p, child: Text(p.label)),
+              DropdownMenuItem(
+                value: p,
+                child: Text(p.label, overflow: TextOverflow.ellipsis),
+              ),
           ],
           onChanged: (p) {
             if (p != null) c.setInputPreset(p);
@@ -317,7 +201,9 @@ class _MonitorCard extends StatelessWidget {
           ],
         ),
         Text(
-          'Toca fuerte: el nivel debe llegar a naranja sin ponerse rojo.',
+          'Toca fuerte: el nivel debe llegar a naranja sin ponerse rojo.\n'
+          'Para elegir el modo del micrófono, graba el mismo riff en cada modo '
+          '(al cambiarlo, el loop se conserva parado) y quédate con el que mejor suene.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         SwitchListTile(
@@ -331,11 +217,7 @@ class _MonitorCard extends StatelessWidget {
           children: [
             const Icon(Icons.volume_up, size: 20),
             Expanded(
-              child: Slider(
-                max: 2,
-                value: c.monitorVolume,
-                onChanged: c.setMonitorVolume,
-              ),
+              child: Slider(max: 2, value: c.monitorVolume, onChanged: c.setMonitorVolume),
             ),
           ],
         ),
@@ -354,36 +236,78 @@ class _LatencyCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final measuring = s.latencyState == LatencyState.running;
+    final recordingNow =
+        s.loopState == LoopState.armed ||
+        s.loopState == LoopState.recording ||
+        s.loopState == LoopState.overdubbing;
     final estimate = (s.outputLatencyMs >= 0 && s.inputLatencyMs >= 0)
         ? s.outputLatencyMs + s.inputLatencyMs
         : -1.0;
+    final c = controller;
+    final source = switch (c.latencySource) {
+      LatencySource.measured => 'medida',
+      LatencySource.estimated => 'estimada por Android, sin medir',
+      LatencySource.none => 'sin medir',
+    };
+    final cs = Theme.of(context).colorScheme;
     return _Section(
       title: 'Latencia',
       children: [
-        Text('Estimación de Android: salida ${_ms(s.outputLatencyMs)} + '
-            'entrada ${_ms(s.inputLatencyMs)} = ${_ms(estimate)}'),
+        if (s.running) ...[
+          Text('Ruta: ${c.routeLabel}'),
+          const SizedBox(height: 4),
+          Text(
+            'Compensación al grabar: ${_ms(c.compensationMs)} ($source)',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: c.latencySource == LatencySource.measured ? null : cs.error,
+            ),
+          ),
+          Text(
+            'Se guarda una medida para cada combinación de entrada y salida y se '
+            'usa sola al cambiar de una a otra.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+        ],
+        Text(
+          'Estimación de Android: salida ${_ms(s.outputLatencyMs)} + '
+          'entrada ${_ms(s.inputLatencyMs)} = ${_ms(estimate)}',
+        ),
         Text('Buffer de salida: ${s.bufferSizeFrames} muestras (${_ms(s.bufferMs)})'),
+        if (s.running)
+          Text(
+            'Entrada: ${s.inputExclusive ? 'exclusivo' : 'compartido'} · '
+            '${s.inputLowLatency ? 'baja latencia' : 'SIN baja latencia'} · '
+            'bloque ${s.inputFramesPerBurst} · buffer ${s.inputBufferFrames} · '
+            'máx. por callback ${s.inputMaxRead}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         const SizedBox(height: 12),
         FilledButton.tonalIcon(
-          onPressed: s.running && !measuring ? controller.measureLatency : null,
+          // No mientras se graba: los pulsos acabarían dentro del loop
+          onPressed: s.running && !measuring && !recordingNow ? controller.measureLatency : null,
           icon: measuring
               ? const SizedBox(
-                  width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
               : const Icon(Icons.speed),
-          label: Text(measuring
-              ? 'Midiendo… clic ${s.latencyProgress}/5'
-              : 'Medir latencia de ida y vuelta'),
+          label: Text(
+            measuring ? 'Midiendo… clic ${s.latencyProgress}/5' : 'Medir latencia de ida y vuelta',
+          ),
         ),
         const SizedBox(height: 8),
         switch (s.latencyState) {
           LatencyState.done => Text(
-              'Ida y vuelta: ${_ms(s.latencyMs)} (${s.latencyFrames} muestras)',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+            'Ida y vuelta: ${_ms(s.latencyMs)} (${s.latencyFrames} muestras) · guardada',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           LatencyState.failed => Text(
-              'No se oyeron los clics. Sube el volumen o revisa el cable.',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
+            'No se oyeron los clics. Sube el volumen o revisa el cable.',
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
           _ => const SizedBox.shrink(),
         },
         const SizedBox(height: 8),
@@ -393,6 +317,14 @@ class _LatencyCard extends StatelessWidget {
           'Interfaz USB: une con un cable la salida de auriculares y la entrada.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
+        if (c.latencySource == LatencySource.measured)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: c.forgetLatency,
+              child: const Text('Olvidar la medida de esta ruta'),
+            ),
+          ),
       ],
     );
   }

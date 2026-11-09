@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "LatencyMeter.h"
+#include "Looper.h"
 #include "Metronome.h"
 #include "SpscQueue.h"
 #include "Transport.h"
@@ -25,6 +26,16 @@ struct Command {
     kSetMonitorVolume,
     kSetInputGain,
     kMeasureLatency,
+    // Looper
+    kLoopPress,      // toque del botón principal
+    kLoopHold,       // se mantiene pulsado tras el toque
+    kLoopDoubleTap,  // segundo toque rápido
+    kLoopUndo,
+    kLoopClear,
+    kSetLoopMode,    // Looper::Mode
+    kSetSyncBars,
+    kSetLatencyFrames,  // compensación de la grabación (muestras)
+    kSetLoopVolume,
   };
   Type type = Type::kPlay;
   double value = 0.0;
@@ -43,11 +54,26 @@ struct CoreStatus {
   int32_t latencyState;
   int32_t latencyProgress;
   int32_t latencyFrames;
+  // Looper
+  int32_t loopState;
+  int32_t loopMode;
+  int32_t loopSyncBars;
+  int32_t loopLayers;
+  int32_t loopCanUndo;
+  int32_t loopLatencyFrames;
+  int64_t loopLength;
+  int64_t loopPosition;
+  int64_t loopRecorded;
+  int64_t loopTarget;
+  int64_t loopBarFrames;
 };
 
 class EngineCore {
  public:
   static constexpr int32_t kMaxBlockFrames = 8192;
+  // Trabajo de fondo del looper por bloque (sumar/borrar capas): a 48 kHz y
+  // bloques de 256 muestras es ~60 veces el tiempo real y cuesta microsegundos.
+  static constexpr int32_t kBackgroundBudget = 16384;
 
   // Fuera del hilo de audio (antes de arrancar el stream). Reserva memoria.
   void prepare(int32_t sampleRate);
@@ -62,6 +88,9 @@ class EngineCore {
 
   CoreStatus status() const;
   int32_t sampleRate() const { return sampleRate_; }
+  // Solo para tests (mismo hilo que process)
+  const Looper& looper() const { return looper_; }
+  int64_t outputPosition() const { return outPos_; }
 
  private:
   void apply(const Command& cmd);
@@ -72,6 +101,12 @@ class EngineCore {
   Transport transport_;
   Metronome metronome_;
   LatencyMeter latency_;
+  Looper looper_;
+  InputRing ring_;
+  int64_t outPos_ = 0;    // índice absoluto de la próxima muestra de salida
+  int64_t monRead_ = 0;   // próxima muestra de entrada que sonará en el monitor
+  int32_t monChunk_ = 0;  // mayor bloque (de entrada o salida) del último segundo
+  int32_t monChunkAge_ = 0;
 
   bool clickEnabled_ = true;
   float clickVolume_ = 0.8f;
@@ -95,6 +130,17 @@ class EngineCore {
   std::atomic<int32_t> aLatencyState_{0};
   std::atomic<int32_t> aLatencyProgress_{0};
   std::atomic<int32_t> aLatencyFrames_{0};
+  std::atomic<int32_t> aLoopState_{0};
+  std::atomic<int32_t> aLoopMode_{0};
+  std::atomic<int32_t> aLoopSyncBars_{4};
+  std::atomic<int32_t> aLoopLayers_{0};
+  std::atomic<int32_t> aLoopCanUndo_{0};
+  std::atomic<int32_t> aLoopLatency_{0};
+  std::atomic<int64_t> aLoopLength_{0};
+  std::atomic<int64_t> aLoopPosition_{0};
+  std::atomic<int64_t> aLoopRecorded_{0};
+  std::atomic<int64_t> aLoopTarget_{0};
+  std::atomic<int64_t> aLoopBarFrames_{0};
 };
 
 }  // namespace loopin

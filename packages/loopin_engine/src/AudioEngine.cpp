@@ -85,10 +85,21 @@ oboe::Result AudioEngine::openAudio() {
   output_->setPerformanceHintEnabled(true);
 
   core_.prepare(output_->getSampleRate());
-  setSharedInputStream(input_);
-  setSharedOutputStream(output_);
 
-  result = oboe::FullDuplexStream::start();
+  // Buffer para leer la entrada en el callback (se reserva aquí, no allí)
+  const int32_t inChannels = input_->getChannelCount();
+  inBufFrames_ = std::min(std::max(input_->getBufferCapacityInFrames(), 4096),
+                          EngineCore::kMaxBlockFrames);
+  inBuf_.assign(static_cast<size_t>(inBufFrames_ * inChannels), 0.0f);
+  warmupLeft_ = kWarmupCallbacks;
+  inputMaxRead_ = 0;
+  diagCallbacks_ = 0;
+  inputMaxReadPublished_.store(0, std::memory_order_relaxed);
+
+  // La entrada primero, para que ya esté en marcha cuando llegue el primer
+  // callback de la salida.
+  result = input_->requestStart();
+  if (result == oboe::Result::OK) result = output_->requestStart();
   if (result != oboe::Result::OK) {
     LOGE("No se pudo arrancar: %s", oboe::convertToText(result));
     closeStreams();
@@ -103,9 +114,8 @@ oboe::Result AudioEngine::openAudio() {
 }
 
 void AudioEngine::closeAudio() {
-  if (output_ || input_) {
-    oboe::FullDuplexStream::stop();
-  }
+  if (output_) output_->requestStop();
+  if (input_) input_->requestStop();
   closeStreams();
   running_.store(false, std::memory_order_release);
 }
@@ -125,23 +135,50 @@ void AudioEngine::closeStreams() {
 oboe::DataCallbackResult AudioEngine::onAudioReady(oboe::AudioStream* stream, void* audioData,
                                                    int32_t numFrames) {
   if (tuner_) tuner_->tune();
-  const oboe::DataCallbackResult r =
-      oboe::FullDuplexStream::onAudioReady(stream, audioData, numFrames);
-  if (r == oboe::DataCallbackResult::Stop) {
+  auto* out = static_cast<float*>(audioData);
+  const int32_t outChannels = stream->getChannelCount();
+  const int32_t inChannels = input_->getChannelCount();
+
+  // Lee toda la entrada que haya, sin esperar
+  int32_t got = 0;
+  bool failed = false;
+  while (got < inBufFrames_) {
+    auto r = input_->read(inBuf_.data() + got * inChannels, inBufFrames_ - got, 0);
+    if (!r) {
+      failed = true;
+      break;
+    }
+    if (r.value() <= 0) break;
+    got += r.value();
+  }
+
+  if (warmupLeft_ > 0) {
+    // Arranque: se tira lo que entró antes de que la salida empezase a
+    // sonar, para empezar con la entrada vacía (la mínima latencia). Mientras,
+    // el núcleo recibe silencio con el mismo número de muestras que la salida,
+    // así los contadores de entrada y salida empiezan a la par. Los errores se
+    // ignoran: la entrada puede no haber arrancado todavía.
+    --warmupLeft_;
+    core_.process(nullptr, numFrames, 1, out, numFrames, outChannels);
+    return oboe::DataCallbackResult::Continue;
+  }
+  if (failed) {
     // La entrada ha fallado (p. ej. se ha desconectado). La interfaz lo verá y
     // reiniciará el audio.
+    std::fill(out, out + numFrames * outChannels, 0.0f);
     running_.store(false, std::memory_order_release);
     disconnected_.store(true, std::memory_order_release);
+    return oboe::DataCallbackResult::Stop;
   }
-  return r;
-}
 
-oboe::DataCallbackResult AudioEngine::onBothStreamsReady(const void* inputData,
-                                                         int numInputFrames, void* outputData,
-                                                         int numOutputFrames) {
-  core_.process(static_cast<const float*>(inputData), numInputFrames,
-                getInputStream()->getChannelCount(), static_cast<float*>(outputData),
-                numOutputFrames, getOutputStream()->getChannelCount());
+  core_.process(inBuf_.data(), got, inChannels, out, numFrames, outChannels);
+
+  inputMaxRead_ = std::max(inputMaxRead_, got);
+  if (++diagCallbacks_ * numFrames >= core_.sampleRate() * 2) {
+    inputMaxReadPublished_.store(inputMaxRead_, std::memory_order_relaxed);
+    inputMaxRead_ = 0;
+    diagCallbacks_ = 0;
+  }
   return oboe::DataCallbackResult::Continue;
 }
 

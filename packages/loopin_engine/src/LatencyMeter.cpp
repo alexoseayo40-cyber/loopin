@@ -16,14 +16,12 @@ constexpr float kMinThreshold = 0.02f;
 
 void LatencyMeter::start() {
   state_ = State::kRunning;
-  outFrames_ = 0;
-  inFrames_ = 0;
+  justStarted_ = true;
   round_ = 0;
   successes_ = 0;
   failures_ = 0;
   resultFrames_ = 0;
   phase_ = Phase::kListen;
-  phaseEndOut_ = sampleRate_ / 2;  // 0,5 s escuchando el ruido de fondo
   noisePeak_ = 0.0f;
   pulseIndex_ = -1;
 }
@@ -49,9 +47,15 @@ void LatencyMeter::finish() {
   }
 }
 
-void LatencyMeter::process(const float* inMono, int32_t inFrames, float* outMono,
-                           int32_t outFrames) {
+void LatencyMeter::process(const float* inMono, int32_t inFrames, int64_t inStart,
+                           float* outMono, int32_t outFrames, int64_t outStart) {
   if (state_ != State::kRunning) return;
+  inFrames_ = inStart;
+  outFrames_ = outStart;
+  if (justStarted_) {
+    justStarted_ = false;
+    phaseEndOut_ = outStart + sampleRate_ / 2;  // 0,5 s escuchando el ruido de fondo
+  }
 
   const int32_t pulseLength =
       static_cast<int32_t>(sampleRate_ * kPulseCycles / kPulseFreq);

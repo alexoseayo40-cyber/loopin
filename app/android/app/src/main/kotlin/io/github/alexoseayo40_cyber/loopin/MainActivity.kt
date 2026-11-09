@@ -32,10 +32,22 @@ class MainActivity : FlutterActivity() {
                     "requestMicrophone" -> requestMicrophone(result)
                     "audioInfo" -> result.success(audioInfo())
                     "audioDevices" -> result.success(audioDevices())
+                    // Ajustes pequeños (texto) que se guardan entre sesiones
+                    "prefsGet" -> result.success(
+                        prefs().getString(call.argument<String>("key"), null)
+                    )
+                    "prefsSet" -> {
+                        prefs().edit()
+                            .putString(call.argument<String>("key"), call.argument<String>("value"))
+                            .apply()
+                        result.success(null)
+                    }
                     else -> result.notImplemented()
                 }
             }
     }
+
+    private fun prefs() = getSharedPreferences("loopin", MODE_PRIVATE)
 
     // Lo que el móvil dice que sabe hacer con el audio
     private fun audioInfo(): Map<String, Any> {

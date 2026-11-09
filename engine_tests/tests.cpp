@@ -12,32 +12,10 @@
 #include "Metronome.h"
 #include "SpscQueue.h"
 #include "Transport.h"
+#include "test_util.h"
 
 using namespace loopin;
 
-static int gFailures = 0;
-#define CHECK(cond)                                                     \
-  do {                                                                  \
-    if (!(cond)) {                                                      \
-      std::printf("  FALLO %s:%d: %s\n", __FILE__, __LINE__, #cond);    \
-      ++gFailures;                                                      \
-    }                                                                   \
-  } while (0)
-#define CHECK_EQ(a, b)                                                                \
-  do {                                                                                \
-    const long long _a = (long long)(a), _b = (long long)(b);                         \
-    if (_a != _b) {                                                                   \
-      std::printf("  FALLO %s:%d: %s == %s (%lld != %lld)\n", __FILE__, __LINE__, #a, \
-                  #b, _a, _b);                                                        \
-      ++gFailures;                                                                    \
-    }                                                                                 \
-  } while (0)
-
-// Tamaños de bloque variables, como los que da Android
-static int32_t randomBlock(std::mt19937& rng) {
-  static const int32_t sizes[] = {48, 96, 128, 144, 192, 240, 256, 480, 512, 960, 1024};
-  return sizes[rng() % (sizeof(sizes) / sizeof(sizes[0]))];
-}
 
 static void testSamplesPerBeat() {
   std::printf("Muestras por tiempo\n");
@@ -276,6 +254,7 @@ static void testSpscQueue() {
 }
 
 int main() {
+  std::printf("=== Etapa 1: transporte, metrónomo y latencia ===\n");
   testSamplesPerBeat();
   testTransportNoDrift();
   testTempoChangeAtBeat();
@@ -286,6 +265,8 @@ int main() {
   testInputGain();
   testLatencyMeter();
   testSpscQueue();
+  std::printf("\n=== Etapa 2: looper ===\n");
+  runLooperTests();
   if (gFailures == 0) {
     std::printf("\nTodo OK\n");
     return 0;

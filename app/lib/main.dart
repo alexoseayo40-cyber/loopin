@@ -10,7 +10,7 @@
 import 'package:flutter/material.dart';
 
 import 'engine/engine_controller.dart';
-import 'ui/prototype_screen.dart';
+import 'ui/looper_screen.dart';
 
 void main() {
   runApp(const LoopinApp());
@@ -43,7 +43,7 @@ class _LoopinAppState extends State<LoopinApp> {
           brightness: Brightness.dark,
         ),
       ),
-      home: PrototypeScreen(controller: _controller),
+      home: LooperScreen(controller: _controller),
     );
   }
 }

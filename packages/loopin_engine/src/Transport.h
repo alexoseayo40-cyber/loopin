@@ -35,6 +35,7 @@ class Transport {
       isBeatStart = true;
     }
     ++posInBeat_;
+    ++posInBar_;
     ++framePosition_;
     if (posInBeat_ >= samplesPerBeat_) {
       advanceBeat();
@@ -51,6 +52,24 @@ class Transport {
   double bpm() const { return bpm_; }
   int64_t framePosition() const { return framePosition_; }
 
+  // --- Para el looper (se consultan antes de tick() de la muestra «ahora») ---
+
+  // Muestras ya sonadas del compás actual. 0 = la próxima muestra es un
+  // primer tiempo (o el transporte está parado).
+  int64_t framesSinceBar() const { return playing_ ? posInBar_ : 0; }
+  // Muestras hasta el próximo primer tiempo (0 si la próxima muestra lo es).
+  // Tiene en cuenta un cambio de tempo pendiente.
+  int64_t framesToNextBar() const;
+  // Duración de un compás con el tempo y el compás que van a regir a partir
+  // del siguiente primer tiempo.
+  int64_t nextSamplesPerBar() const {
+    return int64_t(computeSamplesPerBeat(sampleRate_, pendingBpm_)) * pendingBeatsPerBar_;
+  }
+  // true si hay un cambio de tempo o de compás aún sin aplicar.
+  bool hasPendingChange() const {
+    return pendingBpm_ != bpm_ || pendingBeatsPerBar_ != beatsPerBar_;
+  }
+
   static int32_t computeSamplesPerBeat(int32_t sampleRate, double bpm);
 
  private:
@@ -66,6 +85,7 @@ class Transport {
 
   bool playing_ = false;
   int32_t posInBeat_ = 0;   // muestras dentro del tiempo actual
+  int64_t posInBar_ = 0;    // muestras dentro del compás actual
   int32_t currentBeat_ = 0; // tiempo dentro del compás
   int32_t currentBar_ = 0;
   int64_t framePosition_ = 0;
