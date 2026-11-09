@@ -4,6 +4,8 @@
 
 #include <android/log.h>
 
+#include <algorithm>
+
 #define LOG_TAG "loopin"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
@@ -73,8 +75,14 @@ oboe::Result AudioEngine::openAudio() {
     return result;
   }
 
-  // Buffer de salida = 2 bloques: buen equilibrio entre latencia y cortes.
-  output_->setBufferSizeInFrames(output_->getFramesPerBurst() * 2);
+  // Buffer de salida: empieza en 2 bloques y, si hay cortes, el LatencyTuner
+  // de Oboe lo sube de bloque en bloque (hasta 6) y se queda donde no corta.
+  const int32_t burst = output_->getFramesPerBurst();
+  const int32_t maxBuffer = std::min(output_->getBufferCapacityInFrames(), burst * 6);
+  tuner_ = std::make_unique<oboe::LatencyTuner>(*output_, maxBuffer);
+  output_->setBufferSizeInFrames(burst * 2);
+  // Pide a Android que suba la CPU si el callback va justo (ADPF, si existe).
+  output_->setPerformanceHintEnabled(true);
 
   core_.prepare(output_->getSampleRate());
   setSharedInputStream(input_);
@@ -103,6 +111,7 @@ void AudioEngine::closeAudio() {
 }
 
 void AudioEngine::closeStreams() {
+  tuner_.reset();  // guarda una referencia a la salida: se va antes que ella
   if (output_) {
     output_->close();
     output_.reset();
@@ -115,6 +124,7 @@ void AudioEngine::closeStreams() {
 
 oboe::DataCallbackResult AudioEngine::onAudioReady(oboe::AudioStream* stream, void* audioData,
                                                    int32_t numFrames) {
+  if (tuner_) tuner_->tune();
   const oboe::DataCallbackResult r =
       oboe::FullDuplexStream::onAudioReady(stream, audioData, numFrames);
   if (r == oboe::DataCallbackResult::Stop) {

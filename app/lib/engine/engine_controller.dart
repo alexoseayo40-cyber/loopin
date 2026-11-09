@@ -29,6 +29,7 @@ class EngineController extends ChangeNotifier {
   bool clickEnabled = true;
   double clickVolume = 0.8;
   InputPreset inputPreset = InputPreset.unprocessed;
+  bool _presetChosenByUser = false;
 
   /// Entrada elegida (id de Android). -1 = aún sin elegir; 0 = la de Android.
   int inputDeviceId = -1;
@@ -73,6 +74,13 @@ class EngineController extends ChangeNotifier {
       try {
         final info = await _permissions.invokeMapMethod<String, Object?>('audioInfo');
         if (info != null) deviceInfo = info;
+        // Si el móvil dice que no tiene micro «sin procesar», Android lo trata
+        // como el modo normal (que puede llevar control automático de
+        // ganancia). «Reconocimiento de voz» está obligado por Android a ir
+        // sin control de ganancia ni reducción de ruido: es mejor opción.
+        if (!_presetChosenByUser && deviceInfo['unprocessed'] == false) {
+          inputPreset = InputPreset.voiceRecognition;
+        }
       } on PlatformException {
         // no pasa nada: solo es informativo
       }
@@ -257,6 +265,7 @@ class EngineController extends ChangeNotifier {
   /// Cambiar el modo del micrófono obliga a reabrir el audio.
   void setInputPreset(InputPreset preset) {
     inputPreset = preset;
+    _presetChosenByUser = true;
     if (_wantRunning) {
       _engine.stop();
       _openStream();

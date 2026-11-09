@@ -44,6 +44,8 @@ class AudioEngine : public oboe::FullDuplexStream, public oboe::AudioStreamError
   EngineCore core_;
   std::shared_ptr<oboe::AudioStream> output_;
   std::shared_ptr<oboe::AudioStream> input_;
+  // Sube el buffer de salida de bloque en bloque si hay cortes (y no lo baja).
+  std::unique_ptr<oboe::LatencyTuner> tuner_;
   int32_t requestedPreset_ = static_cast<int32_t>(oboe::InputPreset::Unprocessed);
   bool presetFallback_ = false;
   int32_t requestedInputDevice_ = 0;  // 0 = el que elija Android
