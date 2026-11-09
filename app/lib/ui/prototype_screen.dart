@@ -243,9 +243,31 @@ class _MonitorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final peak = s.inputPeak.clamp(0.0, 1.0);
+    final c = controller;
+    final unprocessed = c.deviceInfo['unprocessed'];
     return _Section(
-      title: 'Guitarra (monitor)',
+      title: 'Guitarra (entrada)',
       children: [
+        DropdownButtonFormField<InputPreset>(
+          initialValue: c.inputPreset,
+          decoration: const InputDecoration(labelText: 'Modo del micrófono'),
+          items: [
+            for (final p in InputPreset.values)
+              DropdownMenuItem(value: p, child: Text(p.label)),
+          ],
+          onChanged: (p) {
+            if (p != null) c.setInputPreset(p);
+          },
+        ),
+        const SizedBox(height: 6),
+        if (s.running)
+          Text(
+            'En uso: ${s.inputPreset?.label ?? '—'}'
+            '${s.presetFallback ? ' (el modo elegido no funciona en este móvil)' : ''}'
+            '${unprocessed == null ? '' : ' · sin procesar admitido: ${unprocessed == true ? 'sí' : 'no'}'}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        const SizedBox(height: 8),
         Row(
           children: [
             const Text('Nivel'),
@@ -260,12 +282,29 @@ class _MonitorCard extends StatelessWidget {
             ),
           ],
         ),
+        Row(
+          children: [
+            SizedBox(width: 90, child: Text('Ganancia +${c.inputGainDb.toStringAsFixed(0)} dB')),
+            Expanded(
+              child: Slider(
+                max: 24,
+                divisions: 24,
+                value: c.inputGainDb,
+                onChanged: c.setInputGainDb,
+              ),
+            ),
+          ],
+        ),
+        Text(
+          'Toca fuerte: el nivel debe llegar a naranja sin ponerse rojo.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Escucharme en directo'),
           subtitle: const Text('Con auriculares de cable. Por el altavoz se acopla.'),
-          value: controller.monitorEnabled,
-          onChanged: controller.setMonitorEnabled,
+          value: c.monitorEnabled,
+          onChanged: c.setMonitorEnabled,
         ),
         Row(
           children: [
@@ -273,8 +312,8 @@ class _MonitorCard extends StatelessWidget {
             Expanded(
               child: Slider(
                 max: 2,
-                value: controller.monitorVolume,
-                onChanged: controller.setMonitorVolume,
+                value: c.monitorVolume,
+                onChanged: c.setMonitorVolume,
               ),
             ),
           ],

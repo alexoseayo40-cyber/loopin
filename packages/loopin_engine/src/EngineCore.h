@@ -23,6 +23,7 @@ struct Command {
     kSetClickVolume,
     kSetMonitorEnabled,
     kSetMonitorVolume,
+    kSetInputGain,
     kMeasureLatency,
   };
   Type type = Type::kPlay;
@@ -76,6 +77,7 @@ class EngineCore {
   float clickVolume_ = 0.8f;
   bool monitorEnabled_ = false;
   float monitorVolume_ = 1.0f;
+  float inputGain_ = 1.0f;
   float peak_ = 0.0f;
 
   std::vector<float> inMono_;

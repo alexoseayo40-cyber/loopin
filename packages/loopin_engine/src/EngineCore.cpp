@@ -43,6 +43,9 @@ void EngineCore::apply(const Command& cmd) {
     case Command::Type::kSetMonitorVolume:
       monitorVolume_ = std::clamp(static_cast<float>(cmd.value), 0.0f, 2.0f);
       break;
+    case Command::Type::kSetInputGain:
+      inputGain_ = std::clamp(static_cast<float>(cmd.value), 0.0f, 32.0f);
+      break;
     case Command::Type::kMeasureLatency:
       latency_.start();
       break;
@@ -57,10 +60,12 @@ void EngineCore::process(const float* in, int32_t inFrames, int32_t inChannels, 
   inFrames = std::clamp(inFrames, 0, kMaxBlockFrames);
   const int32_t n = std::clamp(outFrames, 0, kMaxBlockFrames);
 
-  // Entrada a mono (canal 0) y nivel de pico
+  // Entrada a mono (canal 0) con su ganancia, y nivel de pico. El medidor de
+  // latencia usa la señal sin ganancia para que el umbral no dependa de ella.
   float blockPeak = 0.0f;
+  const float gain = latency_.active() ? 1.0f : inputGain_;
   for (int32_t i = 0; i < inFrames; ++i) {
-    const float s = in != nullptr ? in[i * inChannels] : 0.0f;
+    const float s = in != nullptr ? in[i * inChannels] * gain : 0.0f;
     inMono_[i] = s;
     blockPeak = std::max(blockPeak, std::fabs(s));
   }

@@ -43,6 +43,8 @@ void loopin_set_monitor_enabled(int32_t enabled) {
   post(Command::Type::kSetMonitorEnabled, enabled ? 1.0 : 0.0);
 }
 void loopin_set_monitor_volume(float volume) { post(Command::Type::kSetMonitorVolume, volume); }
+void loopin_set_input_preset(int32_t preset) { engine().setInputPreset(preset); }
+void loopin_set_input_gain(float gain) { post(Command::Type::kSetInputGain, gain); }
 void loopin_measure_latency(void) { post(Command::Type::kMeasureLatency); }
 
 void loopin_get_status(LoopinStatus* out) {
@@ -76,6 +78,8 @@ void loopin_get_status(LoopinStatus* out) {
   }
   if (input && out->running) {
     out->input_channels = input->getChannelCount();
+    out->input_preset = static_cast<int32_t>(input->getInputPreset());
+    out->preset_fallback = e.presetFallback() ? 1 : 0;
     auto lat = input->calculateLatencyMillis();
     if (lat) out->input_latency_ms = lat.value();
   }

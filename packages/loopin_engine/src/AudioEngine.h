@@ -19,6 +19,8 @@ class AudioEngine : public oboe::FullDuplexStream, public oboe::AudioStreamError
   oboe::Result openAudio();
   void closeAudio();
   EngineCore& core() { return core_; }
+  void setInputPreset(int32_t preset) { requestedPreset_ = preset; }
+  bool presetFallback() const { return presetFallback_; }
 
   bool running() const { return running_.load(std::memory_order_acquire); }
   bool disconnected() const { return disconnected_.load(std::memory_order_acquire); }
@@ -41,6 +43,8 @@ class AudioEngine : public oboe::FullDuplexStream, public oboe::AudioStreamError
   EngineCore core_;
   std::shared_ptr<oboe::AudioStream> output_;
   std::shared_ptr<oboe::AudioStream> input_;
+  int32_t requestedPreset_ = static_cast<int32_t>(oboe::InputPreset::Unprocessed);
+  bool presetFallback_ = false;
   std::atomic<bool> running_{false};
   std::atomic<bool> disconnected_{false};
 };

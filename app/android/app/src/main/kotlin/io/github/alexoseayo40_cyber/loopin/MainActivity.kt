@@ -5,6 +5,7 @@ package io.github.alexoseayo40_cyber.loopin
 import android.Manifest
 import android.content.pm.PackageManager
 import android.media.AudioManager
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
@@ -26,9 +27,26 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "loopin/permissions")
             .setMethodCallHandler { call, result ->
-                if (call.method == "requestMicrophone") requestMicrophone(result)
-                else result.notImplemented()
+                when (call.method) {
+                    "requestMicrophone" -> requestMicrophone(result)
+                    "audioInfo" -> result.success(audioInfo())
+                    else -> result.notImplemented()
+                }
             }
+    }
+
+    // Lo que el móvil dice que sabe hacer con el audio
+    private fun audioInfo(): Map<String, Any> {
+        val am = getSystemService(AUDIO_SERVICE) as AudioManager
+        val unprocessed =
+            am.getProperty(AudioManager.PROPERTY_SUPPORT_AUDIO_SOURCE_UNPROCESSED) == "true"
+        return mapOf(
+            "model" to "${Build.MANUFACTURER} ${Build.MODEL}",
+            "android" to Build.VERSION.RELEASE,
+            "unprocessed" to unprocessed,
+            "lowLatency" to packageManager.hasSystemFeature(PackageManager.FEATURE_AUDIO_LOW_LATENCY),
+            "proAudio" to packageManager.hasSystemFeature(PackageManager.FEATURE_AUDIO_PRO),
+        )
     }
 
     // Devuelve "granted", "denied" o "permanentlyDenied"

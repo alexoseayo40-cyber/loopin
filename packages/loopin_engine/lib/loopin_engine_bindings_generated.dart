@@ -107,6 +107,33 @@ class LoopinEngineBindings {
   late final _loopin_set_click_volume = _loopin_set_click_volumePtr
       .asFunction<void Function(double)>();
 
+  /// Entrada. El modo del micrófono se aplica al abrir el audio (loopin_start).
+  /// Por defecto LOOPIN_PRESET_UNPROCESSED: sin control automático de ganancia ni
+  /// filtros, lo mejor para grabar un instrumento.
+  void loopin_set_input_preset(int preset) {
+    return _loopin_set_input_preset(preset);
+  }
+
+  late final _loopin_set_input_presetPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+        'loopin_set_input_preset',
+      );
+  late final _loopin_set_input_preset = _loopin_set_input_presetPtr
+      .asFunction<void Function(int)>();
+
+  /// Ganancia lineal aplicada a la entrada (1.0 = 0 dB), antes del monitor y de
+  /// lo que se grabe.
+  void loopin_set_input_gain(double gain) {
+    return _loopin_set_input_gain(gain);
+  }
+
+  late final _loopin_set_input_gainPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Float)>>(
+        'loopin_set_input_gain',
+      );
+  late final _loopin_set_input_gain = _loopin_set_input_gainPtr
+      .asFunction<void Function(double)>();
+
   /// Monitor: escuchar la entrada en directo
   void loopin_set_monitor_enabled(int enabled) {
     return _loopin_set_monitor_enabled(enabled);
@@ -190,6 +217,14 @@ final class LoopinStatus extends ffi.Struct {
   @ffi.Int32()
   external int output_channels;
 
+  /// LOOPIN_PRESET_* que está usando la entrada
+  @ffi.Int32()
+  external int input_preset;
+
+  /// 1 si el modo pedido falló y se usó otro
+  @ffi.Int32()
+  external int preset_fallback;
+
   /// cortes de la salida (-1 si no se sabe)
   @ffi.Int32()
   external int xrun_count;
@@ -259,6 +294,16 @@ const int LOOPIN_LATENCY_RUNNING = 1;
 const int LOOPIN_LATENCY_DONE = 2;
 
 const int LOOPIN_LATENCY_FAILED = 3;
+
+const int LOOPIN_PRESET_GENERIC = 1;
+
+const int LOOPIN_PRESET_CAMCORDER = 5;
+
+const int LOOPIN_PRESET_VOICE_RECOGNITION = 6;
+
+const int LOOPIN_PRESET_UNPROCESSED = 9;
+
+const int LOOPIN_PRESET_VOICE_PERFORMANCE = 10;
 
 const int LOOPIN_API_UNKNOWN = 0;
 

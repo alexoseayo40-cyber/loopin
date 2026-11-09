@@ -28,6 +28,13 @@ extern "C" {
 #define LOOPIN_LATENCY_DONE 2
 #define LOOPIN_LATENCY_FAILED 3
 
+// Modo del micrófono (valores de Android / Oboe InputPreset)
+#define LOOPIN_PRESET_GENERIC 1
+#define LOOPIN_PRESET_CAMCORDER 5
+#define LOOPIN_PRESET_VOICE_RECOGNITION 6
+#define LOOPIN_PRESET_UNPROCESSED 9
+#define LOOPIN_PRESET_VOICE_PERFORMANCE 10
+
 // API de audio que Oboe ha elegido
 #define LOOPIN_API_UNKNOWN 0
 #define LOOPIN_API_OPENSLES 1
@@ -44,6 +51,8 @@ typedef struct {
   int32_t low_latency;        // 1 = ruta de baja latencia concedida
   int32_t input_channels;
   int32_t output_channels;
+  int32_t input_preset;       // LOOPIN_PRESET_* que está usando la entrada
+  int32_t preset_fallback;    // 1 si el modo pedido falló y se usó otro
   int32_t xrun_count;         // cortes de la salida (-1 si no se sabe)
   int32_t disconnected;       // 1 si se desconectó un dispositivo
   double output_latency_ms;   // estimación de Oboe (-1 si no se sabe)
@@ -83,6 +92,14 @@ FFI_PLUGIN_EXPORT void loopin_set_beats_per_bar(int32_t beats_per_bar);
 // Metrónomo
 FFI_PLUGIN_EXPORT void loopin_set_click_enabled(int32_t enabled);
 FFI_PLUGIN_EXPORT void loopin_set_click_volume(float volume);
+
+// Entrada. El modo del micrófono se aplica al abrir el audio (loopin_start).
+// Por defecto LOOPIN_PRESET_UNPROCESSED: sin control automático de ganancia ni
+// filtros, lo mejor para grabar un instrumento.
+FFI_PLUGIN_EXPORT void loopin_set_input_preset(int32_t preset);
+// Ganancia lineal aplicada a la entrada (1.0 = 0 dB), antes del monitor y de
+// lo que se grabe.
+FFI_PLUGIN_EXPORT void loopin_set_input_gain(float gain);
 
 // Monitor: escuchar la entrada en directo
 FFI_PLUGIN_EXPORT void loopin_set_monitor_enabled(int32_t enabled);

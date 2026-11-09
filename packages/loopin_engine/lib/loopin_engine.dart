@@ -10,6 +10,26 @@ import 'loopin_engine_bindings_generated.dart';
 /// API de audio que ha elegido Oboe.
 enum AudioApi { unknown, openSles, aaudio }
 
+/// Modo del micrófono (InputPreset de Android).
+enum InputPreset {
+  unprocessed(9, 'Sin procesar'),
+  voicePerformance(10, 'Actuación en directo'),
+  voiceRecognition(6, 'Reconocimiento de voz'),
+  camcorder(5, 'Vídeo'),
+  generic(1, 'Normal');
+
+  const InputPreset(this.code, this.label);
+  final int code;
+  final String label;
+
+  static InputPreset? fromCode(int code) {
+    for (final p in values) {
+      if (p.code == code) return p;
+    }
+    return null;
+  }
+}
+
 /// Estado del test de latencia.
 enum LatencyState { idle, running, done, failed }
 
@@ -26,6 +46,8 @@ class EngineStatus {
     this.lowLatency = false,
     this.inputChannels = 0,
     this.outputChannels = 0,
+    this.inputPreset,
+    this.presetFallback = false,
     this.xrunCount = -1,
     this.outputLatencyMs = -1,
     this.inputLatencyMs = -1,
@@ -53,6 +75,12 @@ class EngineStatus {
   final bool lowLatency;
   final int inputChannels;
   final int outputChannels;
+
+  /// Modo del micrófono que está usando la entrada (null si no se sabe).
+  final InputPreset? inputPreset;
+
+  /// true si el modo pedido no funcionó y se usó «Reconocimiento de voz».
+  final bool presetFallback;
 
   /// Cortes de la salida desde que arrancó el stream (-1 si no se sabe).
   final int xrunCount;
@@ -108,6 +136,12 @@ class LoopinEngine {
   void setBeatsPerBar(int beats) => _b.loopin_set_beats_per_bar(beats);
   void setClickEnabled(bool on) => _b.loopin_set_click_enabled(on ? 1 : 0);
   void setClickVolume(double v) => _b.loopin_set_click_volume(v);
+  /// Se aplica la próxima vez que se abra el audio ([start]).
+  void setInputPreset(InputPreset preset) => _b.loopin_set_input_preset(preset.code);
+
+  /// Ganancia lineal de la entrada (1.0 = 0 dB).
+  void setInputGain(double gain) => _b.loopin_set_input_gain(gain);
+
   void setMonitorEnabled(bool on) => _b.loopin_set_monitor_enabled(on ? 1 : 0);
   void setMonitorVolume(double v) => _b.loopin_set_monitor_volume(v);
   void measureLatency() => _b.loopin_measure_latency();
@@ -130,6 +164,8 @@ class LoopinEngine {
       lowLatency: s.low_latency != 0,
       inputChannels: s.input_channels,
       outputChannels: s.output_channels,
+      inputPreset: InputPreset.fromCode(s.input_preset),
+      presetFallback: s.preset_fallback != 0,
       xrunCount: s.xrun_count,
       outputLatencyMs: s.output_latency_ms,
       inputLatencyMs: s.input_latency_ms,

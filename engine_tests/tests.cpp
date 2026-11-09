@@ -187,6 +187,24 @@ static void testMonitorAndMute() {
   CHECK(core.status().inputPeak > 0.39f);
 }
 
+static void testInputGain() {
+  std::printf("Ganancia de entrada\n");
+  EngineCore core;
+  core.prepare(48000);
+  core.post({Command::Type::kSetClickEnabled, 0});
+  core.post({Command::Type::kSetMonitorEnabled, 1});
+  core.post({Command::Type::kSetMonitorVolume, 1.0});
+  core.post({Command::Type::kSetInputGain, 4.0});  // +12 dB
+  std::vector<float> in(128, 0.1f), out(256);
+  core.process(in.data(), 128, 1, out.data(), 128, 2);
+  CHECK(std::fabs(out[0] - 0.4f) < 1e-6f);
+  CHECK(std::fabs(core.status().inputPeak - 0.4f) < 1e-6f);
+  // y nunca satura la salida
+  core.post({Command::Type::kSetInputGain, 32.0});
+  core.process(in.data(), 128, 1, out.data(), 128, 2);
+  CHECK(out[0] <= 1.0f);
+}
+
 // Simula el bucle altavoz → micrófono con un retardo conocido.
 static int32_t runLatency(int32_t sr, int32_t delay, float gain, float noise, bool connected,
                           LatencyMeter::State* finalState) {
@@ -265,6 +283,7 @@ int main() {
   testAccents();
   testEngineClickTiming();
   testMonitorAndMute();
+  testInputGain();
   testLatencyMeter();
   testSpscQueue();
   if (gFailures == 0) {

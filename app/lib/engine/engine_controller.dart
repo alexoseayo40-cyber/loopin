@@ -1,6 +1,7 @@
 // Loopin — estado de la app y órdenes al motor
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -27,6 +28,8 @@ class EngineController extends ChangeNotifier {
   int beatsPerBar = 4;
   bool clickEnabled = true;
   double clickVolume = 0.8;
+  InputPreset inputPreset = InputPreset.unprocessed;
+  double inputGainDb = 0;
   bool monitorEnabled = false;
   double monitorVolume = 1.0;
 
@@ -36,6 +39,9 @@ class EngineController extends ChangeNotifier {
   String? error;
 
   EngineStatus status = const EngineStatus();
+
+  /// Datos del móvil (modelo, si admite micrófono sin procesar…)
+  Map<String, Object?> deviceInfo = const {};
 
   // Prueba de estabilidad: cortes desde que arrancó el metrónomo
   int _xrunsAtPlay = 0;
@@ -58,6 +64,14 @@ class EngineController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    if (deviceInfo.isEmpty) {
+      try {
+        final info = await _permissions.invokeMapMethod<String, Object?>('audioInfo');
+        if (info != null) deviceInfo = info;
+      } on PlatformException {
+        // no pasa nada: solo es informativo
+      }
+    }
     _wantRunning = true;
     _openStream();
     _poll ??= Timer.periodic(const Duration(milliseconds: 33), (_) => _tick());
@@ -76,6 +90,7 @@ class EngineController extends ChangeNotifier {
   }
 
   bool _openStream() {
+    _engine.setInputPreset(inputPreset);
     final code = _engine.start();
     if (code != 0) {
       error = LoopinEngine.describeError(code);
@@ -97,7 +112,10 @@ class EngineController extends ChangeNotifier {
     _engine.setClickVolume(clickVolume);
     _engine.setMonitorEnabled(monitorEnabled);
     _engine.setMonitorVolume(monitorVolume);
+    _engine.setInputGain(_dbToGain(inputGainDb));
   }
+
+  static double _dbToGain(double db) => math.pow(10, db / 20).toDouble();
 
   void _tick() {
     status = _engine.status();
@@ -183,6 +201,24 @@ class EngineController extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ---------- Entrada ----------
+
+  /// Cambiar el modo del micrófono obliga a reabrir el audio.
+  void setInputPreset(InputPreset preset) {
+    inputPreset = preset;
+    if (_wantRunning) {
+      _engine.stop();
+      _openStream();
+    }
+    notifyListeners();
+  }
+
+  void setInputGainDb(double db) {
+    inputGainDb = db.clamp(0, 24).roundToDouble();
+    _engine.setInputGain(_dbToGain(inputGainDb));
+    notifyListeners();
+  }
+
   // ---------- Monitor ----------
 
   void setMonitorEnabled(bool on) {
@@ -213,8 +249,15 @@ class EngineController extends ChangeNotifier {
       AudioApi.openSles => 'OpenSL ES',
       AudioApi.unknown => '—',
     };
+    final model = deviceInfo['model'] ?? '—';
+    final android = deviceInfo['android'] ?? '—';
+    String yesNo(Object? v) => v == true ? 'sí' : (v == false ? 'no' : '—');
     return [
       'Loopin · prototipo de audio',
+      'Móvil: $model · Android $android · baja latencia: ${yesNo(deviceInfo['lowLatency'])} · '
+          'pro audio: ${yesNo(deviceInfo['proAudio'])}',
+      'Micrófono: ${s.inputPreset?.label ?? '—'}${s.presetFallback ? ' (el modo pedido falló)' : ''} · '
+          'sin procesar admitido: ${yesNo(deviceInfo['unprocessed'])} · ganancia +${inputGainDb.toStringAsFixed(0)} dB',
       'API: $api · ${s.sampleRate} Hz · bloque ${s.framesPerBurst} · '
           'buffer ${s.bufferSizeFrames} (${ms(s.bufferMs)})',
       'Modo: ${s.exclusive ? 'exclusivo' : 'compartido'} · '
