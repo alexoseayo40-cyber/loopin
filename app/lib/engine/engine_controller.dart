@@ -410,7 +410,8 @@ class EngineController extends ChangeNotifier {
   /// Nombre legible de la ruta actual.
   String get routeLabel =>
       '${deviceLabel(status.inputDeviceId, input: true)} → '
-      '${deviceLabel(status.outputDeviceId, input: false)}';
+      '${deviceLabel(status.outputDeviceId, input: false)}'
+      ' · ${status.inputPreset?.label ?? '—'}';
 
   String _deviceKey(int id, {required bool input}) {
     final d = _device(id, input: input);
@@ -421,7 +422,9 @@ class EngineController extends ChangeNotifier {
   String get _currentRouteKey =>
       'in=${_deviceKey(status.inputDeviceId, input: true)}'
       '|out=${_deviceKey(status.outputDeviceId, input: false)}'
-      '|${status.sampleRate}';
+      '|${status.sampleRate}'
+      // El modo del micro también cambia la latencia (más o menos procesado)
+      '|preset=${status.inputPreset?.code ?? 0}';
 
   int _appliedLatency = -1;
 

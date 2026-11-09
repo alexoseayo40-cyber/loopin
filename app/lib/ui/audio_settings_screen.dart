@@ -264,8 +264,8 @@ class _LatencyCard extends StatelessWidget {
             ),
           ),
           Text(
-            'Se guarda una medida para cada combinación de entrada y salida y se '
-            'usa sola al cambiar de una a otra.',
+            'Se guarda una medida para cada combinación de entrada, salida y modo '
+            'del micrófono, y se usa sola al cambiar de una a otra.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
