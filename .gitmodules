@@ -1,0 +1,3 @@
+[submodule "packages/loopin_engine/src/third_party/oboe"]
+	path = packages/loopin_engine/src/third_party/oboe
+	url = https://github.com/google/oboe.git

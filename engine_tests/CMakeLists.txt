@@ -1,0 +1,28 @@
+# Loopin — tests del motor que se ejecutan en el PC (sin móvil)
+# Uso:
+#   cmake -S engine_tests -B build/engine_tests
+#   cmake --build build/engine_tests
+#   ./build/engine_tests/loopin_engine_tests
+cmake_minimum_required(VERSION 3.16)
+project(loopin_engine_tests LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/../packages/loopin_engine/src)
+
+add_executable(loopin_engine_tests
+  tests.cpp
+  ${SRC}/EngineCore.cpp
+  ${SRC}/LatencyMeter.cpp
+  ${SRC}/Metronome.cpp
+  ${SRC}/Transport.cpp
+)
+target_include_directories(loopin_engine_tests PRIVATE ${SRC})
+find_package(Threads REQUIRED)
+target_link_libraries(loopin_engine_tests PRIVATE Threads::Threads)
+if(MSVC)
+  target_compile_options(loopin_engine_tests PRIVATE /W4)
+else()
+  target_compile_options(loopin_engine_tests PRIVATE -Wall -Wextra -O2)
+endif()

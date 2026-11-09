@@ -1,0 +1,47 @@
+# Loopin — en cada push: tests del motor en PC + APK descargable
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Tests del motor (PC)
+        run: |
+          cmake -S engine_tests -B build/engine_tests -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/engine_tests -j
+          ./build/engine_tests/loopin_engine_tests
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.9'
+          cache: true
+
+      - name: Analizar Dart
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter analyze
+
+      - name: Compilar APK
+        working-directory: app
+        run: flutter build apk --release --target-platform android-arm64,android-arm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: loopin-apk
+          path: app/build/app/outputs/flutter-apk/app-release.apk

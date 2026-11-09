@@ -1,0 +1,125 @@
+// Loopin — streams de audio con Oboe
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "AudioEngine.h"
+
+#include <android/log.h>
+
+#define LOG_TAG "loopin"
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+
+namespace loopin {
+
+oboe::Result AudioEngine::openAudio() {
+  closeAudio();
+  disconnected_.store(false, std::memory_order_release);
+
+  // 1) Salida primero: elegimos la frecuencia nativa del dispositivo, que es la
+  //    que da la ruta de menor latencia (casi siempre 48 kHz).
+  oboe::AudioStreamBuilder out;
+  out.setDirection(oboe::Direction::Output)
+      ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
+      ->setSharingMode(oboe::SharingMode::Exclusive)
+      ->setFormat(oboe::AudioFormat::Float)
+      ->setFormatConversionAllowed(true)
+      ->setChannelCount(oboe::ChannelCount::Stereo)
+      ->setUsage(oboe::Usage::Game)
+      ->setContentType(oboe::ContentType::Music)
+      ->setDataCallback(this)
+      ->setErrorCallback(this);
+  oboe::Result result = out.openStream(output_);
+  if (result != oboe::Result::OK) {
+    LOGE("No se pudo abrir la salida: %s", oboe::convertToText(result));
+    return result;
+  }
+
+  // 2) Entrada con la misma frecuencia, mono. VoiceRecognition es el preset que
+  //    Oboe recomienda para baja latencia y suele venir sin procesar (sin
+  //    control automático de ganancia ni supresión de ruido).
+  oboe::AudioStreamBuilder in;
+  in.setDirection(oboe::Direction::Input)
+      ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
+      ->setSharingMode(oboe::SharingMode::Exclusive)
+      ->setFormat(oboe::AudioFormat::Float)
+      ->setFormatConversionAllowed(true)
+      ->setChannelCount(oboe::ChannelCount::Mono)
+      ->setChannelConversionAllowed(true)
+      ->setSampleRate(output_->getSampleRate())
+      ->setSampleRateConversionQuality(oboe::SampleRateConversionQuality::Medium)
+      ->setInputPreset(oboe::InputPreset::VoiceRecognition);
+  result = in.openStream(input_);
+  if (result != oboe::Result::OK) {
+    LOGE("No se pudo abrir la entrada: %s", oboe::convertToText(result));
+    closeStreams();
+    return result;
+  }
+
+  // Buffer de salida = 2 bloques: buen equilibrio entre latencia y cortes.
+  output_->setBufferSizeInFrames(output_->getFramesPerBurst() * 2);
+
+  core_.prepare(output_->getSampleRate());
+  setSharedInputStream(input_);
+  setSharedOutputStream(output_);
+
+  result = oboe::FullDuplexStream::start();
+  if (result != oboe::Result::OK) {
+    LOGE("No se pudo arrancar: %s", oboe::convertToText(result));
+    closeStreams();
+    return result;
+  }
+  running_.store(true, std::memory_order_release);
+  LOGI("Audio en marcha: %d Hz, burst %d, API %s, %s", output_->getSampleRate(),
+       output_->getFramesPerBurst(),
+       output_->getAudioApi() == oboe::AudioApi::AAudio ? "AAudio" : "OpenSL ES",
+       output_->getSharingMode() == oboe::SharingMode::Exclusive ? "exclusivo" : "compartido");
+  return oboe::Result::OK;
+}
+
+void AudioEngine::closeAudio() {
+  if (output_ || input_) {
+    oboe::FullDuplexStream::stop();
+  }
+  closeStreams();
+  running_.store(false, std::memory_order_release);
+}
+
+void AudioEngine::closeStreams() {
+  if (output_) {
+    output_->close();
+    output_.reset();
+  }
+  if (input_) {
+    input_->close();
+    input_.reset();
+  }
+}
+
+oboe::DataCallbackResult AudioEngine::onAudioReady(oboe::AudioStream* stream, void* audioData,
+                                                   int32_t numFrames) {
+  const oboe::DataCallbackResult r =
+      oboe::FullDuplexStream::onAudioReady(stream, audioData, numFrames);
+  if (r == oboe::DataCallbackResult::Stop) {
+    // La entrada ha fallado (p. ej. se ha desconectado). La interfaz lo verá y
+    // reiniciará el audio.
+    running_.store(false, std::memory_order_release);
+    disconnected_.store(true, std::memory_order_release);
+  }
+  return r;
+}
+
+oboe::DataCallbackResult AudioEngine::onBothStreamsReady(const void* inputData,
+                                                         int numInputFrames, void* outputData,
+                                                         int numOutputFrames) {
+  core_.process(static_cast<const float*>(inputData), numInputFrames,
+                getInputStream()->getChannelCount(), static_cast<float*>(outputData),
+                numOutputFrames, getOutputStream()->getChannelCount());
+  return oboe::DataCallbackResult::Continue;
+}
+
+void AudioEngine::onErrorAfterClose(oboe::AudioStream* /*stream*/, oboe::Result error) {
+  LOGE("Stream cerrado por error: %s", oboe::convertToText(error));
+  running_.store(false, std::memory_order_release);
+  disconnected_.store(true, std::memory_order_release);
+}
+
+}  // namespace loopin

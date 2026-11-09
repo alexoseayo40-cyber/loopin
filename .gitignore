@@ -1,0 +1,12 @@
+# Compilaciones
+build/
+.cxx/
+.gradle/
+*.apk
+*.aab
+
+# Editores
+.idea/
+.vscode/
+*.iml
+.DS_Store
