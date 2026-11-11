@@ -8,7 +8,7 @@ Looper de guitarra libre para Android: varias pistas que cuadran al compás, met
 
 El botón grande hace de pedal (actúa al pulsar, no al soltar):
 
-- **Toque:** grabar → reproducir → overdub → reproducir → overdub…
+- **Toque:** grabar → reproducir → overdub → reproducir → overdub… El overdub empieza en el primer tiempo del siguiente compás (te da tiempo a volver a la guitarra) y acaba al pulsar.
 - **Mantener:** deshacer la última capa.
 - **Doble toque:** parar / arrancar todo.
 

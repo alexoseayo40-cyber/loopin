@@ -381,6 +381,16 @@ class _PedalButton extends StatelessWidget {
           progress: s.loopLength > 0 ? s.loopPosition / s.loopLength : 0,
         );
       case LoopState.overdubbing:
+        if (s.loopRecorded < 0) {
+          // Esperando al primer tiempo del siguiente compás
+          final beats = s.samplesPerBeat > 0 ? (-s.loopRecorded / s.samplesPerBeat).ceil() : 0;
+          return (
+            color: Colors.orange.shade800,
+            title: '$beats',
+            subtitle: 'overdub en el próximo compás',
+            progress: s.loopLength > 0 ? s.loopPosition / s.loopLength : 0,
+          );
+        }
         return (
           color: Colors.amber.shade700,
           title: 'Overdub',

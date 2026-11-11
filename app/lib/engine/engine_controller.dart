@@ -29,8 +29,10 @@ enum LatencySource {
 class EngineController extends ChangeNotifier {
   EngineController({LoopinEngine? engine}) : _engine = engine ?? LoopinEngine.instance {
     _lifecycle = AppLifecycleListener(onHide: _onHide, onShow: _onShow);
-    _loadPrefs();
+    _prefsLoaded = _loadPrefs();
   }
+
+  late final Future<void> _prefsLoaded;
 
   final LoopinEngine _engine;
   static const _channel = MethodChannel('loopin/permissions');
@@ -103,6 +105,7 @@ class EngineController extends ChangeNotifier {
         // no pasa nada: solo es informativo
       }
     }
+    await _prefsLoaded;
     await refreshDevices();
     _wantRunning = true;
     _openStream();
@@ -369,6 +372,7 @@ class EngineController extends ChangeNotifier {
   void setInputPreset(InputPreset preset) {
     inputPreset = preset;
     _presetChosenByUser = true;
+    _savePreset();
     if (_wantRunning) {
       _engine.stop();
       _openStream();
@@ -489,8 +493,32 @@ class EngineController extends ChangeNotifier {
   // ---------- Ajustes guardados ----------
 
   static const _latencyPrefKey = 'latencies';
+  static const _presetPrefKey = 'inputPreset';
+
+  Future<void> _savePreset() async {
+    try {
+      await _channel.invokeMethod<void>('prefsSet', {
+        'key': _presetPrefKey,
+        'value': '${inputPreset.code}',
+      });
+    } on Object {
+      // no se pudo guardar: vale solo para esta sesión
+    }
+  }
 
   Future<void> _loadPrefs() async {
+    try {
+      // Modo del micrófono elegido por el usuario
+      final preset = await _channel.invokeMethod<String>('prefsGet', {'key': _presetPrefKey});
+      for (final p in InputPreset.values) {
+        if (preset != null && '${p.code}' == preset) {
+          inputPreset = p;
+          _presetChosenByUser = true;
+        }
+      }
+    } on Object {
+      // sin ajustes guardados
+    }
     try {
       final raw = await _channel.invokeMethod<String>('prefsGet', {'key': _latencyPrefKey});
       if (raw == null) return;

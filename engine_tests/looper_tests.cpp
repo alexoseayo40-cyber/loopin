@@ -291,10 +291,30 @@ void testOverdubUndoLayers() {
   CHECK_EQ(r.lp().layerCount(), 1);
   CHECK(!r.lp().canUndo());
 
-  // Overdub B: un loop entero empezando a media vuelta
-  int64_t a = r.outPos + len / 3;
-  r.postAt(a, T::kLoopPress);
+  // El overdub empieza en el primer tiempo del compás siguiente a la pulsación
+  auto nb = [&](int64_t x) { return origin + (x - origin + bar - 1) / bar * bar; };
+
+  // Pulsar y volver a pulsar antes de que empiece: no pasa nada
+  r.postAt(nb(r.outPos) + bar / 4, T::kLoopPress);
+  r.runFor(1);
+  CHECK(r.state() == St::kOverdubbing);
+  CHECK_EQ(r.lp().recordedFrames(r.outPos), r.outPos - nb(r.outPos));
+  r.runFor(bar / 4);
+  r.post(T::kLoopPress);
+  r.runFor(1);
+  CHECK(r.state() == St::kPlaying);
+  CHECK_EQ(r.lp().layerCount(), 1);
+  CHECK(!r.lp().canUndo());
+
+  // Overdub B: se pulsa a media vuelta, graba un loop entero desde el compás
+  int64_t press = r.outPos + len / 3;
+  int64_t a = nb(press);
+  r.postAt(press, T::kLoopPress);
   takes.push_back({a, a + len, 2});
+  r.runTo(a - 1);
+  CHECK(r.lp().recordedFrames(r.outPos) < 0);
+  r.runTo(a + 1);
+  CHECK_EQ(r.lp().recordedFrames(r.outPos), 0);
   r.postAt(a + len, T::kLoopPress);
   r.runFor(1);
   CHECK(r.state() == St::kPlaying);
@@ -315,8 +335,9 @@ void testOverdubUndoLayers() {
   // C (medio loop) y, pegado, D (un loop y medio, se oye a sí mismo al
   // dar la vuelta). Al acabar D, C se consolida en segundo plano: no debe
   // notarse nada.
-  a = r.outPos + 1234;
-  r.postAt(a, T::kLoopPress);
+  press = r.outPos + 1234;
+  a = nb(press);
+  r.postAt(press, T::kLoopPress);
   takes.push_back({a, a + len / 2, 3});
   r.postAt(a + len / 2, T::kLoopPress);  // fin de C
   r.post(T::kLoopPress);                 // empieza D en la misma muestra
@@ -362,8 +383,9 @@ void testOverdubUndoLayers() {
   CHECK_EQ(r.lp().layerCount(), 2);
 
   // Deshacer un overdub a medias
-  a = r.outPos + 100;
-  r.postAt(a, T::kLoopPress);
+  press = r.outPos + 100;
+  a = nb(press);
+  r.postAt(press, T::kLoopPress);
   takes.push_back({a, kInf, 5});
   r.runFor(len / 2);
   r.post(T::kLoopUndo);
@@ -480,7 +502,7 @@ void testPedalGestures() {
   CHECK(!r.lp().canUndo());
   // Otra capa y luego: toque (acaba) + mantener → se deshace esa capa
   r.post(T::kLoopPress);
-  r.runFor(bar / 2);
+  r.runFor(bar);
   r.post(T::kLoopPress);
   r.runFor(50);
   r.post(T::kLoopHold);
@@ -489,7 +511,7 @@ void testPedalGestures() {
   CHECK_EQ(r.lp().layerCount(), 1);
   // Otra capa; toque (empieza overdub) + doble toque → sin overdub y parado
   r.post(T::kLoopPress);
-  r.runFor(bar / 2);
+  r.runFor(bar);
   r.post(T::kLoopPress);
   r.runFor(100);
   r.post(T::kLoopPress);
@@ -508,7 +530,7 @@ void testPedalGestures() {
   CHECK(r.core.status().playing);
   // Overdub; toque (acaba) + doble toque → parado y con la capa
   r.post(T::kLoopPress);
-  r.runFor(bar / 2);
+  r.runFor(bar);
   r.post(T::kLoopPress);
   r.runFor(100);
   r.post(T::kLoopDoubleTap);
@@ -569,8 +591,8 @@ void testRestartKeepsLoop() {
   int64_t origin = bar;
   r.player = [&](int64_t n) { return sig(2, wrapPos(n - origin, bar)); };
   r.post(T::kLoopPress);
-  r.runTo(2 * bar + 1);
-  r.post(T::kLoopPress);  // overdub a medias
+  r.runTo(3 * bar);
+  r.post(T::kLoopPress);  // overdub a medias (justo en el primer tiempo)
   r.runFor(bar / 3);
   CHECK(r.state() == St::kOverdubbing);
 
@@ -593,7 +615,7 @@ void testRestartKeepsLoop() {
   for (int64_t p = 0; p < bar; ++p) {
     if (p >= bar / 3 - 1500 && p < bar / 3 + 500) continue;
     float want = sig(2, p);
-    if (p >= 1 && p < bar / 3) want += sig(2, p);
+    if (p < bar / 3) want += sig(2, p);
     if (r.hist[p] != want) ++wrong;
   }
   CHECK_EQ(wrong, 0);

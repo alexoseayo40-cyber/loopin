@@ -111,6 +111,11 @@ bool Looper::canUndo() const {
 
 int64_t Looper::recordedFrames(int64_t now) const {
   if (state_ == State::kArmed || state_ == State::kRecording) return now - recStart_;
+  if (state_ == State::kOverdubbing) {
+    // Overdub esperando al compás: negativo, lo que falta para empezar
+    for (const Layer& l : layers_)
+      if (l.st == Layer::St::kRecording && now < l.winStart) return now - l.winStart;
+  }
   return 0;
 }
 
@@ -235,7 +240,10 @@ void Looper::startOverdub(int64_t now) {
   fresh->extent = length_;
   fresh->cursor = 0;
   fresh->winOpen = true;
-  fresh->winStart = now;
+  // Empieza en el primer tiempo del siguiente compás del loop, para dar
+  // tiempo a volver a poner la mano en la guitarra tras pulsar.
+  const int64_t inBar = wrap(now - origin_, barFrames_);
+  fresh->winStart = inBar == 0 ? now : now + (barFrames_ - inBar);
   fresh->winEnd = kNever;
   fresh->winOrigin = origin_;
   state_ = State::kOverdubbing;
@@ -243,6 +251,14 @@ void Looper::startOverdub(int64_t now) {
 
 void Looper::endOverdub(int64_t now) {
   Layer* rec = findLayer(Layer::St::kRecording);
+  if (rec != nullptr && now <= rec->winStart) {
+    // Aún estaba esperando al compás: no se ha grabado nada, se anula
+    rec->st = Layer::St::kEmpty;
+    rec->winOpen = false;
+    rec->extent = 0;
+    state_ = State::kPlaying;
+    return;
+  }
   // La capa anterior ya no se podrá deshacer: se consolida en segundo plano
   for (Layer& l : layers_) {
     if (&l != rec && l.st == Layer::St::kLive) {
