@@ -14,8 +14,8 @@ El botón grande hace de pedal (actúa al pulsar, no al soltar):
 
 Modos de grabación:
 
-- **Sincronizado:** 1 compás de cuenta de entrada (si el metrónomo estaba parado) o espera al siguiente compás, y graba 1, 2, 4 u 8 compases.
-- **Manual:** vuelve a tocar para cerrar; el loop se ajusta al compás más cercano (si pulsas tarde se recorta, si pulsas pronto sigue hasta el final del compás). Si empiezas a grabar un poco tarde (hasta ¼ de compás), empieza en el compás que acaba de pasar.
+- **Sincronizado:** al pulsar, el metrónomo empieza de cero (aunque ya estuviera sonando), cuenta 1 compás y graba 1, 2, 4 u 8 compases.
+- **Manual:** vuelve a tocar para cerrar; el loop se ajusta al compás más cercano (si pulsas tarde se recorta, si pulsas pronto sigue hasta el final del compás). También empieza con 1 compás de cuenta desde que pulsas.
 
 Mide la latencia una vez por cada combinación de entrada y salida (Ajustes › Audio y latencia): se guarda y se aplica sola.
 

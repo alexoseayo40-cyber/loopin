@@ -150,7 +150,7 @@ void testSyncFourBarsNoDrift() {
 
 // -----------------------------------------------------------------------------
 void testManualMode() {
-  std::printf("Manual: empezar algo tarde, cerrar tarde y cerrar pronto\n");
+  std::printf("Manual: cuenta de entrada al pulsar, cerrar tarde y cerrar pronto\n");
   const int32_t sr = 48000;
   Rig r(sr, 3000, 7);
   r.post(T::kSetBpm, 120);
@@ -158,14 +158,18 @@ void testManualMode() {
   const int64_t bar = 4 * 24000;
   r.post(T::kPlay);  // metrónomo desde la muestra 0
 
-  // Pulsa 5000 muestras después del compás 3: dentro del margen (1/4 de
-  // compás), así que la grabación empieza en el compás 3, en el pasado.
-  int64_t recStart = 2 * bar;
+  // Pulsa en cualquier momento con el metrónomo ya sonando: el metrónomo
+  // vuelve a empezar ahí, cuenta 1 compás y entonces graba.
+  const int64_t press0 = 2 * bar + 5000;
+  int64_t recStart = press0 + bar;
   r.player = [&](int64_t n) { return n >= recStart ? sig(1, n - recStart) : 0.7f; };
-  r.postAt(2 * bar + 5000, T::kLoopPress);
+  r.postAt(press0, T::kLoopPress);
   r.runFor(1);
-  CHECK(r.state() == St::kRecording);
+  CHECK(r.state() == St::kArmed);
+  CHECK_EQ(r.core.status().framePosition, r.outPos - press0);  // clic reiniciado
   CHECK_EQ(r.lp().recordedFrames(r.outPos), r.outPos - recStart);
+  r.runTo(recStart + 1);
+  CHECK(r.state() == St::kRecording);
   CHECK_EQ(r.lp().targetFrames(), 0);
 
   // Cierra a los 3,3 compases: se recorta a 3 y suena ya, en su sitio
@@ -184,15 +188,15 @@ void testManualMode() {
   for (int64_t n = recStart; n < press; ++n) silent = silent && r.hist[n] == 0.0f;
   CHECK(silent);
 
-  // Borrar y otra vez, pulsando a 0,6 compases: espera al siguiente compás
+  // Borrar y otra vez, pulsando a mitad de compás: cuenta desde ahí
   r.post(T::kLoopClear);
   r.runFor(1);
   CHECK(r.state() == St::kEmpty);
-  const int64_t barNow = (r.outPos / bar + 1) * bar;  // primer tiempo siguiente
-  r.postAt(barNow + bar * 6 / 10, T::kLoopPress);
+  const int64_t press1 = (r.outPos / bar + 1) * bar + bar * 6 / 10;
+  r.postAt(press1, T::kLoopPress);
   r.runFor(1);
   CHECK(r.state() == St::kArmed);
-  recStart = barNow + bar;
+  recStart = press1 + bar;
   CHECK_EQ(r.lp().recordedFrames(r.outPos), r.outPos - recStart);
   r.runTo(recStart + 1);
   CHECK(r.state() == St::kRecording);
@@ -212,15 +216,17 @@ void testManualMode() {
     if (r.hist[n] != sig(1, wrapPos(n - recStart, 3 * bar))) ++wrong;
   CHECK_EQ(wrong, 0);
 
-  // En modo sincronizado no hay margen hacia atrás: espera al compás siguiente
+  // En modo sincronizado, igual: cuenta de entrada desde la pulsación
   r.post(T::kLoopClear);
   r.post(T::kSetLoopMode, 0);
   r.post(T::kSetSyncBars, 1);
-  const int64_t nextBar = (r.outPos / bar + 1) * bar;
-  r.postAt(nextBar + 100, T::kLoopPress);
+  const int64_t press2 = r.outPos + 12345;
+  r.postAt(press2, T::kLoopPress);
   r.runFor(1);
   CHECK(r.state() == St::kArmed);
-  CHECK_EQ(r.lp().recordedFrames(r.outPos), r.outPos - (nextBar + bar));
+  CHECK_EQ(r.lp().recordedFrames(r.outPos), r.outPos - (press2 + bar));
+  r.runTo(press2 + 2 * bar + 1);
+  CHECK(r.state() == St::kPlaying);
 }
 
 // -----------------------------------------------------------------------------

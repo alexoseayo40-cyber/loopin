@@ -140,45 +140,21 @@ void Looper::fireEvent(int64_t n) {
 
 // ---------------------------------------------------------------- grabar
 
-void Looper::arm(int64_t now, const InputRing& in) {
+void Looper::arm(int64_t now, const InputRing& /*in*/) {
   userClosed_ = false;
   stopAfterRec_ = false;
-  if (!transport_->playing()) {
-    // Parado: arranca el metrónomo y graba tras 1 compás de cuenta de entrada
-    transport_->play();
-    barFrames_ = transport_->samplesPerBar();
-    recStart_ = now + barFrames_;
-  } else {
-    barFrames_ = transport_->nextSamplesPerBar();
-    const int64_t since = transport_->framesSinceBar();
-    // En modo manual, si se pulsa un poco tarde (hasta 1/4 de compás y como
-    // mucho 1 s) se empieza en el primer tiempo que acaba de pasar.
-    const int64_t grace = std::min<int64_t>(barFrames_ / 4, sampleRate_);
-    if (mode_ == Mode::kManual && since > 0 && since <= grace &&
-        !transport_->hasPendingChange()) {
-      recStart_ = now - since;
-    } else {
-      recStart_ = now + transport_->framesToNextBar();
-    }
-  }
+  // Siempre con cuenta de entrada: el metrónomo vuelve a empezar en el tiempo 1
+  // justo al pulsar (aunque ya estuviera sonando), cuenta 1 compás y se graba.
+  transport_->stop();
+  transport_->play();
+  barFrames_ = transport_->samplesPerBar();
+  recStart_ = now + barFrames_;
   const int64_t bars = mode_ == Mode::kSync ? std::min<int64_t>(syncBars_, maxBars()) : maxBars();
   recEnd_ = recStart_ + bars * barFrames_;
   recWinOpen_ = true;
   layerCount_ = 0;
-
-  if (recStart_ <= now) {
-    state_ = State::kRecording;
-    nextEvent_ = recEnd_;
-    // Lo que ya se ha capturado de la ventana (empezó en el pasado) se copia
-    // ahora del anillo de entrada.
-    for (int64_t n = recStart_; n < capN_; ++n) {
-      const int64_t j = n + latency_;
-      if (j >= in.begin() && j < in.end()) base_[static_cast<size_t>(n - recStart_)] = in.at(j);
-    }
-  } else {
-    state_ = State::kArmed;
-    nextEvent_ = recStart_;
-  }
+  state_ = State::kArmed;
+  nextEvent_ = recStart_;
 }
 
 void Looper::closeRecording(int64_t now) {

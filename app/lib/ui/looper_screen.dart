@@ -350,7 +350,7 @@ class _PedalButton extends StatelessWidget {
         return (
           color: cs.surfaceContainerHighest,
           title: 'Grabar',
-          subtitle: s.playing ? 'empieza en el próximo compás' : 'con 1 compás de cuenta',
+          subtitle: 'con 1 compás de cuenta',
           progress: 0,
         );
       case LoopState.armed:
