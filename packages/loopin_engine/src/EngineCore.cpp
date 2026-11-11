@@ -61,7 +61,7 @@ void EngineCore::apply(const Command& cmd) {
       latency_.start();
       break;
     case Command::Type::kLoopPress:
-      looper_.press(now, ring_);
+      looper_.press(now);
       break;
     case Command::Type::kLoopHold:
       looper_.hold(now);
@@ -73,7 +73,7 @@ void EngineCore::apply(const Command& cmd) {
       looper_.undo(now);
       break;
     case Command::Type::kLoopClear:
-      looper_.clear(now);
+      looper_.clearAll(now);
       break;
     case Command::Type::kSetLoopMode:
       looper_.setMode(cmd.value != 0.0 ? Looper::Mode::kManual : Looper::Mode::kSync);
@@ -86,6 +86,24 @@ void EngineCore::apply(const Command& cmd) {
       break;
     case Command::Type::kSetLoopVolume:
       looper_.setVolume(static_cast<float>(cmd.value));
+      break;
+    case Command::Type::kSelectTrack:
+      looper_.select(cmd.arg);
+      break;
+    case Command::Type::kSelectNextTrack:
+      looper_.selectNext();
+      break;
+    case Command::Type::kSetTrackVolume:
+      looper_.setTrackVolume(cmd.arg, static_cast<float>(cmd.value));
+      break;
+    case Command::Type::kSetTrackMuted:
+      looper_.setTrackMuted(cmd.arg, cmd.value != 0.0);
+      break;
+    case Command::Type::kClearTrack:
+      looper_.clearTrack(cmd.arg, now);
+      break;
+    case Command::Type::kSetAutoAdvance:
+      looper_.setAutoAdvance(cmd.value != 0.0);
       break;
   }
 }
@@ -187,6 +205,19 @@ void EngineCore::publish() {
   aLoopRecorded_.store(looper_.recordedFrames(outPos_), std::memory_order_relaxed);
   aLoopTarget_.store(looper_.targetFrames(), std::memory_order_relaxed);
   aLoopBarFrames_.store(looper_.barFrames(), std::memory_order_relaxed);
+  aLoopSelected_.store(looper_.selected(), std::memory_order_relaxed);
+  aLoopActive_.store(looper_.active(), std::memory_order_relaxed);
+  aLoopAutoAdvance_.store(looper_.autoAdvance() ? 1 : 0, std::memory_order_relaxed);
+  aLoopBaseLength_.store(looper_.baseLength(), std::memory_order_relaxed);
+  aLoopBasePosition_.store(looper_.basePosition(outPos_), std::memory_order_relaxed);
+  for (int32_t i = 0; i < Looper::kTracks; ++i) {
+    aTrackState_[i].store(static_cast<int32_t>(looper_.trackState(i)), std::memory_order_relaxed);
+    aTrackLayers_[i].store(looper_.trackLayers(i), std::memory_order_relaxed);
+    aTrackMuted_[i].store(looper_.trackMuted(i) ? 1 : 0, std::memory_order_relaxed);
+    aTrackVolume_[i].store(looper_.trackVolume(i), std::memory_order_relaxed);
+    aTrackLength_[i].store(looper_.trackLength(i), std::memory_order_relaxed);
+    aTrackPosition_[i].store(looper_.trackPosition(i), std::memory_order_relaxed);
+  }
 
   // El estado va el último: quien lo lea como «hecho» ve ya el resultado.
   aLatencyState_.store(static_cast<int32_t>(latency_.state()), std::memory_order_release);
@@ -216,6 +247,19 @@ CoreStatus EngineCore::status() const {
   s.loopRecorded = aLoopRecorded_.load(std::memory_order_relaxed);
   s.loopTarget = aLoopTarget_.load(std::memory_order_relaxed);
   s.loopBarFrames = aLoopBarFrames_.load(std::memory_order_relaxed);
+  s.loopSelected = aLoopSelected_.load(std::memory_order_relaxed);
+  s.loopActive = aLoopActive_.load(std::memory_order_relaxed);
+  s.loopAutoAdvance = aLoopAutoAdvance_.load(std::memory_order_relaxed);
+  s.loopBaseLength = aLoopBaseLength_.load(std::memory_order_relaxed);
+  s.loopBasePosition = aLoopBasePosition_.load(std::memory_order_relaxed);
+  for (int32_t i = 0; i < Looper::kTracks; ++i) {
+    s.trackState[i] = aTrackState_[i].load(std::memory_order_relaxed);
+    s.trackLayers[i] = aTrackLayers_[i].load(std::memory_order_relaxed);
+    s.trackMuted[i] = aTrackMuted_[i].load(std::memory_order_relaxed);
+    s.trackVolume[i] = aTrackVolume_[i].load(std::memory_order_relaxed);
+    s.trackLength[i] = aTrackLength_[i].load(std::memory_order_relaxed);
+    s.trackPosition[i] = aTrackPosition_[i].load(std::memory_order_relaxed);
+  }
   return s;
 }
 

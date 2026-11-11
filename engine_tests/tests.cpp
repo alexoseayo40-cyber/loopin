@@ -265,7 +265,7 @@ int main() {
   testInputGain();
   testLatencyMeter();
   testSpscQueue();
-  std::printf("\n=== Etapa 2: looper ===\n");
+  std::printf("\n=== Looper ===\n");
   runLooperTests();
   if (gFailures == 0) {
     std::printf("\nTodo OK\n");

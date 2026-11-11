@@ -78,7 +78,7 @@ enum LoopState {
   /// Cuenta de entrada o esperando al siguiente compás para grabar.
   armed,
 
-  /// Grabando el primer loop.
+  /// Grabando una pista vacía.
   recording,
   playing,
   overdubbing,
@@ -89,16 +89,47 @@ enum LoopState {
   bool get hasLoop => this == playing || this == overdubbing || this == stopped;
 }
 
-/// Modo de grabación del primer loop (mismo orden que LOOPIN_MODE_*).
+/// Modo de grabación (mismo orden que LOOPIN_MODE_*).
 enum LoopMode {
-  /// Cuenta de entrada y se cierra solo tras N compases.
+  /// Graba N compases y se cierra solo.
   sync('Sincronizado'),
 
-  /// Se cierra al pulsar, en el compás más cercano.
+  /// Se cierra al pulsar.
   manual('Manual');
 
   const LoopMode(this.label);
   final String label;
+}
+
+/// Número de pistas del looper.
+const int kTrackCount = 4;
+
+/// Estado de una pista.
+class TrackStatus {
+  const TrackStatus({
+    this.state = LoopState.empty,
+    this.layers = 0,
+    this.muted = false,
+    this.volume = 1,
+    this.length = 0,
+    this.position = 0,
+  });
+
+  final LoopState state;
+
+  /// Capas que suenan (la primera grabación cuenta como 1).
+  final int layers;
+  final bool muted;
+  final double volume;
+
+  /// Longitud en muestras: 1, 2 o 4 veces la base (0 = vacía).
+  final int length;
+  final int position;
+
+  bool get hasLoop => length > 0;
+
+  /// Por dónde va, de 0 a 1.
+  double get progress => length > 0 ? position / length : 0;
 }
 
 /// Copia inmutable del estado del motor en un instante.
@@ -149,6 +180,12 @@ class EngineStatus {
     this.loopRecorded = 0,
     this.loopTarget = 0,
     this.loopBarFrames = 0,
+    this.selectedTrack = 0,
+    this.activeTrack = -1,
+    this.autoAdvance = false,
+    this.baseLength = 0,
+    this.basePosition = 0,
+    this.tracks = const [TrackStatus(), TrackStatus(), TrackStatus(), TrackStatus()],
   });
 
   final bool running;
@@ -225,6 +262,28 @@ class EngineStatus {
   final int loopTarget;
   final int loopBarFrames;
 
+  /// Pista que usará el siguiente toque del botón principal (0..3).
+  final int selectedTrack;
+
+  /// Pista en la que se está grabando o a punto (-1 si ninguna).
+  final int activeTrack;
+
+  /// Tras grabar una pista se elige sola la siguiente vacía.
+  final bool autoAdvance;
+
+  /// Duración base en muestras: la de la primera pista grabada (0 = sin loops).
+  final int baseLength;
+  final int basePosition;
+
+  /// Las [kTrackCount] pistas.
+  final List<TrackStatus> tracks;
+
+  /// Hay algún loop grabado.
+  bool get hasLoops => baseLength > 0;
+
+  /// Compases de la base.
+  int get baseBars => loopBarFrames > 0 ? (baseLength / loopBarFrames).round() : 0;
+
   /// Compases del loop (o grabados hasta ahora).
   double get loopBars {
     if (loopBarFrames <= 0) return 0;
@@ -285,6 +344,12 @@ class LoopinEngine {
   void loopDoubleTap() => _b.loopin_loop_double_tap();
   void loopUndo() => _b.loopin_loop_undo();
   void loopClear() => _b.loopin_loop_clear();
+  void selectTrack(int track) => _b.loopin_select_track(track);
+  void selectNextTrack() => _b.loopin_select_next_track();
+  void setTrackVolume(int track, double v) => _b.loopin_set_track_volume(track, v);
+  void setTrackMuted(int track, bool muted) => _b.loopin_set_track_muted(track, muted ? 1 : 0);
+  void clearTrack(int track) => _b.loopin_clear_track(track);
+  void setAutoAdvance(bool on) => _b.loopin_set_auto_advance(on ? 1 : 0);
   void setLoopMode(LoopMode mode) => _b.loopin_set_loop_mode(mode.index);
   void setSyncBars(int bars) => _b.loopin_set_sync_bars(bars);
   void setLoopVolume(double v) => _b.loopin_set_loop_volume(v);
@@ -345,6 +410,22 @@ class LoopinEngine {
       loopRecorded: s.loop_recorded,
       loopTarget: s.loop_target,
       loopBarFrames: s.loop_bar_frames,
+      selectedTrack: s.loop_selected.clamp(0, kTrackCount - 1),
+      activeTrack: s.loop_active,
+      autoAdvance: s.loop_auto_advance != 0,
+      baseLength: s.loop_base_length,
+      basePosition: s.loop_base_position,
+      tracks: [
+        for (var i = 0; i < kTrackCount; i++)
+          TrackStatus(
+            state: LoopState.values[s.track_state[i].clamp(0, LoopState.values.length - 1)],
+            layers: s.track_layers[i],
+            muted: s.track_muted[i] != 0,
+            volume: s.track_volume[i],
+            length: s.track_length[i],
+            position: s.track_position[i],
+          ),
+      ],
     );
   }
 

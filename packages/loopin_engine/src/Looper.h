@@ -1,4 +1,4 @@
-// Loopin — looper: grabar, reproducir, overdub, deshacer y borrar
+// Loopin — looper de 4 pistas: grabar, reproducir, overdub, deshacer y borrar
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
@@ -37,7 +37,7 @@ class InputRing {
   int64_t end_ = 0;
 };
 
-// Un loop sincronizado con el transporte (Etapa 2: una pista).
+// Cuatro pistas sincronizadas con el transporte.
 //
 // Cómo se cuenta el tiempo: n es el índice absoluto de una muestra de salida y
 // j el de una de entrada. Todo (inicio y fin de la grabación, overdub, origen
@@ -47,76 +47,113 @@ class InputRing {
 // escritura va con retraso: capture() avanza un cursor de salida capN_ a medida
 // que llega la entrada.
 //
-// Capas: base_ es el loop ya consolidado. Cada overdub va a una capa aparte
-// (hay dos) para poder deshacerlo. Al acabar un overdub, la capa anterior se
-// suma a base_ poco a poco en segundo plano: como lo que suena es
-// base_ + capas, sumar una muestra de la capa a base_ y poner la capa a 0 no
-// cambia nada de lo que se oye.
+// Pistas: la primera que se graba marca la duración base (con cuenta de
+// entrada). Las siguientes se graban sobre lo que suena, empiezan en el primer
+// tiempo del siguiente compás y duran 1, 2 o 4 veces la base. Cada pista tiene
+// su propio origen (la muestra de salida de su posición 0), así no hay que
+// girar ningún buffer: suena en wrap(n − origen, longitud).
+//
+// Solo se graba en una pista a la vez (la «activa»). La pista «seleccionada»
+// es la que usará el siguiente toque del botón principal.
+//
+// Capas: cada overdub va a una capa aparte (hay dos, compartidas entre las
+// cuatro pistas) para poder deshacerlo. Al acabar el siguiente overdub o la
+// siguiente pista, la capa anterior se suma a su pista poco a poco en segundo
+// plano: como lo que suena es pista + capas, sumar una muestra de la capa a la
+// pista y poner la capa a 0 no cambia nada de lo que se oye.
+//
+// Invariante: el buffer de una pista vacía es todo ceros (salvo mientras se
+// está borrando en segundo plano). Así, si se deja de grabar antes de llenar la
+// pista, el resto es silencio sin tener que escribirlo.
 class Looper {
  public:
+  static constexpr int32_t kTracks = 4;
+
+  // Estado general y también el de cada pista (trackState).
   enum class State : int32_t {
     kEmpty = 0,     // sin loop
-    kArmed = 1,     // esperando al primer tiempo para grabar (cuenta de entrada)
-    kRecording = 2, // grabando el primer loop
+    kArmed = 1,     // esperando para grabar (cuenta de entrada o siguiente compás)
+    kRecording = 2, // grabando una pista vacía
     kPlaying = 3,
     kOverdubbing = 4,
     kStopped = 5,   // hay loop pero el transporte está parado
   };
   enum class Mode : int32_t {
     kSync = 0,    // graba N compases y se cierra solo
-    kManual = 1,  // se cierra al pulsar, en el compás más cercano
+    kManual = 1,  // se cierra al pulsar
   };
 
   static constexpr int32_t kMaxSeconds = 60;
   static constexpr int64_t kNever = std::numeric_limits<int64_t>::max();
 
   // Fuera del hilo de audio. Reserva memoria. Si ya estaba preparado con la
-  // misma frecuencia, conserva el loop (queda parado); si cambia, lo borra.
+  // misma frecuencia, conserva los loops (quedan parados); si cambia, los borra.
   void prepare(int32_t sampleRate, Transport* transport, int32_t maxSeconds = kMaxSeconds);
 
   // --- Órdenes (hilo de audio, al principio de un bloque) ---
   // now = índice absoluto de la próxima muestra de salida.
-  void press(int64_t now, const InputRing& in);  // toque del botón principal
+  void press(int64_t now);      // toque del botón principal
   void hold(int64_t now);       // mantener pulsado tras un toque
   void doubleTap(int64_t now);  // segundo toque rápido tras un toque
-  void undo(int64_t now);
-  void clear(int64_t now);
-  void startAll(int64_t now);   // arranca transporte (y loop si lo hay)
-  void stopAll(int64_t now);    // para transporte y loop
+  void undo(int64_t now);       // deshace lo último (una capa o una pista)
+  void clearAll(int64_t now);
+  void clearTrack(int32_t track, int64_t now);
+  void startAll(int64_t now);   // arranca transporte (y loops si los hay)
+  void stopAll(int64_t now);    // para transporte y loops
+  void select(int32_t track);   // no hace nada mientras se graba
+  void selectNext();
+  void setAutoAdvance(bool on) { autoAdvance_ = on; }
   void setMode(Mode mode) { mode_ = mode; }
   void setSyncBars(int32_t bars);
   void setLatency(int32_t frames);
-  void setVolume(float volume);
+  void setVolume(float volume);  // volumen general de los loops
+  void setTrackVolume(int32_t track, float volume);
+  void setTrackMuted(int32_t track, bool muted);
 
   // --- Por muestra / por bloque (hilo de audio) ---
   // Una muestra de salida. Llamar después de transport.tick() de esa muestra.
   inline float render(int64_t n) {
     if (n >= nextEvent_) fireEvent(n);
-    if (state_ != State::kPlaying && state_ != State::kOverdubbing) return 0.0f;
-    const size_t p = static_cast<size_t>(playPos_);
-    float s = base_[p];
-    for (const Layer& l : layers_)
-      if (l.audible()) s += l.data[p];
-    if (++playPos_ >= length_) playPos_ = 0;
-    return s * volume_;
+    if (state_ == State::kStopped || baseLen_ == 0) return 0.0f;
+    float out = 0.0f;
+    for (int32_t i = 0; i < kTracks; ++i) {
+      Track& t = tracks_[static_cast<size_t>(i)];
+      if (t.len == 0) continue;
+      const size_t p = static_cast<size_t>(t.playPos);
+      float s = t.data[p];
+      for (const Layer& l : layers_)
+        if (l.track == i && l.audible()) s += l.data[p];
+      if (++t.playPos >= t.len) t.playPos = 0;
+      // El volumen cambia poco a poco (unos 5 ms) para que no haga «clic»
+      const float target = t.muted ? 0.0f : t.volume;
+      if (t.gain != target) {
+        t.gain += (target - t.gain) * kGainSmoothing;
+        if (t.gain - target < 1e-4f && target - t.gain < 1e-4f) t.gain = target;
+      }
+      out += s * t.gain;
+    }
+    return out * volume_;
   }
-  // Escribe en el loop la entrada que ya ha llegado, compensada.
+  // Escribe en las pistas la entrada que ya ha llegado, compensada.
   void capture(const InputRing& in);
-  // Trabajo de fondo acotado: sumar o borrar capas (budget muestras).
+  // Trabajo de fondo acotado: sumar o borrar capas y pistas (budget muestras).
   void background(int32_t budget);
 
   // --- Estado ---
   State state() const { return state_; }
   Mode mode() const { return mode_; }
   int32_t syncBars() const { return syncBars_; }
+  bool autoAdvance() const { return autoAdvance_; }
   bool locksTempo() const { return state_ != State::kEmpty; }
   // Durante la cuenta de entrada el clic suena aunque esté apagado.
-  bool forcesClick() const { return state_ == State::kArmed; }
-  int64_t length() const { return length_; }
-  int64_t position() const { return playPos_; }
+  bool forcesClick() const { return state_ == State::kArmed && baseLen_ == 0; }
+  int32_t selected() const { return selected_; }
+  // Pista en la que se está grabando (o a punto), −1 si ninguna.
+  int32_t active() const { return busy() ? active_ : -1; }
+  int64_t baseLength() const { return baseLen_; }
+  int64_t basePosition(int64_t now) const;
   int64_t barFrames() const { return barFrames_; }
   int32_t latency() const { return latency_; }
-  int32_t layerCount() const { return layerCount_; }
   bool canUndo() const;
   // Armado: negativo, muestras que faltan para empezar. Grabando: grabadas.
   int64_t recordedFrames(int64_t now) const;
@@ -124,11 +161,43 @@ class Looper {
   int64_t targetFrames() const;
   int64_t capacityFrames() const { return capacity_; }
 
+  State trackState(int32_t track) const;
+  int64_t trackLength(int32_t track) const { return tr(track).len; }
+  int64_t trackPosition(int32_t track) const { return tr(track).playPos; }
+  int32_t trackLayers(int32_t track) const { return tr(track).layers; }
+  float trackVolume(int32_t track) const { return tr(track).volume; }
+  bool trackMuted(int32_t track) const { return tr(track).muted; }
+
+  // De la pista seleccionada (lo que mira el botón principal)
+  int64_t length() const { return trackLength(selected_); }
+  int64_t position() const { return trackPosition(selected_); }
+  int32_t layerCount() const { return trackLayers(selected_); }
+
  private:
+  static constexpr float kGainSmoothing = 0.004f;
+
+  struct Track {
+    std::vector<float> data;
+    int64_t len = 0;      // 0 = vacía
+    int64_t origin = 0;   // índice de salida de su posición 0
+    int64_t playPos = 0;
+    int32_t layers = 0;   // capas que suenan (la primera grabación cuenta 1)
+    float volume = 1.0f;
+    bool muted = false;
+    float gain = 1.0f;    // volumen aplicado (sigue a volume / muted)
+    // Ventana de la primera grabación de la pista (índices de salida)
+    bool winOpen = false;
+    int64_t winStart = 0, winEnd = 0;
+    // Borrado en segundo plano de [0, clearExtent)
+    bool clearing = false;
+    int64_t clearCursor = 0, clearExtent = 0;
+  };
+
   struct Layer {
     enum class St { kEmpty, kRecording, kLive, kMerging, kClearing };
     std::vector<float> data;
     St st = St::kEmpty;
+    int32_t track = 0;   // pista a la que pertenece
     int64_t extent = 0;  // posiciones [0, extent) que pueden no ser 0
     int64_t cursor = 0;  // avance del trabajo de fondo
     // Ventana de grabación (índices de salida) y origen del loop en ella
@@ -139,8 +208,26 @@ class Looper {
     }
   };
 
+  // Lo último que se hizo y se puede deshacer
+  enum class Last { kNone, kLayer, kTrack };
+
+  const Track& tr(int32_t track) const {
+    return tracks_[static_cast<size_t>(track < 0 ? 0 : (track >= kTracks ? kTracks - 1 : track))];
+  }
+  Track& tr(int32_t track) {
+    return tracks_[static_cast<size_t>(track < 0 ? 0 : (track >= kTracks ? kTracks - 1 : track))];
+  }
+  bool busy() const {
+    return state_ == State::kArmed || state_ == State::kRecording ||
+           state_ == State::kOverdubbing;
+  }
+  bool recordingTrack() const {
+    return state_ == State::kArmed || state_ == State::kRecording;
+  }
+  bool anyContent() const;
+
   void fireEvent(int64_t n);
-  void arm(int64_t now, const InputRing& in);
+  void arm(int64_t now);
   void closeRecording(int64_t now);
   void finishRecording(int64_t now);
   void cancelRecording();
@@ -148,14 +235,22 @@ class Looper {
   void endOverdub(int64_t now);
   void discard(Layer& l);
   void finishBackground(Layer& l);
+  void startClear(Track& t, int64_t extent);
+  void finishClear(Track& t);
+  void dropTrack(int32_t track);
+  void consolidateLive();
+  void advanceSelection(int32_t from);
+  void refreshEmpty();
   Layer* findLayer(Layer::St st);
   int64_t maxBars() const;
+  int64_t maxMultiple() const;
+  int64_t lengthFor(int64_t frames) const;
   void clearPre() { hasPre_ = false; }
 
   int32_t sampleRate_ = 0;
   Transport* transport_ = nullptr;
   int64_t capacity_ = 0;
-  std::vector<float> base_;
+  std::array<Track, kTracks> tracks_;
   std::array<Layer, 2> layers_;
 
   State state_ = State::kEmpty;
@@ -163,22 +258,27 @@ class Looper {
   int32_t syncBars_ = 4;
   float volume_ = 1.0f;
   int32_t latency_ = 0;
+  bool autoAdvance_ = false;
 
-  int64_t barFrames_ = 0;  // muestras por compás del loop
-  int64_t length_ = 0;     // longitud del loop (0 = vacío)
-  int64_t origin_ = 0;     // índice de salida de la posición 0 del loop
-  int64_t playPos_ = 0;
+  int32_t selected_ = 0;  // pista que usará el siguiente toque
+  int32_t active_ = 0;    // pista en la que se graba
+
+  int64_t barFrames_ = 0;  // muestras por compás de los loops
+  int64_t baseLen_ = 0;    // duración base (0 = no hay ningún loop)
+  int64_t origin_ = 0;     // índice de salida de un inicio del ciclo base
   int64_t nextEvent_ = kNever;
-  int32_t layerCount_ = 0;  // capas que suenan (el loop base cuenta como 1)
 
-  // Grabación del primer loop: ventana [recStart_, recEnd_)
+  // Grabación en curso de la pista activa: ventana [recStart_, recEnd_)
   int64_t recStart_ = 0;
   int64_t recEnd_ = 0;
-  bool recWinOpen_ = false;
+  int64_t newLen_ = 0;         // longitud elegida al cerrar (pistas 2 a 4)
   bool userClosed_ = false;    // ya se pulsó para cerrar
   bool stopAfterRec_ = false;  // al acabar de grabar, quedarse parado
 
   int64_t capN_ = 0;  // siguiente índice de salida a capturar
+
+  Last last_ = Last::kNone;
+  int32_t lastTrack_ = 0;
 
   // Estado antes del último toque, para interpretar «mantener» y «doble toque»
   bool hasPre_ = false;

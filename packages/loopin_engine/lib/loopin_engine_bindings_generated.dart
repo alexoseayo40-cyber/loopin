@@ -236,6 +236,73 @@ class LoopinEngineBindings {
   late final _loopin_loop_clear = _loopin_loop_clearPtr
       .asFunction<void Function()>();
 
+  /// Pistas (track de 0 a LOOPIN_TRACKS - 1)
+  void loopin_select_track(int track) {
+    return _loopin_select_track(track);
+  }
+
+  late final _loopin_select_trackPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+        'loopin_select_track',
+      );
+  late final _loopin_select_track = _loopin_select_trackPtr
+      .asFunction<void Function(int)>();
+
+  void loopin_select_next_track() {
+    return _loopin_select_next_track();
+  }
+
+  late final _loopin_select_next_trackPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function()>>(
+        'loopin_select_next_track',
+      );
+  late final _loopin_select_next_track = _loopin_select_next_trackPtr
+      .asFunction<void Function()>();
+
+  void loopin_set_track_volume(int track, double volume) {
+    return _loopin_set_track_volume(track, volume);
+  }
+
+  late final _loopin_set_track_volumePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32, ffi.Float)>>(
+        'loopin_set_track_volume',
+      );
+  late final _loopin_set_track_volume = _loopin_set_track_volumePtr
+      .asFunction<void Function(int, double)>();
+
+  void loopin_set_track_muted(int track, int muted) {
+    return _loopin_set_track_muted(track, muted);
+  }
+
+  late final _loopin_set_track_mutedPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32, ffi.Int32)>>(
+        'loopin_set_track_muted',
+      );
+  late final _loopin_set_track_muted = _loopin_set_track_mutedPtr
+      .asFunction<void Function(int, int)>();
+
+  void loopin_clear_track(int track) {
+    return _loopin_clear_track(track);
+  }
+
+  late final _loopin_clear_trackPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+        'loopin_clear_track',
+      );
+  late final _loopin_clear_track = _loopin_clear_trackPtr
+      .asFunction<void Function(int)>();
+
+  void loopin_set_auto_advance(int enabled) {
+    return _loopin_set_auto_advance(enabled);
+  }
+
+  late final _loopin_set_auto_advancePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+        'loopin_set_auto_advance',
+      );
+  late final _loopin_set_auto_advance = _loopin_set_auto_advancePtr
+      .asFunction<void Function(int)>();
+
   void loopin_set_loop_mode(int mode) {
     return _loopin_set_loop_mode(mode);
   }
@@ -466,7 +533,49 @@ final class LoopinStatus extends ffi.Struct {
   /// muestras por compás del loop
   @ffi.Int64()
   external int loop_bar_frames;
+
+  /// pista que usará el siguiente toque (0..3)
+  @ffi.Int32()
+  external int loop_selected;
+
+  /// pista en la que se graba (-1 si ninguna)
+  @ffi.Int32()
+  external int loop_active;
+
+  /// 1 = tras grabar una pista se elige la siguiente vacía
+  @ffi.Int32()
+  external int loop_auto_advance;
+
+  /// duración base en muestras (0 = no hay loops)
+  @ffi.Int64()
+  external int loop_base_length;
+
+  /// posición dentro del ciclo base
+  @ffi.Int64()
+  external int loop_base_position;
+
+  /// LOOPIN_LOOP_*
+  @ffi.Array.multi([4])
+  external ffi.Array<ffi.Int32> track_state;
+
+  @ffi.Array.multi([4])
+  external ffi.Array<ffi.Int32> track_layers;
+
+  @ffi.Array.multi([4])
+  external ffi.Array<ffi.Int32> track_muted;
+
+  @ffi.Array.multi([4])
+  external ffi.Array<ffi.Float> track_volume;
+
+  /// 1, 2 o 4 veces la base (0 = vacía)
+  @ffi.Array.multi([4])
+  external ffi.Array<ffi.Int64> track_length;
+
+  @ffi.Array.multi([4])
+  external ffi.Array<ffi.Int64> track_position;
 }
+
+const int LOOPIN_TRACKS = 4;
 
 const int LOOPIN_LATENCY_IDLE = 0;
 

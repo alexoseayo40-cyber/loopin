@@ -56,6 +56,13 @@ struct Rig {
     post(T::kSetClickEnabled, 0);
   }
   void post(T t, double v = 0) { core.post({t, v}); }
+  void postTrack(T t, int32_t track, double v = 0) {
+    Command c;
+    c.type = t;
+    c.value = v;
+    c.arg = track;
+    core.post(c);
+  }
   const Looper& lp() const { return core.looper(); }
   St state() const { return lp().state(); }
 
@@ -289,7 +296,7 @@ void testOverdubUndoLayers() {
   r.runFor(len);
   checkRange(origin + len, r.outPos, "base");
   CHECK_EQ(r.lp().layerCount(), 1);
-  CHECK(!r.lp().canUndo());
+  CHECK(r.lp().canUndo());  // deshacer quitaría la pista recién grabada
 
   // El overdub empieza en el primer tiempo del compás siguiente a la pulsación
   auto nb = [&](int64_t x) { return origin + (x - origin + bar - 1) / bar * bar; };
@@ -304,7 +311,6 @@ void testOverdubUndoLayers() {
   r.runFor(1);
   CHECK(r.state() == St::kPlaying);
   CHECK_EQ(r.lp().layerCount(), 1);
-  CHECK(!r.lp().canUndo());
 
   // Overdub B: se pulsa a media vuelta, graba un loop entero desde el compás
   int64_t press = r.outPos + len / 3;
@@ -478,12 +484,18 @@ void testPedalGestures() {
   r.post(T::kLoopPress);
   r.runFor(2 * bar + 10);
   CHECK(r.state() == St::kPlaying);
-  // Reproduciendo + toque (empieza overdub) + mantener → nada de overdub
+  // Reproduciendo + toque (empieza overdub) + mantener → fuera el overdub y
+  // lo último que se hizo, que era grabar la pista: queda vacío
   r.post(T::kLoopPress);
   r.runFor(1000);
   CHECK(r.state() == St::kOverdubbing);
   r.post(T::kLoopHold);
   r.runFor(100);
+  CHECK(r.state() == St::kEmpty);
+  CHECK_EQ(r.lp().layerCount(), 0);
+  // Otra vez 1 compás
+  r.post(T::kLoopPress);
+  r.runFor(2 * bar + 10);
   CHECK(r.state() == St::kPlaying);
   CHECK_EQ(r.lp().layerCount(), 1);
   // Una capa: toque, toque
@@ -666,6 +678,484 @@ void testMonitorNoBacklog() {
               (long long)maxDelay);
 }
 
+
+// -----------------------------------------------------------------------------
+// Cuatro pistas con avance automático. Un modelo sencillo dice qué tiene que
+// sonar en cada muestra: la suma de lo grabado en cada pista, cada una con su
+// origen, su longitud (1, 2 o 4 veces la base) y su volumen.
+struct TrackModel {
+  bool on = false;
+  int64_t origin = 0, len = 0, recorded = 0, since = 0;
+  int seed = 0;
+  float gain = 1.0f;
+};
+struct LayerModel {
+  int track;
+  int64_t from, span, since;  // tramo grabado, en índices de salida
+  int seed;
+};
+
+void testFourTracks() {
+  std::printf("4 pistas: avance automático, longitudes 1x/2x/4x, volumen y borrar\n");
+  const int32_t sr = 48000;
+  Rig r(sr, 4113, 17);
+  r.post(T::kSetBpm, 120);
+  r.post(T::kSetLoopMode, 1);
+  r.post(T::kSetAutoAdvance, 1);
+  const int64_t bar = 96000;
+
+  struct Play { int64_t from, to; int seed; int64_t ref; };  // suena sig(seed, n - ref)
+  std::vector<Play> plays;
+  r.player = [&](int64_t n) {
+    float s = 0.0f;
+    for (const Play& p : plays)
+      if (n >= p.from && n < p.to) s += sig(p.seed, n - p.ref);
+    return s;
+  };
+  TrackModel m[4];
+  std::vector<LayerModel> layers;
+  auto expected = [&](int64_t n) {
+    float s = 0.0f;
+    for (int i = 0; i < 4; ++i) {
+      const TrackModel& t = m[i];
+      if (!t.on || n < t.since) continue;
+      const int64_t p = wrapPos(n - t.origin, t.len);
+      float x = p < t.recorded ? sig(t.seed, p) : 0.0f;
+      for (const LayerModel& l : layers) {
+        if (l.track != i || n < l.since) continue;
+        const int64_t d = wrapPos(p - wrapPos(l.from - t.origin, t.len), t.len);
+        if (d < l.span) x += sig(l.seed, p);
+      }
+      s += x * t.gain;
+    }
+    return s;
+  };
+  auto checkRange = [&](int64_t from, int64_t to, const char* what) {
+    int64_t wrong = 0;
+    for (int64_t n = from; n < to; ++n) {
+      if (r.hist[n] != expected(n)) {
+        if (wrong == 0)
+          std::printf("  %s: muestra %lld = %g, esperado %g\n", what, (long long)n, r.hist[n],
+                      expected(n));
+        ++wrong;
+      }
+    }
+    if (wrong) std::printf("  %s: %lld muestras mal\n", what, (long long)wrong);
+    CHECK_EQ(wrong, 0);
+  };
+
+  // Pista 1: cuenta de entrada y 2 compases → la base
+  const int64_t t0 = 1000;
+  int64_t base0 = t0 + bar;  // origen del ciclo base
+  r.postAt(t0, T::kLoopPress);
+  plays.push_back({base0, base0 + 3 * bar, 1, base0});
+  r.postAt(base0 + 2 * bar, T::kLoopPress);
+  r.runFor(1);
+  CHECK(r.state() == St::kPlaying);
+  CHECK_EQ(r.lp().baseLength(), 2 * bar);
+  CHECK_EQ(r.lp().trackLength(0), 2 * bar);
+  CHECK_EQ(r.lp().selected(), 1);  // avance automático
+  CHECK(r.lp().trackState(0) == St::kPlaying);
+  CHECK(r.lp().trackState(1) == St::kEmpty);
+  CHECK_EQ(r.lp().active(), -1);
+  m[0] = {true, base0, 2 * bar, 2 * bar, base0 + 2 * bar, 1, 1.0f};
+
+  // Pista 2: se pulsa a mitad de compás, empieza en el siguiente; se cierra a
+  // los 1,6 compases → dura la base (2) y el resto es silencio
+  const int64_t o1 = base0 + 3 * bar;
+  r.postAt(base0 + 2 * bar + bar * 3 / 10, T::kLoopPress);
+  r.runFor(1);
+  CHECK(r.state() == St::kArmed);
+  CHECK_EQ(r.lp().active(), 1);
+  CHECK(r.lp().trackState(1) == St::kArmed);
+  CHECK(r.lp().trackState(0) == St::kPlaying);
+  CHECK_EQ(r.lp().recordedFrames(r.outPos), r.outPos - o1);
+  CHECK(r.core.status().playing);
+  plays.push_back({o1, o1 + 2 * bar, 2, o1});  // sigue tocando tras pulsar
+  r.runTo(o1 + 1);
+  CHECK(r.state() == St::kRecording);
+  r.postAt(o1 + bar * 16 / 10, T::kLoopPress);
+  r.runFor(1);
+  CHECK(r.state() == St::kPlaying);
+  CHECK_EQ(r.lp().trackLength(1), 2 * bar);
+  CHECK_EQ(r.lp().selected(), 2);
+  m[1] = {true, o1, 2 * bar, bar * 16 / 10, o1 + bar * 16 / 10, 2, 1.0f};
+
+  // Pista 3: 2,9 compases → 3 compases no caben en la base → dura el doble (4)
+  const int64_t o2 = base0 + 5 * bar;
+  r.postAt(o1 + bar * 16 / 10 + 1000, T::kLoopPress);
+  plays.push_back({o2, o2 + 3 * bar, 3, o2});  // toca hasta que empieza la pista 4
+  r.postAt(o2 + bar * 29 / 10, T::kLoopPress);
+  r.runFor(1);
+  CHECK_EQ(r.lp().trackLength(2), 4 * bar);
+  CHECK_EQ(r.lp().selected(), 3);
+  m[2] = {true, o2, 4 * bar, bar * 29 / 10, o2 + bar * 29 / 10, 3, 1.0f};
+
+  // Pista 4: se pulsa justo en un primer tiempo (empieza ya) y se cierra tarde,
+  // a los 2,2 compases → dura 2 y lo que sobra no se graba
+  const int64_t o3 = o2 + 3 * bar;
+  r.postAt(o3, T::kLoopPress);
+  plays.push_back({o3, o3 + 3 * bar, 4, o3});
+  r.runFor(1);
+  CHECK(r.state() == St::kRecording);
+  r.postAt(o3 + bar * 22 / 10, T::kLoopPress);
+  r.runFor(1);
+  CHECK_EQ(r.lp().trackLength(3), 2 * bar);
+  CHECK_EQ(r.lp().selected(), 3);  // no queda ninguna vacía: se queda en la 4
+  m[3] = {true, o3, 2 * bar, 2 * bar, o3 + bar * 22 / 10, 4, 1.0f};
+  r.runFor(8 * bar);
+  // Todo lo que ha sonado desde que se cerró la primera pista
+  checkRange(base0 + 2 * bar, r.outPos, "4 pistas");
+
+  // Silenciar la pista 2 y bajar la 3 a la mitad (el cambio tarda unos ms)
+  r.postTrack(T::kSetTrackMuted, 1, 1);
+  r.postTrack(T::kSetTrackVolume, 2, 0.5);
+  r.runFor(sr / 5);
+  m[1].gain = 0.0f;
+  m[2].gain = 0.5f;
+  CHECK(r.core.status().trackMuted[1] == 1);
+  int64_t from = r.outPos;
+  r.runFor(4 * bar);
+  checkRange(from, r.outPos, "silencio y volumen");
+  r.postTrack(T::kSetTrackMuted, 1, 0);
+  r.postTrack(T::kSetTrackVolume, 2, 1.0);
+  r.runFor(sr / 5);
+  m[1].gain = 1.0f;
+  m[2].gain = 1.0f;
+
+  // Con las 4 llenas, el toque hace overdub en la seleccionada (la 4)
+  auto nb = [&](int64_t x) { return base0 + (x - base0 + bar - 1) / bar * bar; };
+  int64_t press = r.outPos + 500;
+  int64_t a = nb(press);
+  r.postAt(press, T::kLoopPress);
+  r.runFor(1);
+  CHECK(r.state() == St::kOverdubbing);
+  CHECK_EQ(r.lp().active(), 3);
+  CHECK(r.lp().trackState(3) == St::kOverdubbing);
+  // El músico toca sobre la pista 4: la señal depende de la posición en ella
+  plays.push_back({a, a + bar, 5, m[3].origin});
+  r.postAt(a + bar, T::kLoopPress);
+  r.runFor(1);
+  CHECK_EQ(r.lp().trackLayers(3), 2);
+  // Lo grabado es sig(5, n - origen) en el tramo [a, a + bar)
+  from = r.outPos + r.L;
+  r.runFor(r.L + 4 * bar);
+  {
+    int64_t wrong = 0;
+    for (int64_t n = from; n < r.outPos; ++n) {
+      float want = expected(n);
+      const int64_t p = wrapPos(n - m[3].origin, m[3].len);
+      const int64_t pa = wrapPos(a - m[3].origin, m[3].len);
+      const int64_t d = wrapPos(p - pa, m[3].len);
+      if (d < bar) want += sig(5, a - m[3].origin + d);
+      if (r.hist[n] != want) ++wrong;
+    }
+    CHECK_EQ(wrong, 0);
+  }
+  // Deshacer quita esa capa (y solo esa)
+  CHECK(r.lp().canUndo());
+  r.post(T::kLoopUndo);
+  r.runFor(1);
+  CHECK_EQ(r.lp().trackLayers(3), 1);
+  CHECK(!r.lp().canUndo());
+  from = r.outPos;
+  r.runFor(4 * bar);
+  checkRange(from, r.outPos, "deshacer overdub de la pista 4");
+
+  // Borrar la pista 2 y volver a grabarla, más corta: no queda nada de la vieja
+  r.postTrack(T::kClearTrack, 1);
+  r.runFor(1);
+  m[1].on = false;
+  CHECK(r.lp().trackState(1) == St::kEmpty);
+  CHECK(r.state() == St::kPlaying);
+  from = r.outPos;
+  r.runFor(2 * bar);
+  checkRange(from, r.outPos, "borrar pista 2");
+  r.postTrack(T::kSelectTrack, 1);
+  press = r.outPos + 100;
+  a = nb(press);
+  r.postAt(press, T::kLoopPress);
+  plays.push_back({a, a + bar, 6, a});
+  r.postAt(a + bar / 2, T::kLoopPress);
+  r.runFor(1);
+  CHECK_EQ(r.lp().trackLength(1), 2 * bar);
+  CHECK_EQ(r.lp().selected(), 1);
+  m[1] = {true, a, 2 * bar, bar / 2, a + bar / 2, 6, 1.0f};
+  r.runFor(4 * bar);
+  checkRange(a + bar / 2, r.outPos, "pista 2 nueva");
+  // Deshacer quita la pista recién grabada y la deja elegida
+  CHECK(r.lp().canUndo());
+  r.post(T::kLoopUndo);
+  r.runFor(1);
+  m[1].on = false;
+  CHECK(r.lp().trackState(1) == St::kEmpty);
+  CHECK_EQ(r.lp().selected(), 1);
+  CHECK(!r.lp().canUndo());
+  from = r.outPos;
+  r.runFor(2 * bar);
+  checkRange(from, r.outPos, "deshacer pista 2");
+
+  // Parar y arrancar: el ciclo base empieza con el compás 1 y cada pista
+  // conserva su posición respecto a las demás
+  r.postAt(r.outPos + 12345, T::kPause);
+  r.runFor(1);
+  CHECK(r.state() == St::kStopped);
+  CHECK(r.lp().trackState(2) == St::kStopped);
+  from = r.outPos;
+  r.runFor(50000);
+  bool silent = true;
+  for (int64_t n = from; n < r.outPos; ++n) silent = silent && r.hist[n] == 0.0f;
+  CHECK(silent);
+  const int64_t start = r.outPos + 777;
+  r.postAt(start, T::kPlay);
+  r.runFor(1);
+  CHECK(r.state() == St::kPlaying);
+  const int64_t shift = start - base0;
+  base0 = start;
+  for (TrackModel& t : m) t.origin += shift;
+  r.runFor(8 * bar);
+  checkRange(start, r.outPos, "parar y arrancar");
+  CHECK_EQ(r.core.status().framePosition, r.outPos - start);
+
+  // Borrar la pista que marcó la base: las demás siguen y la base no cambia
+  r.postTrack(T::kClearTrack, 0);
+  r.runFor(1);
+  m[0].on = false;
+  CHECK(r.state() == St::kPlaying);
+  CHECK_EQ(r.lp().baseLength(), 2 * bar);
+  r.post(T::kSetBpm, 90);
+  from = r.outPos;
+  r.runFor(4 * bar);
+  checkRange(from, r.outPos, "sin la pista 1");
+  CHECK(std::fabs(r.core.status().bpm - 120) < 1e-9);  // el tempo sigue fijo
+  r.postTrack(T::kSelectTrack, 0);
+  press = r.outPos + 4321;
+  a = nb(press);
+  r.postAt(press, T::kLoopPress);
+  plays.push_back({a, a + 2 * bar, 7, a});
+  r.postAt(a + bar, T::kLoopPress);
+  r.runFor(1);
+  CHECK_EQ(r.lp().trackLength(0), 2 * bar);
+  m[0] = {true, a, 2 * bar, bar, a + bar, 7, 1.0f};
+  r.runFor(4 * bar);
+  checkRange(a + bar, r.outPos, "pista 1 nueva");
+
+  // Borrar todo
+  r.post(T::kLoopClear);
+  r.runFor(1);
+  CHECK(r.state() == St::kEmpty);
+  CHECK_EQ(r.lp().baseLength(), 0);
+  for (int i = 0; i < 4; ++i) CHECK(r.lp().trackState(i) == St::kEmpty);
+  from = r.outPos;
+  r.runFor(bar);
+  silent = true;
+  for (int64_t n = from; n < r.outPos; ++n) silent = silent && r.hist[n] == 0.0f;
+  CHECK(silent);
+}
+
+// -----------------------------------------------------------------------------
+// Modo sincronizado con varias pistas: cada una graba los compases elegidos y
+// se cierra sola.
+void testSyncTracks() {
+  std::printf("Sincronizado con varias pistas: se cierran solas\n");
+  const int32_t sr = 48000;
+  Rig r(sr, 6123, 23);
+  r.post(T::kSetBpm, 120);
+  r.post(T::kSetLoopMode, 0);
+  r.post(T::kSetSyncBars, 2);
+  r.post(T::kSetAutoAdvance, 1);
+  const int64_t bar = 96000;
+  struct Play { int64_t from, to; int seed; };
+  std::vector<Play> plays;
+  r.player = [&](int64_t n) {
+    float s = 0.0f;
+    for (const Play& p : plays)
+      if (n >= p.from && n < p.to) s += sig(p.seed, n - p.from);
+    return s;
+  };
+  TrackModel m[4];
+  auto expected = [&](int64_t n) {
+    float s = 0.0f;
+    for (const TrackModel& t : m) {
+      if (!t.on || n < t.since) continue;
+      const int64_t p = wrapPos(n - t.origin, t.len);
+      if (p < t.recorded) s += sig(t.seed, p);
+    }
+    return s;
+  };
+
+  const int64_t base0 = 500 + bar;
+  r.postAt(500, T::kLoopPress);
+  plays.push_back({base0, base0 + 3 * bar, 1});
+  r.runTo(base0 + 2 * bar + 1);
+  CHECK(r.state() == St::kPlaying);
+  CHECK_EQ(r.lp().selected(), 1);
+  m[0] = {true, base0, 2 * bar, 2 * bar, base0 + 2 * bar, 1, 1.0f};
+
+  // Pista 2: 2 compases desde el siguiente compás
+  const int64_t o1 = base0 + 3 * bar;
+  r.postAt(base0 + 2 * bar + bar / 2, T::kLoopPress);
+  r.runFor(1);
+  CHECK(r.state() == St::kArmed);
+  CHECK_EQ(r.lp().targetFrames(), 2 * bar);
+  plays.push_back({o1, o1 + 3 * bar, 2});
+  r.runTo(o1 + 2 * bar - 1);
+  CHECK(r.state() == St::kRecording);
+  r.runTo(o1 + 2 * bar + 1);
+  CHECK(r.state() == St::kPlaying);
+  CHECK_EQ(r.lp().trackLength(1), 2 * bar);
+  CHECK_EQ(r.lp().selected(), 2);
+  m[1] = {true, o1, 2 * bar, 2 * bar, o1 + 2 * bar, 2, 1.0f};
+
+  // Pista 3: 4 compases → el doble de la base
+  r.post(T::kSetSyncBars, 4);
+  const int64_t o2 = o1 + 3 * bar;
+  r.postAt(o1 + 2 * bar + 100, T::kLoopPress);
+  plays.push_back({o2, o2 + 5 * bar, 3});
+  r.runTo(o2 + 4 * bar + 1);
+  CHECK(r.state() == St::kPlaying);
+  CHECK_EQ(r.lp().trackLength(2), 4 * bar);
+  m[2] = {true, o2, 4 * bar, 4 * bar, o2 + 4 * bar, 3, 1.0f};
+
+  // Pista 4: 1 compás → dura la base y medio loop es silencio
+  r.post(T::kSetSyncBars, 1);
+  const int64_t o3 = o2 + 5 * bar;
+  r.postAt(o2 + 4 * bar + 100, T::kLoopPress);
+  plays.push_back({o3, o3 + 2 * bar, 4});
+  r.runTo(o3 + bar + 1);
+  CHECK(r.state() == St::kPlaying);
+  CHECK_EQ(r.lp().trackLength(3), 2 * bar);
+  m[3] = {true, o3, 2 * bar, bar, o3 + bar, 4, 1.0f};
+
+  r.runFor(8 * bar);
+  int64_t wrong = 0;
+  for (int64_t n = base0 + 2 * bar; n < r.outPos; ++n)
+    if (r.hist[n] != expected(n)) ++wrong;
+  CHECK_EQ(wrong, 0);
+}
+
+// -----------------------------------------------------------------------------
+// Gestos del pedal con avance automático, cambio de pista y límite del buffer
+void testTrackGestures() {
+  std::printf("Pistas: gestos con avance automático y límite de 60 s\n");
+  const int32_t sr = 48000;
+  Rig r(sr, 1000, 29);
+  r.keep = false;
+  r.post(T::kSetBpm, 120);
+  r.post(T::kSetSyncBars, 1);
+  r.post(T::kSetAutoAdvance, 1);
+  const int64_t bar = 96000;
+  r.player = [](int64_t n) { return sig(1, n); };
+
+  // Pista 1 (1 compás). La selección pasa a la 2
+  r.post(T::kLoopPress);
+  r.runFor(2 * bar + 10);
+  CHECK(r.state() == St::kPlaying);
+  CHECK_EQ(r.lp().selected(), 1);
+  // Toque (prepara la pista 2) + mantener → se anula y se deshace la pista 1
+  r.post(T::kLoopPress);
+  r.runFor(100);
+  CHECK(r.state() == St::kArmed || r.state() == St::kRecording);
+  r.post(T::kLoopHold);
+  r.runFor(100);
+  CHECK(r.state() == St::kEmpty);
+  CHECK_EQ(r.lp().selected(), 0);
+  CHECK(r.lp().trackState(1) == St::kEmpty);
+
+  // Otra vez la pista 1; toque + doble toque → nada en la 2 y todo parado
+  r.post(T::kLoopPress);
+  r.runFor(2 * bar + 10);
+  CHECK_EQ(r.lp().selected(), 1);
+  r.post(T::kLoopPress);
+  r.runFor(100);
+  r.post(T::kLoopDoubleTap);
+  r.runFor(100);
+  CHECK(r.state() == St::kStopped);
+  CHECK(r.lp().trackState(0) == St::kStopped);
+  CHECK(r.lp().trackState(1) == St::kEmpty);
+  CHECK(!r.core.status().playing);
+  // Toque → arranca
+  r.post(T::kLoopPress);
+  r.runFor(100);
+  CHECK(r.state() == St::kPlaying);
+
+  // Pista 2; al cerrarla, mantener → se quita la 2 y vuelve a quedar elegida
+  r.post(T::kLoopPress);
+  r.runFor(2 * bar + 200);
+  CHECK(r.state() == St::kPlaying);
+  CHECK(r.lp().trackState(1) == St::kPlaying);
+  CHECK_EQ(r.lp().selected(), 2);
+  r.post(T::kLoopUndo);
+  r.runFor(100);
+  CHECK(r.lp().trackState(1) == St::kEmpty);
+  CHECK(r.lp().trackState(0) == St::kPlaying);
+  CHECK_EQ(r.lp().selected(), 1);
+
+  // Cambiar de pista: «siguiente» da la vuelta; mientras se graba no cambia
+  r.post(T::kSelectNextTrack);
+  r.runFor(10);
+  CHECK_EQ(r.lp().selected(), 2);
+  r.post(T::kSelectNextTrack);
+  r.post(T::kSelectNextTrack);
+  r.runFor(10);
+  CHECK_EQ(r.lp().selected(), 0);
+  r.post(T::kLoopPress);  // overdub en la pista 1
+  r.runFor(100);
+  CHECK(r.state() == St::kOverdubbing);
+  r.post(T::kSelectNextTrack);
+  r.runFor(10);
+  CHECK_EQ(r.lp().selected(), 0);
+  r.post(T::kLoopPress);
+  r.runFor(10);
+  CHECK(r.state() == St::kPlaying);
+
+  // Sin avance automático la selección no se mueve
+  r.post(T::kSetAutoAdvance, 0);
+  r.postTrack(T::kSelectTrack, 3);
+  r.post(T::kLoopPress);
+  r.runFor(2 * bar + 200);
+  CHECK(r.lp().trackState(3) == St::kPlaying);
+  CHECK_EQ(r.lp().selected(), 3);
+
+  // Borrar la única pista con loop mientras se graba otra → todo vacío
+  r.post(T::kLoopClear);
+  r.runFor(10);
+  CHECK(r.state() == St::kEmpty);
+  r.post(T::kSetAutoAdvance, 1);
+  r.postTrack(T::kSelectTrack, 0);
+  r.post(T::kLoopPress);
+  r.runFor(2 * bar + 10);
+  r.post(T::kLoopPress);  // pista 2
+  r.runFor(bar + 5000);
+  CHECK(r.state() == St::kRecording);
+  r.postTrack(T::kClearTrack, 0);
+  r.runFor(10);
+  CHECK(r.state() == St::kEmpty);
+  CHECK_EQ(r.lp().baseLength(), 0);
+
+  // Base de 24 s: una pista nueva puede durar como mucho el doble (48 s); si
+  // no se cierra, se cierra sola ahí
+  r.post(T::kSetLoopMode, 1);
+  r.post(T::kLoopPress);
+  r.runFor(1);
+  const int64_t rec0 = r.outPos - r.lp().recordedFrames(r.outPos);
+  r.postAt(rec0 + 12 * bar, T::kLoopPress);
+  r.runFor(10);
+  CHECK_EQ(r.lp().baseLength(), 12 * bar);
+  const int32_t first = r.lp().selected() == 0 ? 3 : r.lp().selected() - 1;
+  CHECK_EQ(r.lp().trackLength(first), 12 * bar);
+  const int32_t second = r.lp().selected();
+  r.post(T::kLoopPress);
+  r.runFor(1);
+  const int64_t rec1 = r.outPos - r.lp().recordedFrames(r.outPos);
+  CHECK_EQ(r.lp().targetFrames(), 0);  // manual: abierta
+  r.runTo(rec1 + 24 * bar - 100);
+  CHECK(r.state() == St::kRecording);
+  r.runFor(200);
+  CHECK(r.state() == St::kPlaying);
+  CHECK_EQ(r.lp().trackLength(second), 24 * bar);
+}
+
 }  // namespace
 
 void runLooperTests() {
@@ -677,4 +1167,7 @@ void runLooperTests() {
   testRestartKeepsLoop();
   testMaxLength();
   testMonitorNoBacklog();
+  testFourTracks();
+  testSyncTracks();
+  testTrackGestures();
 }

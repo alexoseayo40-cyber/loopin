@@ -31,14 +31,22 @@ struct Command {
     kLoopHold,       // se mantiene pulsado tras el toque
     kLoopDoubleTap,  // segundo toque rápido
     kLoopUndo,
-    kLoopClear,
+    kLoopClear,      // borra todas las pistas
     kSetLoopMode,    // Looper::Mode
     kSetSyncBars,
     kSetLatencyFrames,  // compensación de la grabación (muestras)
     kSetLoopVolume,
+    // Pistas (arg = pista, de 0 a 3)
+    kSelectTrack,
+    kSelectNextTrack,
+    kSetTrackVolume,
+    kSetTrackMuted,
+    kClearTrack,
+    kSetAutoAdvance,
   };
   Type type = Type::kPlay;
   double value = 0.0;
+  int32_t arg = 0;
 };
 
 // Lo que el núcleo publica para la interfaz (atómicos, sin bloqueos).
@@ -66,6 +74,18 @@ struct CoreStatus {
   int64_t loopRecorded;
   int64_t loopTarget;
   int64_t loopBarFrames;
+  // Pistas
+  int32_t loopSelected;
+  int32_t loopActive;
+  int32_t loopAutoAdvance;
+  int64_t loopBaseLength;
+  int64_t loopBasePosition;
+  int32_t trackState[Looper::kTracks];
+  int32_t trackLayers[Looper::kTracks];
+  int32_t trackMuted[Looper::kTracks];
+  float trackVolume[Looper::kTracks];
+  int64_t trackLength[Looper::kTracks];
+  int64_t trackPosition[Looper::kTracks];
 };
 
 class EngineCore {
@@ -141,6 +161,17 @@ class EngineCore {
   std::atomic<int64_t> aLoopRecorded_{0};
   std::atomic<int64_t> aLoopTarget_{0};
   std::atomic<int64_t> aLoopBarFrames_{0};
+  std::atomic<int32_t> aLoopSelected_{0};
+  std::atomic<int32_t> aLoopActive_{-1};
+  std::atomic<int32_t> aLoopAutoAdvance_{0};
+  std::atomic<int64_t> aLoopBaseLength_{0};
+  std::atomic<int64_t> aLoopBasePosition_{0};
+  std::atomic<int32_t> aTrackState_[Looper::kTracks] = {};
+  std::atomic<int32_t> aTrackLayers_[Looper::kTracks] = {};
+  std::atomic<int32_t> aTrackMuted_[Looper::kTracks] = {};
+  std::atomic<float> aTrackVolume_[Looper::kTracks] = {};
+  std::atomic<int64_t> aTrackLength_[Looper::kTracks] = {};
+  std::atomic<int64_t> aTrackPosition_[Looper::kTracks] = {};
 };
 
 }  // namespace loopin

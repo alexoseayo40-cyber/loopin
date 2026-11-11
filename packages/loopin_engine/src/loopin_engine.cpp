@@ -16,10 +16,11 @@ AudioEngine& engine() {
   return *instance;
 }
 
-void post(Command::Type type, double value = 0.0) {
+void post(Command::Type type, double value = 0.0, int32_t arg = 0) {
   Command c;
   c.type = type;
   c.value = value;
+  c.arg = arg;
   engine().core().post(c);
 }
 
@@ -53,6 +54,18 @@ void loopin_loop_hold(void) { post(Command::Type::kLoopHold); }
 void loopin_loop_double_tap(void) { post(Command::Type::kLoopDoubleTap); }
 void loopin_loop_undo(void) { post(Command::Type::kLoopUndo); }
 void loopin_loop_clear(void) { post(Command::Type::kLoopClear); }
+void loopin_select_track(int32_t track) { post(Command::Type::kSelectTrack, 0.0, track); }
+void loopin_select_next_track(void) { post(Command::Type::kSelectNextTrack); }
+void loopin_set_track_volume(int32_t track, float volume) {
+  post(Command::Type::kSetTrackVolume, volume, track);
+}
+void loopin_set_track_muted(int32_t track, int32_t muted) {
+  post(Command::Type::kSetTrackMuted, muted ? 1.0 : 0.0, track);
+}
+void loopin_clear_track(int32_t track) { post(Command::Type::kClearTrack, 0.0, track); }
+void loopin_set_auto_advance(int32_t enabled) {
+  post(Command::Type::kSetAutoAdvance, enabled ? 1.0 : 0.0);
+}
 void loopin_set_loop_mode(int32_t mode) { post(Command::Type::kSetLoopMode, mode); }
 void loopin_set_sync_bars(int32_t bars) { post(Command::Type::kSetSyncBars, bars); }
 void loopin_set_loop_volume(float volume) { post(Command::Type::kSetLoopVolume, volume); }
@@ -129,6 +142,20 @@ void loopin_get_status(LoopinStatus* out) {
   out->loop_recorded = c.loopRecorded;
   out->loop_target = c.loopTarget;
   out->loop_bar_frames = c.loopBarFrames;
+
+  out->loop_selected = c.loopSelected;
+  out->loop_active = c.loopActive;
+  out->loop_auto_advance = c.loopAutoAdvance;
+  out->loop_base_length = c.loopBaseLength;
+  out->loop_base_position = c.loopBasePosition;
+  for (int i = 0; i < LOOPIN_TRACKS; ++i) {
+    out->track_state[i] = c.trackState[i];
+    out->track_layers[i] = c.trackLayers[i];
+    out->track_muted[i] = c.trackMuted[i];
+    out->track_volume[i] = c.trackVolume[i];
+    out->track_length[i] = c.trackLength[i];
+    out->track_position[i] = c.trackPosition[i];
+  }
 }
 
 }  // extern "C"
