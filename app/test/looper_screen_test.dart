@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:loopin/engine/engine_controller.dart';
 import 'package:loopin/ui/audio_settings_screen.dart';
+import 'package:loopin/ui/latency_tap_screen.dart';
 import 'package:loopin/ui/looper_screen.dart';
 import 'package:loopin/ui/pedal_widgets.dart';
 import 'package:loopin/ui/settings_screen.dart';
@@ -319,10 +320,149 @@ void main() {
     await c.startAudio();
     await tester.pump(const Duration(milliseconds: 100));
     expect(tester.takeException(), isNull);
-    await tester.scrollUntilVisible(find.textContaining('Compensación al grabar'), 200);
-    expect(find.textContaining('Compensación al grabar'), findsOneWidget);
+    await tester.scrollUntilVisible(find.textContaining('Compensación:'), 200);
+    expect(find.textContaining('Compensación:'), findsOneWidget);
     expect(tester.takeException(), isNull);
     c.stopAudio();
     c.dispose();
   });
+
+  testWidgets('metrónomo: arrancar y parar sin silenciar, TAP visible y luces de los tiempos', (
+    tester,
+  ) async {
+    setScreen(tester, const Size(393, 873));
+    final engine = FakeEngine()..next = fakeStatus(LoopState.empty, playing: false);
+    final c = EngineController(engine: engine);
+    await tester.pumpWidget(_app(LooperScreen(controller: c)));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('TAP · TOCA AL RITMO'), findsOneWidget);
+    expect(find.bySemanticsLabel('Metrónomo parado'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('metronome-toggle')));
+    expect(engine.calls.last, 'play');
+    // Sonando: la luz del tiempo que suena está encendida
+    engine.next = fakeStatus(LoopState.empty);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(find.bySemanticsLabel(RegExp(r'Tiempo \d de 4')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('metronome-toggle')));
+    expect(engine.calls.last, 'pause');
+    expect(tester.takeException(), isNull);
+    c.stopAudio();
+    c.dispose();
+  });
+
+  testWidgets('compases, clic y modo libre / empezar al tocar', (tester) async {
+    setScreen(tester, const Size(393, 873));
+    final engine = FakeEngine()..next = fakeStatus(LoopState.empty, playing: false);
+    final c = EngineController(engine: engine);
+    await tester.pumpWidget(_app(LooperScreen(controller: c)));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    Future<void> pick(String tooltip, Finder item) async {
+      await tester.tap(find.byTooltip(tooltip));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(item.last);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    await pick('Compás', find.text('7/8  (2+2+3)'));
+    expect(c.timeSignature.label, '7/8');
+    expect(engine.calls, contains('meter 7 20'));
+    expect(find.text('7/8 2+2+3'), findsOneWidget);
+
+    await pick('Clic: siempre', find.text('Clic: solo visual'));
+    expect(c.clickMode, ClickMode.silent);
+    expect(engine.calls, contains('click silent'));
+
+    await pick('Modo de grabación', find.text('Empezar al tocar (sin cuenta, pista 1)'));
+    expect(c.startOnSound, isTrue);
+    expect(engine.calls, contains('onSound true'));
+    expect(find.textContaining('arranca con tu primera nota'), findsOneWidget);
+
+    await pick('Modo de grabación', find.textContaining('Libre ·'));
+    expect(c.loopMode, LoopMode.free);
+    expect(find.text('LIBRE: EL TEMPO SALDRÁ DEL LOOP'), findsOneWidget);
+    expect(find.text('TAP · TOCA AL RITMO'), findsNothing);
+
+    // Esperando a que suene la guitarra
+    engine.next = fakeStatus(LoopState.armed, playing: false, waiting: true);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('ESPERANDO'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    c.stopAudio();
+    c.dispose();
+  });
+
+  test('el pulso visual sigue al motor', () {
+    final engine = FakeEngine()..next = fakeStatus(LoopState.empty);
+    final c = EngineController(engine: engine);
+    c.status = engine.next;
+    final now = c.beatNow();
+    expect(now, isNotNull);
+    // Tiempo 2 (o el anterior, si la latencia de salida pasa de lo ya sonado)
+    expect(now!.beat, anyOf(1, 2));
+    expect(now.phase, inInclusiveRange(0, 1));
+    c.status = fakeStatus(LoopState.empty, playing: false);
+    expect(c.beatNow(), isNull);
+    c.dispose();
+  });
+
+  test('compases: acentos de cada grupo', () {
+    TimeSignature ts(String l) => kTimeSignatures.firstWhere((t) => t.label == l);
+    expect(ts('4/4').accentMask, 0);
+    expect(ts('6/8').accentMask, 1 << 3);
+    expect(ts('7/8').accentMask, (1 << 2) | (1 << 4));
+    expect(ts('12/8').beats, 12);
+    expect(ts('5/4').grouping, '3+2');
+    expect(ts('9/8').eighths, isTrue);
+    expect(ts('7/8').startsGroup(4), isTrue);
+    expect(ts('7/8').startsGroup(5), isFalse);
+  });
+
+  testWidgets('latencia a mano: mueve lo grabado y se guarda', (tester) async {
+    setScreen(tester, const Size(393, 873));
+    final engine = FakeEngine()..next = fakeStatus(LoopState.playing);
+    final c = EngineController(engine: engine);
+    await tester.pumpWidget(_app(AudioSettingsScreen(controller: c)));
+    await c.startAudio();
+    await tester.pump(const Duration(milliseconds: 100));
+    final plus = find.byTooltip('Sumar 1 ms');
+    await tester.scrollUntilVisible(plus, 200);
+    await tester.pump();
+    await tester.tap(plus);
+    await tester.pump();
+    // 105 ms (estimación de 45 + 60) + 1 = 106 ms = 5088 muestras
+    expect(engine.calls.last, 'nudge 5088');
+    expect(c.latencySource, LatencySource.measured);
+    expect(tester.takeException(), isNull);
+    c.stopAudio();
+    c.dispose();
+  });
+
+  for (final tap in LatencyState.values) {
+    testWidgets('medir tocando: ${tap.name}', (tester) async {
+      setScreen(tester, const Size(360, 640));
+      final engine = FakeEngine()
+        ..next = fakeStatus(LoopState.empty, playing: false, tapState: tap, tapClicks: 7);
+      final c = EngineController(engine: engine);
+      await tester.pumpWidget(_app(LatencyTapScreen(controller: c)));
+      await c.startAudio();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(tester.takeException(), isNull);
+      if (tap == LatencyState.running) expect(find.text('3 / 12'), findsOneWidget);
+      if (tap == LatencyState.done) {
+        final result = find.text('Latencia: 120 ms · guardada');
+        await tester.scrollUntilVisible(result, 200);
+        expect(result, findsOneWidget);
+      }
+      final button = find.byType(FilledButton);
+      await tester.scrollUntilVisible(button, 200);
+      await tester.tap(button);
+      expect(engine.calls.last, tap == LatencyState.running ? 'tapCancel' : 'tapStart');
+      c.stopAudio();
+      c.dispose();
+    });
+  }
 }

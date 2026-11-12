@@ -11,15 +11,63 @@ import 'package:loopin_engine/loopin_engine.dart';
 
 import '../ui/theme.dart';
 
-/// Compases disponibles: tiempos por compás → nombre.
-const Map<int, String> kTimeSignatures = {4: '4/4', 3: '3/4', 6: '6/8'};
+/// Un compás: cómo se agrupan sus tiempos. En los de 8, el tiempo (y el BPM)
+/// es la corchea.
+class TimeSignature {
+  const TimeSignature(this.label, this.groups);
+
+  /// «7/8»
+  final String label;
+
+  /// Tiempos de cada grupo: [2, 2, 3] en 7/8. El primero de cada grupo lleva
+  /// acento (el del compás, más fuerte).
+  final List<int> groups;
+
+  int get beats => groups.fold(0, (a, b) => a + b);
+
+  /// Bit k = el tiempo k empieza un grupo (acento medio). El 0 no cuenta.
+  int get accentMask {
+    var mask = 0, beat = 0;
+    for (final g in groups) {
+      if (beat > 0) mask |= 1 << beat;
+      beat += g;
+    }
+    return mask;
+  }
+
+  /// El tiempo k empieza un grupo (incluido el 0).
+  bool startsGroup(int beat) => beat == 0 || (accentMask >> beat) & 1 == 1;
+
+  /// «2+2+3» (vacío si es un solo grupo)
+  String get grouping => groups.length > 1 ? groups.join('+') : '';
+
+  /// En los compases de 8 el pulso es la corchea.
+  bool get eighths => label.endsWith('/8');
+}
+
+/// Compases disponibles.
+const List<TimeSignature> kTimeSignatures = [
+  TimeSignature('4/4', [4]),
+  TimeSignature('3/4', [3]),
+  TimeSignature('2/4', [2]),
+  TimeSignature('5/4', [3, 2]),
+  TimeSignature('7/4', [4, 3]),
+  TimeSignature('6/8', [3, 3]),
+  TimeSignature('9/8', [3, 3, 3]),
+  TimeSignature('12/8', [3, 3, 3, 3]),
+  TimeSignature('5/8', [3, 2]),
+  TimeSignature('7/8', [2, 2, 3]),
+];
+
+/// El tiempo que se está oyendo y cuánto lleva (de 0 a 1).
+typedef BeatNow = ({int beat, double phase});
 
 /// Compases que se pueden grabar en modo sincronizado.
 const List<int> kSyncBarOptions = [1, 2, 4, 8];
 
 /// De dónde sale la compensación de latencia que se está usando.
 enum LatencySource {
-  /// Medida con el test para esta entrada y salida.
+  /// Medida (con el altavoz o tocando) o ajustada a mano para esta ruta.
   measured,
 
   /// Sin medir: estimación de Android (puede fallar bastante).
@@ -72,9 +120,13 @@ class EngineController extends ChangeNotifier {
 
   // Lo que el usuario ha pedido (se reaplica si el audio se reinicia)
   double bpm = 92;
-  int beatsPerBar = 4;
-  bool clickEnabled = true;
+  TimeSignature timeSignature = kTimeSignatures.first;
+  int get beatsPerBar => timeSignature.beats;
+  ClickMode clickMode = ClickMode.always;
   double clickVolume = 0.8;
+
+  /// La primera pista espera a que suene la guitarra y empieza ahí.
+  bool startOnSound = false;
   InputPreset inputPreset = InputPreset.unprocessed;
   bool _presetChosenByUser = false;
 
@@ -185,9 +237,10 @@ class EngineController extends ChangeNotifier {
 
   void _applySettings() {
     _engine.setBpm(bpm);
-    _engine.setBeatsPerBar(beatsPerBar);
-    _engine.setClickEnabled(clickEnabled);
+    _engine.setMeter(timeSignature.beats, timeSignature.accentMask);
+    _engine.setClickMode(clickMode);
     _engine.setClickVolume(clickVolume);
+    _engine.setStartOnSound(startOnSound);
     _engine.setMonitorEnabled(monitorEnabled);
     _engine.setMonitorVolume(monitorVolume);
     _engine.setInputGain(_dbToGain(inputGainDb));
@@ -205,7 +258,13 @@ class EngineController extends ChangeNotifier {
   void _tick() {
     final prev = status;
     status = _engine.status();
+    _statusAt = _clock.elapsedMicroseconds;
     if (status.running) {
+      // Con loop, el tempo es el del motor (en libre lo calcula él)
+      if (tempoLocked && status.bpm > 0) bpm = status.bpm;
+      if (prev.tapState == LatencyState.running && status.tapState == LatencyState.done) {
+        _saveMeasuredLatency(status.tapFrames);
+      }
       // El looper también arranca y para el metrónomo (cuenta de entrada,
       // doble toque): lo que quiere el usuario es lo que está pasando.
       if (status.playing && !prev.playing) {
@@ -266,6 +325,7 @@ class EngineController extends ChangeNotifier {
     if (tempoLocked) return;
     bpm = value.clamp(40, 240).roundToDouble();
     _engine.setBpm(bpm);
+    _setPref(_bpmPrefKey, bpm.toStringAsFixed(0));
     notifyListeners();
   }
 
@@ -283,17 +343,45 @@ class EngineController extends ChangeNotifier {
     }
   }
 
-  void setBeatsPerBar(int value) {
+  void setTimeSignature(TimeSignature ts) {
     if (tempoLocked) return;
-    beatsPerBar = value;
-    _engine.setBeatsPerBar(value);
+    timeSignature = ts;
+    _engine.setMeter(ts.beats, ts.accentMask);
+    _setPref(_meterPrefKey, ts.label);
     notifyListeners();
   }
 
-  void setClickEnabled(bool on) {
-    clickEnabled = on;
-    _engine.setClickEnabled(on);
+  void setClickMode(ClickMode mode) {
+    clickMode = mode;
+    _engine.setClickMode(mode);
+    _setPref(_clickModePrefKey, mode.name);
     notifyListeners();
+  }
+
+  // Reloj para dibujar el pulso: el motor dice en qué tiempo va cada vez que
+  // se le pregunta (30 veces por segundo); entre medias se calcula con el
+  // reloj del móvil. Se resta la latencia de salida para que la luz vaya con
+  // lo que se oye, no con lo que el motor acaba de calcular.
+  final Stopwatch _clock = Stopwatch()..start();
+  int _statusAt = 0;
+
+  /// El tiempo del compás que se está oyendo ahora (null si está parado).
+  BeatNow? beatNow() {
+    final s = status;
+    final spb = s.samplesPerBeat;
+    final bpb = s.beatsPerBar;
+    if (!s.running || !s.playing || spb <= 0 || bpb <= 0 || s.sampleRate <= 0) return null;
+    final elapsed = (_clock.elapsedMicroseconds - _statusAt) / 1e6;
+    final out = s.outputLatencyMs > 0 ? s.outputLatencyMs / 1000 : 0.0;
+    // Sin noticias del motor en un rato: no se inventa
+    if (elapsed > 0.5) return (beat: s.beat, phase: 0.0);
+    var frames = s.beatFrames + ((elapsed - out) * s.sampleRate).round();
+    var beat = s.beat;
+    final steps = (frames / spb).floor();
+    frames -= steps * spb;
+    beat = (beat + steps) % bpb;
+    if (beat < 0) beat += bpb;
+    return (beat: beat, phase: frames / spb);
   }
 
   void setClickVolume(double v) {
@@ -403,12 +491,21 @@ class EngineController extends ChangeNotifier {
   void setLoopMode(LoopMode mode) {
     loopMode = mode;
     _engine.setLoopMode(mode);
+    _setPref(_loopModePrefKey, mode.name);
     notifyListeners();
   }
 
   void setSyncBars(int bars) {
     syncBars = bars;
     _engine.setSyncBars(bars);
+    _setPref(_syncBarsPrefKey, '$bars');
+    notifyListeners();
+  }
+
+  void setStartOnSound(bool on) {
+    startOnSound = on;
+    _engine.setStartOnSound(on);
+    _setPref(_startOnSoundPrefKey, on ? '1' : '0');
     notifyListeners();
   }
 
@@ -582,6 +679,40 @@ class EngineController extends ChangeNotifier {
     if (!status.running) return;
     _engine.measureLatency();
   }
+
+  /// Calibración tocando al clic (con cascos).
+  void startTapCalibration() {
+    if (!status.running) return;
+    _engine.startTapCalibration();
+  }
+
+  void cancelTapCalibration() => _engine.cancelTapCalibration();
+
+  /// Se está grabando algo (no se puede medir ni mover la latencia).
+  bool get recordingNow =>
+      status.loopState == LoopState.armed ||
+      status.loopState == LoopState.recording ||
+      status.loopState == LoopState.overdubbing;
+
+  /// Ajuste a mano (en ms). Lo ya grabado se mueve lo mismo, así se puede
+  /// afinar a oído con un loop sonando sobre el clic.
+  void setLatencyManually(double ms) {
+    if (!status.running || status.sampleRate <= 0 || recordingNow) return;
+    final frames = (ms.clamp(0, 500) * status.sampleRate / 1000).round();
+    final key = _routeKey ?? _currentRouteKey;
+    _routeKey = key;
+    _savedLatencies[key] = frames;
+    latencySource = LatencySource.measured;
+    _appliedLatency = frames;
+    _engine.nudgeLatency(frames);
+    _savePrefs();
+    notifyListeners();
+  }
+
+  /// Compensación que se ha pedido (aunque el motor aún no la haya aplicado).
+  double get compensationTargetMs => status.sampleRate > 0 && _appliedLatency >= 0
+      ? 1000 * _appliedLatency / status.sampleRate
+      : compensationMs;
 
   /// Compensación en uso, en ms.
   double get compensationMs =>
@@ -758,6 +889,12 @@ class EngineController extends ChangeNotifier {
   static const _volumeKeysPrefKey = 'volumeKeys';
   static const _headsetKeyPrefKey = 'headsetKey';
   static const _learnedKeysPrefKey = 'learnedKeys';
+  static const _bpmPrefKey = 'bpm';
+  static const _meterPrefKey = 'meter';
+  static const _clickModePrefKey = 'clickMode';
+  static const _loopModePrefKey = 'loopMode';
+  static const _syncBarsPrefKey = 'syncBars';
+  static const _startOnSoundPrefKey = 'startOnSound';
 
   Future<String?> _getPref(String key) async {
     try {
@@ -789,6 +926,22 @@ class EngineController extends ChangeNotifier {
 
     final advance = await _getPref(_autoAdvancePrefKey);
     if (advance != null) autoAdvance = advance == '1';
+
+    // Metrónomo y looper
+    final savedBpm = double.tryParse(await _getPref(_bpmPrefKey) ?? '');
+    if (savedBpm != null) bpm = savedBpm.clamp(40, 240);
+    final meter = await _getPref(_meterPrefKey);
+    timeSignature = kTimeSignatures.firstWhere(
+      (t) => t.label == meter,
+      orElse: () => kTimeSignatures.first,
+    );
+    final click = await _getPref(_clickModePrefKey);
+    clickMode = ClickMode.values.firstWhere((m) => m.name == click, orElse: () => ClickMode.always);
+    final mode = await _getPref(_loopModePrefKey);
+    loopMode = LoopMode.values.firstWhere((m) => m.name == mode, orElse: () => LoopMode.sync);
+    final bars = int.tryParse(await _getPref(_syncBarsPrefKey) ?? '');
+    if (bars != null && kSyncBarOptions.contains(bars)) syncBars = bars;
+    startOnSound = await _getPref(_startOnSoundPrefKey) == '1';
 
     // Apariencia
     final theme = await _getPref(_themePrefKey);
@@ -882,6 +1035,9 @@ class EngineController extends ChangeNotifier {
             '${(s.playSeconds / 60).toStringAsFixed(1)} min · cortes: $xrunsSincePlay',
       // Cortes desde que se abrió el audio (el buffer sube si los hay)
       if (s.xrunCount >= 0) 'Cortes desde que se abrió el audio: ${s.xrunCount}',
+      'Metrónomo: ${timeSignature.label}'
+          '${timeSignature.grouping.isEmpty ? '' : ' (${timeSignature.grouping})'}'
+          ' · clic: ${clickMode.label.toLowerCase()} · empezar al tocar: ${startOnSound ? 'sí' : 'no'}',
       'Looper: ${_stateName(s.loopState)} · ${loopMode.label}'
           '${s.hasLoops ? ' · base de ${s.baseBars} compases' : ''}'
           ' · avance automático: ${autoAdvance ? 'sí' : 'no'}',
@@ -897,15 +1053,25 @@ class EngineController extends ChangeNotifier {
 
   static String _stateName(LoopState st) => switch (st) {
     LoopState.empty => 'vacío',
-    LoopState.armed => 'cuenta de entrada',
+    LoopState.armed => 'cuenta de entrada o esperando',
     LoopState.recording => 'grabando',
     LoopState.playing => 'sonando',
     LoopState.overdubbing => 'overdub',
     LoopState.stopped => 'parado',
   };
 
+  bool _disposed = false;
+
+  // Los ajustes guardados se cargan en segundo plano: si llegan cuando ya se
+  // ha cerrado, no hay a quién avisar
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
   @override
   void dispose() {
+    _disposed = true;
     _lifecycle.dispose();
     _keys.setMethodCallHandler(null);
     appearance.dispose();

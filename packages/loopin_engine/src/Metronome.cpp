@@ -35,9 +35,9 @@ void Metronome::prepare(int32_t sampleRate) {
   clicks_[static_cast<int>(Accent::kWeak)] = makeClick(sampleRate, 1320.0, 0.5);
 }
 
-Metronome::Accent Metronome::accentFor(int32_t beat, int32_t beatsPerBar) {
+Metronome::Accent Metronome::accentFor(int32_t beat, uint32_t accentMask) {
   if (beat == 0) return Accent::kStrong;
-  if (beatsPerBar == 6 && beat == 3) return Accent::kMedium;
+  if (beat < 32 && (accentMask >> beat) & 1u) return Accent::kMedium;
   return Accent::kWeak;
 }
 

@@ -10,6 +10,7 @@
 #include "Looper.h"
 #include "Metronome.h"
 #include "SpscQueue.h"
+#include "TapCalibrator.h"
 #include "Transport.h"
 
 namespace loopin {
@@ -43,10 +44,24 @@ struct Command {
     kSetTrackMuted,
     kClearTrack,
     kSetAutoAdvance,
+    // Etapa 3, parte 2
+    kSetMeter,         // value = tiempos, arg = acentos medios (bits)
+    kSetClickMode,     // ClickMode
+    kStartTapCalibration,
+    kCancelTapCalibration,
+    kNudgeLatency,     // nueva compensación; mueve lo grabado lo que cambie
+    kSetStartOnSound,
   };
   Type type = Type::kPlay;
   double value = 0.0;
   int32_t arg = 0;
+};
+
+// Cuándo suena el clic del metrónomo
+enum class ClickMode : int32_t {
+  kSilent = 0,   // nunca (metrónomo solo visual)
+  kCountIn = 1,  // solo en la cuenta de entrada
+  kAlways = 2,
 };
 
 // Lo que el núcleo publica para la interfaz (atómicos, sin bloqueos).
@@ -86,6 +101,17 @@ struct CoreStatus {
   float trackVolume[Looper::kTracks];
   int64_t trackLength[Looper::kTracks];
   int64_t trackPosition[Looper::kTracks];
+  // Etapa 3, parte 2
+  int32_t beatFrames;       // muestras ya sonadas del tiempo actual
+  int32_t accentMask;
+  int32_t clickMode;
+  int32_t loopWaiting;      // esperando a que suene la guitarra
+  int32_t startOnSound;
+  int32_t tapState;         // TapCalibrator::State
+  int32_t tapClicks;
+  int32_t tapHits;
+  int32_t tapFrames;
+  int32_t tapSpread;
 };
 
 class EngineCore {
@@ -121,6 +147,7 @@ class EngineCore {
   Transport transport_;
   Metronome metronome_;
   LatencyMeter latency_;
+  TapCalibrator tap_;
   Looper looper_;
   InputRing ring_;
   int64_t outPos_ = 0;    // índice absoluto de la próxima muestra de salida
@@ -128,7 +155,8 @@ class EngineCore {
   int32_t monChunk_ = 0;  // mayor bloque (de entrada o salida) del último segundo
   int32_t monChunkAge_ = 0;
 
-  bool clickEnabled_ = true;
+  ClickMode clickMode_ = ClickMode::kAlways;
+  bool clickGate_ = false;  // el clic que está sonando se oye
   float clickVolume_ = 0.8f;
   bool monitorEnabled_ = false;
   float monitorVolume_ = 1.0f;
@@ -172,6 +200,16 @@ class EngineCore {
   std::atomic<float> aTrackVolume_[Looper::kTracks] = {};
   std::atomic<int64_t> aTrackLength_[Looper::kTracks] = {};
   std::atomic<int64_t> aTrackPosition_[Looper::kTracks] = {};
+  std::atomic<int32_t> aBeatFrames_{0};
+  std::atomic<int32_t> aAccentMask_{0};
+  std::atomic<int32_t> aClickMode_{2};
+  std::atomic<int32_t> aLoopWaiting_{0};
+  std::atomic<int32_t> aStartOnSound_{0};
+  std::atomic<int32_t> aTapState_{0};
+  std::atomic<int32_t> aTapClicks_{0};
+  std::atomic<int32_t> aTapHits_{0};
+  std::atomic<int32_t> aTapFrames_{0};
+  std::atomic<int32_t> aTapSpread_{0};
 };
 
 }  // namespace loopin

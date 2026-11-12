@@ -22,8 +22,16 @@ class Transport {
   // compás al empezar el siguiente compás, para no romper el pulso.
   void setBpm(double bpm);
   void setBeatsPerBar(int32_t beatsPerBar);
+  // Compás con sus acentos: el bit k de accentMask marca el tiempo k como
+  // acento medio (el tiempo 0 siempre es fuerte). Ej.: 6/8 → 6 tiempos y el
+  // bit 3; 7/8 (2+2+3) → 7 tiempos y los bits 2 y 4.
+  void setMeter(int32_t beatsPerBar, uint32_t accentMask);
 
   void play();   // arranca desde el compás 0, tiempo 0
+  // Arranca como si hubiera empezado hace `elapsed` muestras: el compás 0,
+  // tiempo 0 cayó en la muestra «ahora − elapsed». Para empezar a contar el
+  // tempo justo donde el músico empezó a tocar.
+  void playFrom(int64_t elapsed);
   void stop();
 
   // Avanza una muestra. Devuelve true si esta muestra es el inicio de un
@@ -47,6 +55,9 @@ class Transport {
   int32_t bar() const { return currentBar_; }
   int32_t beat() const { return currentBeat_; }
   int32_t beatsPerBar() const { return beatsPerBar_; }
+  uint32_t accentMask() const { return accentMask_; }
+  // Muestras ya sonadas del tiempo actual
+  int32_t framesSinceBeat() const { return playing_ ? posInBeat_ : 0; }
   int32_t samplesPerBeat() const { return samplesPerBeat_; }
   int64_t samplesPerBar() const { return int64_t(samplesPerBeat_) * beatsPerBar_; }
   double bpm() const { return bpm_; }
@@ -67,7 +78,8 @@ class Transport {
   }
   // true si hay un cambio de tempo o de compás aún sin aplicar.
   bool hasPendingChange() const {
-    return pendingBpm_ != bpm_ || pendingBeatsPerBar_ != beatsPerBar_;
+    return pendingBpm_ != bpm_ || pendingBeatsPerBar_ != beatsPerBar_ ||
+           pendingAccentMask_ != accentMask_;
   }
 
   static int32_t computeSamplesPerBeat(int32_t sampleRate, double bpm);
@@ -79,9 +91,11 @@ class Transport {
   double bpm_ = 100.0;
   int32_t samplesPerBeat_ = 28800;
   int32_t beatsPerBar_ = 4;
+  uint32_t accentMask_ = 0;
 
   double pendingBpm_ = 100.0;
   int32_t pendingBeatsPerBar_ = 4;
+  uint32_t pendingAccentMask_ = 0;
 
   bool playing_ = false;
   int32_t posInBeat_ = 0;   // muestras dentro del tiempo actual

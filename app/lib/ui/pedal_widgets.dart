@@ -3,8 +3,57 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
+import '../engine/engine_controller.dart' show BeatNow;
 import 'theme.dart';
+
+/// Redibuja lo que hay dentro en cada fotograma mientras [active] (el
+/// metrónomo suena), con el tiempo que se está oyendo. Así el pulso se ve
+/// suave aunque el estado del motor llegue solo 30 veces por segundo, y solo
+/// se redibuja esta pieza, no la pantalla entera.
+class BeatBuilder extends StatefulWidget {
+  const BeatBuilder({
+    super.key,
+    required this.active,
+    required this.beatNow,
+    required this.builder,
+  });
+
+  final bool active;
+  final BeatNow? Function() beatNow;
+  final Widget Function(BuildContext context, BeatNow? now) builder;
+
+  @override
+  State<BeatBuilder> createState() => _BeatBuilderState();
+}
+
+class _BeatBuilderState extends State<BeatBuilder> with SingleTickerProviderStateMixin {
+  late final Ticker _ticker = createTicker((_) => setState(() {}));
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.active) _ticker.start();
+  }
+
+  @override
+  void didUpdateWidget(BeatBuilder old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !_ticker.isActive) _ticker.start();
+    if (!widget.active && _ticker.isActive) _ticker.stop();
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      widget.builder(context, widget.active ? widget.beatNow() : null);
+}
 
 /// Un LED pequeño.
 class Led extends StatelessWidget {
@@ -129,6 +178,8 @@ class Footswitch extends StatefulWidget {
     this.glow = false,
     this.icon,
     this.text,
+    this.pulse = 0,
+    this.pulseColor = LoopinPalette.display,
     this.semanticLabel = 'Botón principal',
   });
 
@@ -136,6 +187,10 @@ class Footswitch extends StatefulWidget {
   final Color? color;
   final double progress;
   final bool glow;
+
+  /// Destello del pulso del metrónomo en la arandela (de 0 a 1).
+  final double pulse;
+  final Color pulseColor;
 
   /// Lo que hará el siguiente toque.
   final IconData? icon;
@@ -189,7 +244,11 @@ class _FootswitchState extends State<Footswitch> {
                 glow: widget.glow,
               ),
               pressed: _pressed,
-              washer: palette.edge,
+              washer: Color.lerp(
+                palette.edge,
+                widget.pulseColor,
+                0.85 * widget.pulse.clamp(0.0, 1.0),
+              )!,
             ),
             child: Center(
               child: widget.text != null

@@ -1156,6 +1156,286 @@ void testTrackGestures() {
   CHECK_EQ(r.lp().trackLength(second), 24 * bar);
 }
 
+
+// -----------------------------------------------------------------------------
+// Calibración tocando al clic, como con cascos: el clic no vuelve al micro;
+// lo que entra son los golpes del músico, que llegan con la latencia L y
+// adelantados o atrasados respecto al clic que oye.
+void testTapCalibration() {
+  std::printf("Calibración tocando al clic (cascos)\n");
+  for (int32_t L : {2400, 6123, 15000}) {
+    const int32_t sr = 48000;
+    Rig r(sr, L, 41);
+    r.keep = false;
+    const int64_t period = std::llround(60.0 * sr / TapCalibrator::kBpm);
+    // El músico oye el primer clic y a partir de ahí lleva el ritmo (por eso
+    // puede adelantarse al clic). Se adelanta 20 ms de media, con altibajos.
+    int64_t first = -1, lastSound = -sr;
+    r.onOut = [&](int64_t n, float s) {
+      if (s != 0.0f) {
+        if (first < 0 && n - lastSound > sr / 10) first = n;
+        lastSound = n;
+      }
+    };
+    const int32_t jitter[] = {0, 300, -300, 150, -150, 600, -600, 0, 75, -75, 450, -450};
+    r.player = [&](int64_t n) {
+      if (first < 0) return 0.0f;
+      for (int k = 1; k < TapCalibrator::kTotal; ++k) {
+        const int64_t tap = first + k * period - 960 + jitter[(k * 7) % 12];
+        if (n >= tap && n < tap + sr / 50) {
+          const int64_t d = n - tap;
+          return float(0.3 * std::exp(-double(d) / (0.005 * sr))) * (d % 2 ? -1.0f : 1.0f);
+        }
+      }
+      return 0.0f;
+    };
+    r.post(T::kStartTapCalibration);
+    int64_t guard = 0;
+    while (r.core.status().tapState == 1 || guard == 0) {
+      r.runFor(4800);
+      if (++guard > 400) break;
+    }
+    const CoreStatus st = r.core.status();
+    CHECK_EQ(st.tapState, 2);
+    CHECK_EQ(st.tapClicks, TapCalibrator::kTotal);
+    CHECK_EQ(st.tapHits, TapCalibrator::kCounted);
+    // Latencia más lo que se adelanta el músico (la mediana de los golpes)
+    const int32_t want = L - 960;
+    CHECK(std::abs(st.tapFrames - want) <= 4);
+    std::printf("  latencia %d, se adelanta 960 → medido %d (dispersión %d muestras)\n", L,
+                st.tapFrames, st.tapSpread);
+  }
+  // Sin golpes: falla
+  Rig r(48000, 3000, 43);
+  r.keep = false;
+  r.post(T::kStartTapCalibration);
+  r.runFor(48000 * 16);
+  CHECK_EQ(r.core.status().tapState, 3);
+}
+
+// -----------------------------------------------------------------------------
+// Empezar al tocar: la primera pista no cuenta; espera al primer ataque y el
+// compás 1 empieza ahí, aunque se detecte cuando ya ha pasado (latencia).
+void testStartOnSound() {
+  std::printf("Empezar al tocar: el compás 1 empieza en el primer ataque\n");
+  const int32_t sr = 48000;
+  const int32_t L = 6123;
+  Rig r(sr, L, 47);
+  r.post(T::kSetBpm, 120);
+  r.post(T::kSetLoopMode, 0);
+  r.post(T::kSetSyncBars, 2);
+  r.post(T::kSetStartOnSound, 1);
+  r.post(T::kSetClickMode, 2);  // clic siempre... pero no mientras espera
+  const int64_t bar = 96000;
+  const int64_t t0 = 5000, T = 60000;  // pulsa en t0; empieza a tocar en T
+  std::mt19937 nrng(3);
+  std::normal_distribution<float> noise(0.0f, 0.002f);
+  auto played = [&](int64_t n) {  // lo que toca (desde T), con un ataque fuerte
+    return n >= T ? 0.25f + sig(1, n - T) : 0.0f;
+  };
+  r.player = [&](int64_t n) { return played(n) + noise(nrng); };
+  r.postAt(t0, T::kLoopPress);
+  r.runTo(T);
+  CHECK(r.state() == St::kArmed);
+  CHECK(r.lp().waiting());
+  CHECK(!r.core.status().playing);  // en silencio mientras espera
+  bool silent = true;
+  for (int64_t n = t0; n < T; ++n) silent = silent && r.hist[n] == 0.0f;
+  CHECK(silent);
+  // Se detecta cuando el ataque llega a la entrada (L después)
+  r.runTo(T + L + 2000);
+  CHECK(r.state() == St::kRecording);
+  CHECK(!r.lp().waiting());
+  const int64_t start = T - sr / 500;  // 2 ms antes del ataque
+  CHECK(r.core.status().playing);
+  CHECK_EQ(r.core.status().framePosition, r.outPos - start);
+  CHECK_EQ(r.lp().targetFrames(), 2 * bar);
+  // Se cierra sola a los 2 compases y suena lo que se tocó desde el ataque
+  r.runTo(start + 2 * bar + 1);
+  CHECK(r.state() == St::kPlaying);
+  CHECK_EQ(r.lp().baseLength(), 2 * bar);
+  r.post(T::kSetClickMode, 0);
+  // Deja de tocar cuando lo tocado hasta el final del loop ya ha entrado
+  r.runFor(r.L + r.inJitter + 100);
+  r.player = [&](int64_t) { return noise(nrng); };
+  r.runFor(r.L + r.inJitter + 100);
+  const int64_t from = r.outPos;
+  r.runFor(3 * bar);
+  int64_t wrong = 0;
+  for (int64_t n = from; n < r.outPos; ++n) {
+    const int64_t p = wrapPos(n - start, 2 * bar);
+    const float want = played(start + p);
+    if (std::fabs(r.hist[n] - want) > 0.02f) ++wrong;  // el ruido también se grabó
+  }
+  CHECK_EQ(wrong, 0);
+
+  // Pulsar mientras espera lo anula
+  r.post(T::kLoopClear);
+  r.runFor(100);
+  r.post(T::kLoopPress);
+  r.runFor(1000);
+  CHECK(r.lp().waiting());
+  r.post(T::kLoopPress);
+  r.runFor(100);
+  CHECK(r.state() == St::kEmpty);
+  CHECK(!r.lp().waiting());
+}
+
+// -----------------------------------------------------------------------------
+// Libre: sin metrónomo; el primer loop dura lo que se toque y de ahí sale el
+// tempo (entre 70 y 140 BPM). Las demás pistas ya van por compases.
+void testFreeMode() {
+  std::printf("Modo libre: el primer loop marca el tempo\n");
+  const int32_t sr = 48000;
+  const int32_t L = 4113;
+  Rig r(sr, L, 53);
+  r.post(T::kSetLoopMode, 2);
+  r.post(T::kSetBeatsPerBar, 4);
+  r.post(T::kSetClickMode, 2);  // da igual: en libre no hay clic
+  r.post(T::kSetAutoAdvance, 1);
+  r.player = [](int64_t n) { return sig(1, n); };
+  const int64_t t0 = 3000;
+  r.postAt(t0, T::kLoopPress);  // empieza ya, sin cuenta
+  r.runTo(t0 + 10);
+  CHECK(r.state() == St::kRecording);
+  CHECK(!r.core.status().playing);
+  // 3,7 s: con 1 compás serían 64,9 BPM → 2 compases a 129,7 BPM
+  r.postAt(t0 + 177601, T::kLoopPress);
+  r.runFor(1);
+  CHECK(r.state() == St::kPlaying);
+  CHECK_EQ(r.lp().baseLength(), 177600);
+  CHECK_EQ(r.lp().barFrames(), 88800);
+  const CoreStatus st = r.core.status();
+  CHECK(st.playing);
+  CHECK(std::fabs(st.bpm - 60.0 * sr / 22200.0) < 1e-9);
+  CHECK_EQ(st.samplesPerBeat, 22200);
+  CHECK_EQ(st.framePosition, r.outPos - t0);  // el compás 1 empieza con el loop
+  // Sin clic: lo que suena es solo el loop
+  r.runFor(L + r.inJitter + 100);
+  r.player = [](int64_t) { return 0.0f; };
+  r.runFor(L + r.inJitter + 100);
+  int64_t from = r.outPos, wrong = 0;
+  r.runFor(2 * 177600);
+  for (int64_t n = from; n < r.outPos; ++n)
+    if (r.hist[n] != sig(1, t0 + wrapPos(n - t0, 177600))) ++wrong;
+  CHECK_EQ(wrong, 0);
+
+  // La pista 2 empieza en el siguiente compás (del tempo calculado)
+  r.post(T::kLoopPress);
+  r.runFor(1);
+  CHECK(r.state() == St::kArmed);
+  CHECK_EQ(wrapPos(r.outPos - r.lp().recordedFrames(r.outPos) - t0, 88800), 0);
+
+  // Muy corto (menos de un compás a 240 BPM): se anula
+  r.post(T::kLoopClear);
+  r.runFor(10);
+  r.post(T::kLoopPress);
+  r.runFor(20000);
+  r.post(T::kLoopPress);
+  r.runFor(10);
+  CHECK(r.state() == St::kEmpty);
+
+  // Libre y empezar al tocar: la duración cuenta desde el ataque
+  r.post(T::kSetStartOnSound, 1);
+  r.post(T::kSetBeatsPerBar, 3);
+  const int64_t press = r.outPos + 100, T0 = press + 20000;
+  r.player = [&](int64_t n) { return n >= T0 ? 0.3f + sig(2, n - T0) : 0.0f; };
+  r.postAt(press, T::kLoopPress);
+  r.runTo(T0 + L + 1000);
+  CHECK(r.state() == St::kRecording);
+  const int64_t start = T0 - sr / 500;
+  r.postAt(start + 100000, T::kLoopPress);  // 2,08 s en 3/4 → 86,4 BPM, 1 compás
+  r.runFor(1);
+  CHECK_EQ(r.lp().baseLength(), 99999);
+  CHECK_EQ(r.core.status().samplesPerBeat, 33333);
+  CHECK_EQ(r.core.status().framePosition, r.outPos - start);
+}
+
+// -----------------------------------------------------------------------------
+// Ajuste a mano: con la compensación corta, el loop suena tarde; al corregirla
+// a mano, lo grabado se mueve lo mismo y cuadra.
+void testNudgeLatency() {
+  std::printf("Ajuste a mano de la latencia: mueve lo grabado\n");
+  const int32_t sr = 48000;
+  const int32_t L = 6000;  // latencia de verdad
+  Rig r(sr, L, 59);
+  r.post(T::kSetLatencyFrames, L - 960);  // 20 ms corta
+  r.post(T::kSetBpm, 120);
+  r.post(T::kSetSyncBars, 1);
+  r.post(T::kSetAutoAdvance, 1);
+  const int64_t bar = 96000;
+  const int64_t t0 = 1000, rec = t0 + bar;
+  // El músico repite su frase de 1 compás (también antes y después)
+  r.player = [&](int64_t n) { return sig(1, wrapPos(n - rec, bar)); };
+  r.postAt(t0, T::kLoopPress);
+  r.runTo(rec + bar + L + 100);
+  CHECK(r.state() == St::kPlaying);
+  // Ahora suena 960 muestras tarde
+  int64_t from = r.outPos, wrong = 0;
+  r.runFor(bar);
+  for (int64_t n = from; n < r.outPos; ++n)
+    if (r.hist[n] != sig(1, wrapPos(n - rec - 960, bar))) ++wrong;
+  CHECK_EQ(wrong, 0);
+  // Se corrige a mano: cuadra
+  r.post(T::kNudgeLatency, L);
+  r.runFor(1);
+  CHECK_EQ(r.lp().latency(), L);
+  from = r.outPos;
+  wrong = 0;
+  r.runFor(bar);
+  for (int64_t n = from; n < r.outPos; ++n)
+    if (r.hist[n] != sig(1, wrapPos(n - rec, bar))) ++wrong;
+  CHECK_EQ(wrong, 0);
+  // Lo que se graba después ya va con la compensación buena
+  const int64_t press = r.outPos + 10;
+  const int64_t s2 = rec + (press - rec + bar - 1) / bar * bar;
+  r.player = [&](int64_t n) { return sig(2, wrapPos(n - s2, bar)); };
+  r.postAt(press, T::kLoopPress);
+  r.runTo(s2 + bar + L + 100);
+  CHECK_EQ(r.lp().trackLength(1), bar);
+  from = r.outPos;
+  wrong = 0;
+  r.runFor(bar);
+  for (int64_t n = from; n < r.outPos; ++n)
+    if (r.hist[n] != sig(1, wrapPos(n - rec, bar)) + sig(2, wrapPos(n - s2, bar))) ++wrong;
+  CHECK_EQ(wrong, 0);
+}
+
+// -----------------------------------------------------------------------------
+// Modos del clic: siempre, solo en la cuenta de entrada y nunca
+void testClickModes() {
+  std::printf("Modos del clic\n");
+  const int32_t sr = 48000;
+  const int64_t bar = 96000;
+  auto clickIn = [](const Rig& r, int64_t from, int64_t to) {
+    for (int64_t n = from; n < to; ++n)
+      if (r.hist[n] != 0.0f) return true;
+    return false;
+  };
+  for (int mode : {0, 1, 2}) {
+    Rig r(sr, 3000, 61);
+    r.post(T::kSetBpm, 120);
+    r.post(T::kSetSyncBars, 1);
+    r.post(T::kSetClickMode, mode);
+    r.post(T::kLoopPress);  // 1 compás de cuenta y 1 de grabación (en silencio)
+    r.runFor(bar);
+    const bool countIn = clickIn(r, 0, bar);
+    r.runFor(bar);
+    const bool recording = clickIn(r, bar, 2 * bar);
+    CHECK(countIn == (mode >= 1));
+    CHECK(recording == (mode == 2));
+    // El metrónomo arranca y para aunque no haya loop
+    r.post(T::kLoopClear);
+    r.post(T::kPlay);
+    r.runFor(bar);
+    CHECK(clickIn(r, r.outPos - bar, r.outPos) == (mode == 2));
+    CHECK(r.core.status().playing);
+    r.post(T::kPause);
+    r.runFor(10);
+    CHECK(!r.core.status().playing);
+  }
+}
+
 }  // namespace
 
 void runLooperTests() {
@@ -1170,4 +1450,9 @@ void runLooperTests() {
   testFourTracks();
   testSyncTracks();
   testTrackGestures();
+  testTapCalibration();
+  testStartOnSound();
+  testFreeMode();
+  testNudgeLatency();
+  testClickModes();
 }

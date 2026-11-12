@@ -292,6 +292,72 @@ class LoopinEngineBindings {
   late final _loopin_clear_track = _loopin_clear_trackPtr
       .asFunction<void Function(int)>();
 
+  void loopin_set_meter(int beats, int accentMask) {
+    return _loopin_set_meter(beats, accentMask);
+  }
+
+  late final _loopin_set_meterPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32, ffi.Int32)>>(
+        'loopin_set_meter',
+      );
+  late final _loopin_set_meter = _loopin_set_meterPtr
+      .asFunction<void Function(int, int)>();
+
+  void loopin_set_click_mode(int mode) {
+    return _loopin_set_click_mode(mode);
+  }
+
+  late final _loopin_set_click_modePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+        'loopin_set_click_mode',
+      );
+  late final _loopin_set_click_mode = _loopin_set_click_modePtr
+      .asFunction<void Function(int)>();
+
+  void loopin_start_tap_calibration() {
+    return _loopin_start_tap_calibration();
+  }
+
+  late final _loopin_start_tap_calibrationPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function()>>(
+        'loopin_start_tap_calibration',
+      );
+  late final _loopin_start_tap_calibration = _loopin_start_tap_calibrationPtr
+      .asFunction<void Function()>();
+
+  void loopin_cancel_tap_calibration() {
+    return _loopin_cancel_tap_calibration();
+  }
+
+  late final _loopin_cancel_tap_calibrationPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function()>>(
+        'loopin_cancel_tap_calibration',
+      );
+  late final _loopin_cancel_tap_calibration = _loopin_cancel_tap_calibrationPtr
+      .asFunction<void Function()>();
+
+  void loopin_nudge_latency(int frames) {
+    return _loopin_nudge_latency(frames);
+  }
+
+  late final _loopin_nudge_latencyPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+        'loopin_nudge_latency',
+      );
+  late final _loopin_nudge_latency = _loopin_nudge_latencyPtr
+      .asFunction<void Function(int)>();
+
+  void loopin_set_start_on_sound(int enabled) {
+    return _loopin_set_start_on_sound(enabled);
+  }
+
+  late final _loopin_set_start_on_soundPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+        'loopin_set_start_on_sound',
+      );
+  late final _loopin_set_start_on_sound = _loopin_set_start_on_soundPtr
+      .asFunction<void Function(int)>();
+
   void loopin_set_auto_advance(int enabled) {
     return _loopin_set_auto_advance(enabled);
   }
@@ -573,6 +639,45 @@ final class LoopinStatus extends ffi.Struct {
 
   @ffi.Array.multi([4])
   external ffi.Array<ffi.Int64> track_position;
+
+  /// muestras ya sonadas del tiempo actual
+  @ffi.Int32()
+  external int beat_frames;
+
+  /// tiempos con acento medio (bit k = tiempo k)
+  @ffi.Int32()
+  external int accent_mask;
+
+  /// LOOPIN_CLICK_*
+  @ffi.Int32()
+  external int click_mode;
+
+  @ffi.Int32()
+  external int start_on_sound;
+
+  /// 1 = esperando a que suene la guitarra
+  @ffi.Int32()
+  external int loop_waiting;
+
+  /// LOOPIN_LATENCY_* (mismos valores)
+  @ffi.Int32()
+  external int tap_state;
+
+  /// clics que ya han sonado (de 16)
+  @ffi.Int32()
+  external int tap_clicks;
+
+  /// golpes que cuentan (de 12)
+  @ffi.Int32()
+  external int tap_hits;
+
+  /// resultado en muestras
+  @ffi.Int32()
+  external int tap_frames;
+
+  /// dispersión de los golpes en muestras
+  @ffi.Int32()
+  external int tap_spread;
 }
 
 const int LOOPIN_TRACKS = 4;
@@ -584,6 +689,12 @@ const int LOOPIN_LATENCY_RUNNING = 1;
 const int LOOPIN_LATENCY_DONE = 2;
 
 const int LOOPIN_LATENCY_FAILED = 3;
+
+const int LOOPIN_CLICK_SILENT = 0;
+
+const int LOOPIN_CLICK_COUNT_IN = 1;
+
+const int LOOPIN_CLICK_ALWAYS = 2;
 
 const int LOOPIN_PRESET_GENERIC = 1;
 

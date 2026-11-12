@@ -95,9 +95,27 @@ enum LoopMode {
   sync('Sincronizado'),
 
   /// Se cierra al pulsar.
-  manual('Manual');
+  manual('Manual'),
+
+  /// Sin metrónomo: el primer loop dura lo que se toque y marca el tempo.
+  free('Libre');
 
   const LoopMode(this.label);
+  final String label;
+}
+
+/// Cuándo suena el clic del metrónomo (mismo orden que LOOPIN_CLICK_*).
+enum ClickMode {
+  /// Nunca: el metrónomo solo se ve.
+  silent('Solo visual'),
+
+  /// Solo en la cuenta de entrada.
+  countIn('Solo la cuenta'),
+
+  /// Siempre.
+  always('Siempre');
+
+  const ClickMode(this.label);
   final String label;
 }
 
@@ -186,6 +204,16 @@ class EngineStatus {
     this.baseLength = 0,
     this.basePosition = 0,
     this.tracks = const [TrackStatus(), TrackStatus(), TrackStatus(), TrackStatus()],
+    this.beatFrames = 0,
+    this.accentMask = 0,
+    this.clickMode = ClickMode.always,
+    this.startOnSound = false,
+    this.loopWaiting = false,
+    this.tapState = LatencyState.idle,
+    this.tapClicks = 0,
+    this.tapHits = 0,
+    this.tapFrames = 0,
+    this.tapSpread = 0,
   });
 
   final bool running;
@@ -278,6 +306,36 @@ class EngineStatus {
   /// Las [kTrackCount] pistas.
   final List<TrackStatus> tracks;
 
+  /// Muestras ya sonadas del tiempo actual (para dibujar el pulso).
+  final int beatFrames;
+
+  /// Tiempos con acento medio (bit k = tiempo k; el 0 siempre es fuerte).
+  final int accentMask;
+  final ClickMode clickMode;
+
+  /// La primera pista espera a que suene la guitarra.
+  final bool startOnSound;
+
+  /// Esperando a que suene la guitarra para empezar la primera pista.
+  final bool loopWaiting;
+
+  /// Calibración tocando al clic.
+  final LatencyState tapState;
+
+  /// Clics que ya han sonado (de [tapTotalClicks]).
+  final int tapClicks;
+
+  /// Golpes que cuentan (de [tapCountedClicks]).
+  final int tapHits;
+  final int tapFrames;
+
+  /// Dispersión de los golpes en muestras.
+  final int tapSpread;
+
+  static const tapCountInClicks = 4;
+  static const tapCountedClicks = 12;
+  static const tapTotalClicks = tapCountInClicks + tapCountedClicks;
+
   /// Hay algún loop grabado.
   bool get hasLoops => baseLength > 0;
 
@@ -322,7 +380,11 @@ class LoopinEngine {
   void pause() => _b.loopin_pause();
   void setBpm(double bpm) => _b.loopin_set_bpm(bpm);
   void setBeatsPerBar(int beats) => _b.loopin_set_beats_per_bar(beats);
+
+  /// Compás: tiempos y acentos medios (bit k = tiempo k).
+  void setMeter(int beats, int accentMask) => _b.loopin_set_meter(beats, accentMask);
   void setClickEnabled(bool on) => _b.loopin_set_click_enabled(on ? 1 : 0);
+  void setClickMode(ClickMode mode) => _b.loopin_set_click_mode(mode.index);
   void setClickVolume(double v) => _b.loopin_set_click_volume(v);
   /// Se aplica la próxima vez que se abra el audio ([start]).
   void setInputPreset(InputPreset preset) => _b.loopin_set_input_preset(preset.code);
@@ -337,6 +399,10 @@ class LoopinEngine {
   void setMonitorEnabled(bool on) => _b.loopin_set_monitor_enabled(on ? 1 : 0);
   void setMonitorVolume(double v) => _b.loopin_set_monitor_volume(v);
   void measureLatency() => _b.loopin_measure_latency();
+
+  /// Calibración tocando al clic (para cascos).
+  void startTapCalibration() => _b.loopin_start_tap_calibration();
+  void cancelTapCalibration() => _b.loopin_cancel_tap_calibration();
 
   // Looper
   void loopPress() => _b.loopin_loop_press();
@@ -356,6 +422,12 @@ class LoopinEngine {
 
   /// Latencia de ida y vuelta (muestras) que se compensa al grabar.
   void setLatencyCompensation(int frames) => _b.loopin_set_latency_compensation(frames);
+
+  /// Ajuste a mano: nueva compensación; lo ya grabado se mueve lo mismo.
+  void nudgeLatency(int frames) => _b.loopin_nudge_latency(frames);
+
+  /// La primera pista espera a que suene la guitarra.
+  void setStartOnSound(bool on) => _b.loopin_set_start_on_sound(on ? 1 : 0);
 
   EngineStatus status() {
     _b.loopin_get_status(_status);
@@ -426,6 +498,16 @@ class LoopinEngine {
             position: s.track_position[i],
           ),
       ],
+      beatFrames: s.beat_frames,
+      accentMask: s.accent_mask,
+      clickMode: ClickMode.values[s.click_mode.clamp(0, ClickMode.values.length - 1)],
+      startOnSound: s.start_on_sound != 0,
+      loopWaiting: s.loop_waiting != 0,
+      tapState: LatencyState.values[s.tap_state.clamp(0, 3)],
+      tapClicks: s.tap_clicks,
+      tapHits: s.tap_hits,
+      tapFrames: s.tap_frames,
+      tapSpread: s.tap_spread,
     );
   }
 

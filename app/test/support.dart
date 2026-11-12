@@ -43,6 +43,20 @@ class FakeEngine implements LoopinEngine {
   void setAutoAdvance(bool on) => calls.add('autoAdvance $on');
   @override
   void setLatencyCompensation(int frames) => calls.add('latency $frames');
+  @override
+  void nudgeLatency(int frames) => calls.add('nudge $frames');
+  @override
+  void setMeter(int beats, int accentMask) => calls.add('meter $beats $accentMask');
+  @override
+  void setClickMode(ClickMode mode) => calls.add('click ${mode.name}');
+  @override
+  void setStartOnSound(bool on) => calls.add('onSound $on');
+  @override
+  void setLoopMode(LoopMode mode) => calls.add('mode ${mode.name}');
+  @override
+  void startTapCalibration() => calls.add('tapStart');
+  @override
+  void cancelTapCalibration() => calls.add('tapCancel');
 
   // El resto de órdenes no importan aquí
   @override
@@ -53,7 +67,13 @@ const _bar = 125216; // un compás a 92 BPM y 48 kHz
 
 /// Un estado creíble del motor: la pista 1 con loop, la 2 elegida (y en ella
 /// lo que diga [st]), la 3 en silencio y el doble de larga, la 4 vacía.
-EngineStatus fakeStatus(LoopState st, {bool playing = true}) {
+EngineStatus fakeStatus(
+  LoopState st, {
+  bool playing = true,
+  bool waiting = false,
+  LatencyState tapState = LatencyState.idle,
+  int tapClicks = 0,
+}) {
   final any = st != LoopState.empty;
   final rest = st == LoopState.stopped ? LoopState.stopped : LoopState.playing;
   final busy = st == LoopState.armed || st == LoopState.recording || st == LoopState.overdubbing;
@@ -65,12 +85,19 @@ EngineStatus fakeStatus(LoopState st, {bool playing = true}) {
     beatsPerBar: 4,
     beat: 2,
     samplesPerBeat: 31304,
+    beatFrames: 1000,
     inputDeviceId: 10,
     outputDeviceId: 20,
     outputLatencyMs: 45,
     inputLatencyMs: 60,
     inputPeak: 0.4,
     loopState: st,
+    loopWaiting: waiting,
+    tapState: tapState,
+    tapClicks: tapClicks,
+    tapHits: tapClicks > 4 ? tapClicks - 4 : 0,
+    tapFrames: 5760,
+    tapSpread: 240,
     loopBarFrames: _bar,
     loopLength: st.hasLoop ? 4 * _bar : 0,
     loopPosition: st.hasLoop ? 200000 : 0,

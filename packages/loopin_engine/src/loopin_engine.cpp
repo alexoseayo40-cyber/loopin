@@ -39,6 +39,16 @@ void loopin_set_beats_per_bar(int32_t beats) { post(Command::Type::kSetBeatsPerB
 void loopin_set_click_enabled(int32_t enabled) {
   post(Command::Type::kSetClickEnabled, enabled ? 1.0 : 0.0);
 }
+void loopin_set_meter(int32_t beats, int32_t accent_mask) {
+  post(Command::Type::kSetMeter, beats, accent_mask);
+}
+void loopin_set_click_mode(int32_t mode) { post(Command::Type::kSetClickMode, mode); }
+void loopin_start_tap_calibration(void) { post(Command::Type::kStartTapCalibration); }
+void loopin_cancel_tap_calibration(void) { post(Command::Type::kCancelTapCalibration); }
+void loopin_nudge_latency(int32_t frames) { post(Command::Type::kNudgeLatency, frames); }
+void loopin_set_start_on_sound(int32_t enabled) {
+  post(Command::Type::kSetStartOnSound, enabled ? 1.0 : 0.0);
+}
 void loopin_set_click_volume(float volume) { post(Command::Type::kSetClickVolume, volume); }
 void loopin_set_monitor_enabled(int32_t enabled) {
   post(Command::Type::kSetMonitorEnabled, enabled ? 1.0 : 0.0);
@@ -156,6 +166,16 @@ void loopin_get_status(LoopinStatus* out) {
     out->track_length[i] = c.trackLength[i];
     out->track_position[i] = c.trackPosition[i];
   }
+  out->beat_frames = c.beatFrames;
+  out->accent_mask = c.accentMask;
+  out->click_mode = c.clickMode;
+  out->start_on_sound = c.startOnSound;
+  out->loop_waiting = c.loopWaiting;
+  out->tap_state = c.tapState;
+  out->tap_clicks = c.tapClicks;
+  out->tap_hits = c.tapHits;
+  out->tap_frames = c.tapFrames;
+  out->tap_spread = c.tapSpread;
 }
 
 }  // extern "C"

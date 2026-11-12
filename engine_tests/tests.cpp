@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "EngineCore.h"
+#include "OnsetDetector.h"
 #include "LatencyMeter.h"
 #include "Metronome.h"
 #include "SpscQueue.h"
@@ -88,10 +89,80 @@ static void testMeterChangeAtBar() {
 
 static void testAccents() {
   std::printf("Acentos\n");
-  CHECK(Metronome::accentFor(0, 4) == Metronome::Accent::kStrong);
-  CHECK(Metronome::accentFor(2, 4) == Metronome::Accent::kWeak);
-  CHECK(Metronome::accentFor(3, 6) == Metronome::Accent::kMedium);
-  CHECK(Metronome::accentFor(3, 4) == Metronome::Accent::kWeak);
+  CHECK(Metronome::accentFor(0, 0) == Metronome::Accent::kStrong);
+  CHECK(Metronome::accentFor(2, 0) == Metronome::Accent::kWeak);
+  CHECK(Metronome::accentFor(3, 1u << 3) == Metronome::Accent::kMedium);  // 6/8
+  CHECK(Metronome::accentFor(3, 0) == Metronome::Accent::kWeak);
+  // 7/8 en 2+2+3
+  const uint32_t m78 = (1u << 2) | (1u << 4);
+  CHECK(Metronome::accentFor(2, m78) == Metronome::Accent::kMedium);
+  CHECK(Metronome::accentFor(4, m78) == Metronome::Accent::kMedium);
+  CHECK(Metronome::accentFor(5, m78) == Metronome::Accent::kWeak);
+  CHECK(Metronome::accentFor(0, m78) == Metronome::Accent::kStrong);
+
+  // El compás nuevo (con sus acentos) entra en el siguiente compás
+  Transport t;
+  t.setSampleRate(48000);
+  t.setBpm(120);
+  t.setMeter(4, 0);
+  t.play();
+  for (int i = 0; i < 24000; ++i) t.tick();
+  t.setMeter(7, m78);
+  CHECK_EQ(t.accentMask(), 0u);
+  CHECK_EQ(t.beatsPerBar(), 4);
+  for (int i = 24000; i < 24000 * 4; ++i) t.tick();
+  CHECK_EQ(t.beatsPerBar(), 7);
+  CHECK_EQ(t.accentMask(), m78);
+}
+
+static void testPlayFrom() {
+  std::printf("Arrancar el tempo desde una posición\n");
+  Transport t;
+  t.setSampleRate(48000);
+  t.setBpm(120);  // 24000 por tiempo
+  t.setMeter(3, 0);
+  t.playFrom(24000 * 4 + 100);  // compás 1, tiempo 1, 100 muestras dentro
+  CHECK_EQ(t.bar(), 1);
+  CHECK_EQ(t.beat(), 1);
+  CHECK_EQ(t.framesSinceBeat(), 100);
+  CHECK_EQ(t.framesSinceBar(), 24000 + 100);
+  CHECK_EQ(t.framePosition(), 24000 * 4 + 100);
+  // El siguiente tiempo empieza justo donde toca
+  int64_t i = 0;
+  while (!t.tick()) ++i;
+  CHECK_EQ(i, 24000 - 100);
+  CHECK_EQ(t.beat(), 2);
+  t.playFrom(0);
+  CHECK_EQ(t.bar(), 0);
+  CHECK(t.tick());  // la primera muestra es un tiempo
+}
+
+static void testOnsetDetector() {
+  std::printf("Detector de ataques\n");
+  const int32_t sr = 48000;
+  OnsetDetector d;
+  d.prepare(sr);
+  d.reset(0.02f, sr / 4);
+  std::mt19937 rng(5);
+  std::normal_distribution<float> noise(0.0f, 0.003f);
+  // Ruido de fondo: nada
+  int hits = 0;
+  for (int i = 0; i < sr; ++i) hits += d.push(noise(rng));
+  CHECK_EQ(hits, 0);
+  // Una nota (seno que decae) cada 600 ms, con ruido: un ataque por nota,
+  // justo al empezar
+  const double kPi = 3.14159265358979;
+  std::vector<int64_t> found;
+  for (int64_t i = 0; i < sr * 3; ++i) {
+    const int64_t k = i % (sr * 6 / 10);
+    const float note = float(0.3 * std::exp(-double(k) / (0.15 * sr)) * std::sin(2 * kPi * 196.0 * k / sr));
+    if (d.push(note + noise(rng))) found.push_back(i);
+  }
+  CHECK_EQ((int)found.size(), 5);
+  for (size_t n = 0; n < found.size(); ++n) {
+    const int64_t want = int64_t(n) * (sr * 6 / 10);
+    CHECK(found[n] >= want && found[n] < want + sr / 1000);  // < 1 ms tarde
+  }
 }
 
 // El núcleo completo durante 5 minutos con bloques de tamaño variable:
@@ -260,6 +331,8 @@ int main() {
   testTempoChangeAtBeat();
   testMeterChangeAtBar();
   testAccents();
+  testPlayFrom();
+  testOnsetDetector();
   testEngineClickTiming();
   testMonitorAndMute();
   testInputGain();

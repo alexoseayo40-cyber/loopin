@@ -15,8 +15,9 @@ class Metronome {
 
   void prepare(int32_t sampleRate);
 
-  // Acento según el compás: el 1 siempre fuerte; en 6/8 el 4 es medio.
-  static Accent accentFor(int32_t beat, int32_t beatsPerBar);
+  // Acento de un tiempo: el 0 siempre fuerte; los marcados en accentMask
+  // (bit k = tiempo k), medios; el resto, normales.
+  static Accent accentFor(int32_t beat, uint32_t accentMask);
 
   void trigger(Accent accent) {
     current_ = &clicks_[static_cast<int>(accent)];

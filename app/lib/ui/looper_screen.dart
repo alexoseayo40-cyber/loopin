@@ -121,7 +121,7 @@ class _TallLayout extends StatelessWidget {
     final compact = box.maxHeight < 760;
     final gap = compact ? 8.0 : 14.0;
     // Lo que ocupa todo menos el pulsador (medido), para darle el resto
-    final fixed = (compact ? 492.0 : 585.0) + (mixer ? 3 * 52.0 : 0);
+    final fixed = (compact ? 500.0 : 630.0) + (mixer ? 3 * 52.0 : 0);
     final pedal = (math.min(
       width * 0.62,
       box.maxHeight - fixed,
@@ -144,7 +144,7 @@ class _TallLayout extends StatelessWidget {
                     _TopBar(view: view),
                     _TempoDisplay(view: view, compact: compact),
                     SizedBox(height: gap),
-                    _TrackRings(view: view),
+                    _TrackRings(view: view, maxSize: compact ? 60 : 96),
                     SizedBox(height: gap),
                     _TrackControls(view: view, mixer: mixer),
                   ],
@@ -334,13 +334,14 @@ class _TempoDisplay extends StatelessWidget {
     final c = view.controller;
     final s = view.s;
     final locked = c.tempoLocked;
+    final free = c.loopMode == LoopMode.free;
+    // En libre, mientras no haya loop no hay tempo
+    final noTempo = free && !s.hasLoops;
     final bpm = locked ? s.bpm : c.bpm;
     const amber = LoopinPalette.display;
     const dimAmber = LoopinPalette.displayDim;
     final small = view.palette.label(size: 12, color: dimAmber);
-    // El modo solo cuenta al empezar a grabar
-    final busy = s.loopState == LoopState.armed || s.loopState == LoopState.recording;
-    final modeValue = c.loopMode == LoopMode.sync ? c.syncBars : 0;
+    final canEdit = !locked && !free;
 
     return Container(
       padding: EdgeInsets.fromLTRB(4, compact ? 4 : 8, 4, compact ? 6 : 10),
@@ -355,20 +356,22 @@ class _TempoDisplay extends StatelessWidget {
             children: [
               IconButton(
                 tooltip: 'Bajar el tempo',
-                onPressed: locked ? null : () => c.setBpm(c.bpm - 1),
+                onPressed: canEdit ? () => c.setBpm(c.bpm - 1) : null,
                 icon: const Icon(Icons.remove),
                 color: amber,
                 disabledColor: dimAmber.withValues(alpha: 0.5),
               ),
               Expanded(
                 child: Semantics(
-                  button: !locked,
-                  label:
-                      '${bpm.round()} pulsos por minuto. '
-                      '${locked ? 'Fijo mientras haya loop' : 'Toca varias veces para marcar el tempo'}',
+                  button: canEdit,
+                  label: noTempo
+                      ? 'Modo libre: el tempo saldrá del primer loop'
+                      : '${bpm.round()} pulsos por minuto. '
+                            '${locked ? 'Fijo mientras haya loop' : 'Toca varias veces al ritmo para marcar el tempo'}',
                   excludeSemantics: true,
                   child: InkWell(
-                    onTap: locked ? null : c.tapTempo,
+                    key: const ValueKey('tap-tempo'),
+                    onTap: canEdit ? c.tapTempo : null,
                     borderRadius: BorderRadius.circular(8),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -386,7 +389,7 @@ class _TempoDisplay extends StatelessWidget {
                                   child: Icon(Icons.lock, size: 16, color: dimAmber),
                                 ),
                               Text(
-                                bpm.toStringAsFixed(0),
+                                noTempo ? '- - -' : bpm.toStringAsFixed(0),
                                 style: TextStyle(
                                   fontFamily: LoopinFonts.display,
                                   fontSize: compact ? 36 : 46,
@@ -395,16 +398,43 @@ class _TempoDisplay extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              Text('BPM', style: small.copyWith(fontSize: 14)),
+                              Text(
+                                c.timeSignature.eighths ? 'BPM ♪' : 'BPM',
+                                style: small.copyWith(fontSize: 14),
+                              ),
                             ],
                           ),
                         ),
-                        Text(
-                          locked ? 'FIJO MIENTRAS HAYA LOOP' : 'TOCA AQUÍ PARA MARCAR EL TEMPO',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: small.copyWith(fontSize: 11),
-                        ),
+                        const SizedBox(height: 2),
+                        if (canEdit)
+                          // Que se vea que se puede marcar el tempo tocando
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: amber.withValues(alpha: 0.6)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.touch_app, size: 14, color: amber),
+                                  const SizedBox(width: 4),
+                                  Text('TAP · TOCA AL RITMO', style: small.copyWith(color: amber)),
+                                ],
+                              ),
+                            ),
+                          )
+                        else
+                          Text(
+                            noTempo
+                                ? 'LIBRE: EL TEMPO SALDRÁ DEL LOOP'
+                                : (locked ? 'FIJO MIENTRAS HAYA LOOP' : ''),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: small.copyWith(fontSize: 11),
+                          ),
                       ],
                     ),
                   ),
@@ -412,78 +442,46 @@ class _TempoDisplay extends StatelessWidget {
               ),
               IconButton(
                 tooltip: 'Subir el tempo',
-                onPressed: locked ? null : () => c.setBpm(c.bpm + 1),
+                onPressed: canEdit ? () => c.setBpm(c.bpm + 1) : null,
                 icon: const Icon(Icons.add),
                 color: amber,
                 disabledColor: dimAmber.withValues(alpha: 0.5),
               ),
             ],
           ),
-          SizedBox(height: compact ? 2 : 6),
+          SizedBox(height: compact ? 4 : 8),
+          // Arrancar o parar y los tiempos del compás, bien grandes
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
             child: Row(
               children: [
-                // LEDs de los tiempos del compás
-                for (var i = 0; i < s.beatsPerBar; i++)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: Led(
-                      size: 11,
-                      color: s.playing && s.beat == i
-                          ? (i == 0 ? LoopinPalette.rec : amber)
-                          : LoopinPalette.ledOff,
-                    ),
-                  ),
-                const SizedBox(width: 4),
-                // Si no caben (letra grande, 6/8…), se encogen
+                _MetronomeButton(view: view),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerRight,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _DisplayMenu<int>(
-                          tooltip: 'Compás',
-                          enabled: !locked,
-                          value: c.beatsPerBar,
-                          label: kTimeSignatures[c.beatsPerBar] ?? '${c.beatsPerBar}',
-                          items: {for (final e in kTimeSignatures.entries) e.key: e.value},
-                          onSelected: c.setBeatsPerBar,
-                        ),
-                        const SizedBox(width: 6),
-                        _DisplayMenu<int>(
-                          tooltip: 'Modo de grabación',
-                          enabled: !busy,
-                          value: modeValue,
-                          label: c.loopMode == LoopMode.sync ? 'SYNC · ${c.syncBars} C' : 'MANUAL',
-                          items: {
-                            for (final b in kSyncBarOptions)
-                              b: 'Sincronizado · $b ${b == 1 ? 'compás' : 'compases'}',
-                            0: 'Manual · se cierra al pulsar',
-                          },
-                          onSelected: (v) {
-                            if (v == 0) {
-                              c.setLoopMode(LoopMode.manual);
-                            } else {
-                              c.setLoopMode(LoopMode.sync);
-                              c.setSyncBars(v);
-                            }
-                          },
-                        ),
-                        const SizedBox(width: 2),
-                        IconButton(
-                          visualDensity: VisualDensity.compact,
-                          tooltip: c.clickEnabled ? 'Clic encendido' : 'Clic apagado',
-                          onPressed: () => c.setClickEnabled(!c.clickEnabled),
-                          icon: Icon(c.clickEnabled ? Icons.volume_up : Icons.volume_off, size: 20),
-                          color: c.clickEnabled ? amber : dimAmber,
-                        ),
-                      ],
+                  child: BeatBuilder(
+                    active: s.playing,
+                    beatNow: c.beatNow,
+                    builder: (context, now) => _BeatBar(
+                      signature: c.timeSignature,
+                      beats: s.playing ? s.beatsPerBar : c.beatsPerBar,
+                      now: now,
+                      height: compact ? 14 : 18,
                     ),
                   ),
                 ),
+              ],
+            ),
+          ),
+          SizedBox(height: compact ? 4 : 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Row(
+              children: [
+                Expanded(child: _MeterMenu(view: view)),
+                const SizedBox(width: 6),
+                Expanded(flex: 2, child: _ModeMenu(view: view)),
+                const SizedBox(width: 6),
+                _ClickMenu(view: view),
               ],
             ),
           ),
@@ -493,46 +491,285 @@ class _TempoDisplay extends StatelessWidget {
   }
 }
 
-/// Un valor de la pantalla de tempo que abre un menú al tocarlo.
-class _DisplayMenu<T> extends StatelessWidget {
-  const _DisplayMenu({
-    required this.tooltip,
-    required this.enabled,
-    required this.value,
-    required this.label,
-    required this.items,
-    required this.onSelected,
+/// Arranca o para el metrónomo (y los loops, si los hay).
+class _MetronomeButton extends StatelessWidget {
+  const _MetronomeButton({required this.view});
+
+  final _View view;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = view.controller;
+    final s = view.s;
+    final playing = s.playing;
+    // En libre, sin loop no hay tempo que arrancar
+    final enabled = s.running && !(c.loopMode == LoopMode.free && !s.hasLoops);
+    final color = enabled ? LoopinPalette.display : LoopinPalette.displayDim;
+    return Semantics(
+      button: true,
+      label: playing
+          ? (s.hasLoops ? 'Parar todo' : 'Parar el metrónomo')
+          : (s.hasLoops ? 'Arrancar todo' : 'Arrancar el metrónomo'),
+      excludeSemantics: true,
+      child: InkWell(
+        key: const ValueKey('metronome-toggle'),
+        borderRadius: BorderRadius.circular(8),
+        onTap: enabled ? c.togglePlay : null,
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 40),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withValues(alpha: playing ? 1 : 0.5)),
+            color: playing ? LoopinPalette.display.withValues(alpha: 0.15) : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(playing ? Icons.stop : Icons.play_arrow, color: color, size: 22),
+              const SizedBox(width: 2),
+              Icon(Icons.av_timer, color: color, size: 18),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Los tiempos del compás como una fila de luces: se enciende el que suena
+/// (rojo el primero, ámbar fuerte el que empieza cada grupo) y se apaga poco a
+/// poco hasta el siguiente. Los grupos (2+2+3…) van separados.
+class _BeatBar extends StatelessWidget {
+  const _BeatBar({
+    required this.signature,
+    required this.beats,
+    required this.now,
+    required this.height,
   });
 
-  final String tooltip;
-  final bool enabled;
-  final T value;
+  final TimeSignature signature;
+  final int beats;
+  final BeatNow? now;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = beats.clamp(1, 16);
+    final children = <Widget>[];
+    for (var i = 0; i < n; i++) {
+      if (i > 0) children.add(SizedBox(width: signature.startsGroup(i) ? 10 : 4));
+      final on = now != null && now!.beat == i;
+      final strong = signature.startsGroup(i);
+      final base = i == 0
+          ? LoopinPalette.rec
+          : (strong ? LoopinPalette.display : LoopinPalette.display.withValues(alpha: 0.75));
+      // Destello al empezar el tiempo que se va apagando
+      final glow = on ? 1.0 - 0.6 * now!.phase.clamp(0.0, 1.0) : 0.0;
+      children.add(
+        Expanded(
+          child: Container(
+            height: strong ? height : height * 0.72,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              color: on ? Color.lerp(LoopinPalette.ledOff, base, glow) : LoopinPalette.ledOff,
+            ),
+          ),
+        ),
+      );
+    }
+    return Semantics(
+      label: now == null ? 'Metrónomo parado' : 'Tiempo ${now!.beat + 1} de $n',
+      excludeSemantics: true,
+      child: SizedBox(
+        height: height,
+        child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: children),
+      ),
+    );
+  }
+}
+
+/// Un valor de la pantalla de tempo que abre un menú al tocarlo.
+class _DisplayChip extends StatelessWidget {
+  const _DisplayChip({required this.label, required this.enabled, this.icon});
+
   final String label;
-  final Map<T, String> items;
-  final ValueChanged<T> onSelected;
+  final bool enabled;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
     final color = enabled ? LoopinPalette.display : LoopinPalette.displayDim;
-    return PopupMenuButton<T>(
-      tooltip: tooltip,
+    return Container(
+      constraints: const BoxConstraints(minHeight: 36),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
+      ),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              maxLines: 1,
+              style: TextStyle(fontFamily: LoopinFonts.display, fontSize: 14, color: color),
+            ),
+            if (icon != null) ...[const SizedBox(width: 6), Icon(icon, size: 16, color: color)],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Compás (4/4, 7/8…).
+class _MeterMenu extends StatelessWidget {
+  const _MeterMenu({required this.view});
+
+  final _View view;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = view.controller;
+    final enabled = !c.tempoLocked;
+    final ts = c.timeSignature;
+    return PopupMenuButton<TimeSignature>(
+      tooltip: 'Compás',
       enabled: enabled,
-      initialValue: value,
-      onSelected: onSelected,
+      initialValue: ts,
+      onSelected: c.setTimeSignature,
       itemBuilder: (_) => [
-        for (final e in items.entries) PopupMenuItem(value: e.key, child: Text(e.value)),
+        for (final t in kTimeSignatures)
+          PopupMenuItem(
+            value: t,
+            child: Text(t.grouping.isEmpty ? t.label : '${t.label}  (${t.grouping})'),
+          ),
+      ],
+      child: _DisplayChip(
+        label: ts.grouping.isEmpty ? ts.label : '${ts.label} ${ts.grouping}',
+        enabled: enabled,
+      ),
+    );
+  }
+}
+
+/// Modo de grabación y «empezar al tocar».
+class _ModeMenu extends StatelessWidget {
+  const _ModeMenu({required this.view});
+
+  final _View view;
+
+  static const _manual = -1, _free = -2, _onSound = -3;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = view.controller;
+    final s = view.s;
+    // El modo solo cuenta al empezar a grabar
+    final busy = s.loopState == LoopState.armed || s.loopState == LoopState.recording;
+    final value = switch (c.loopMode) {
+      LoopMode.sync => c.syncBars,
+      LoopMode.manual => _manual,
+      LoopMode.free => _free,
+    };
+    final label = switch (c.loopMode) {
+      LoopMode.sync => 'SYNC · ${c.syncBars} C',
+      LoopMode.manual => 'MANUAL',
+      LoopMode.free => 'LIBRE',
+    };
+    return PopupMenuButton<int>(
+      tooltip: 'Modo de grabación',
+      enabled: !busy,
+      initialValue: value,
+      onSelected: (v) {
+        switch (v) {
+          case _manual:
+            c.setLoopMode(LoopMode.manual);
+          case _free:
+            c.setLoopMode(LoopMode.free);
+          case _onSound:
+            c.setStartOnSound(!c.startOnSound);
+          default:
+            c.setLoopMode(LoopMode.sync);
+            c.setSyncBars(v);
+        }
+      },
+      itemBuilder: (_) => [
+        for (final b in kSyncBarOptions)
+          PopupMenuItem(value: b, child: Text('Sincronizado · ${_bars(b)} (se cierra solo)')),
+        const PopupMenuItem(value: _manual, child: Text('Manual · se cierra al pulsar')),
+        const PopupMenuItem(
+          value: _free,
+          child: Text('Libre · sin metrónomo, el tempo sale del loop'),
+        ),
+        const PopupMenuDivider(),
+        CheckedPopupMenuItem(
+          value: _onSound,
+          checked: c.startOnSound,
+          child: const Text('Empezar al tocar (sin cuenta, pista 1)'),
+        ),
+      ],
+      child: _DisplayChip(
+        label: label,
+        enabled: !busy,
+        icon: c.startOnSound ? Icons.hearing : null,
+      ),
+    );
+  }
+}
+
+/// Cuándo suena el clic: siempre, solo en la cuenta o nunca (solo visual).
+class _ClickMenu extends StatelessWidget {
+  const _ClickMenu({required this.view});
+
+  final _View view;
+
+  static IconData iconFor(ClickMode m) => switch (m) {
+    ClickMode.always => Icons.volume_up,
+    ClickMode.countIn => Icons.timer_outlined,
+    ClickMode.silent => Icons.visibility_outlined,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final c = view.controller;
+    final free = c.loopMode == LoopMode.free;
+    return PopupMenuButton<ClickMode>(
+      tooltip: 'Clic: ${c.clickMode.label.toLowerCase()}',
+      initialValue: c.clickMode,
+      onSelected: c.setClickMode,
+      itemBuilder: (_) => [
+        for (final m in ClickMode.values)
+          PopupMenuItem(
+            value: m,
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(iconFor(m)),
+              title: Text('Clic: ${m.label.toLowerCase()}'),
+              subtitle: Text(switch (m) {
+                ClickMode.always => 'Suena todo el rato',
+                ClickMode.countIn => 'Solo el compás antes de grabar la pista 1',
+                ClickMode.silent => 'No suena nunca: solo las luces',
+              }),
+            ),
+          ),
       ],
       child: Container(
-        constraints: const BoxConstraints(minHeight: 32),
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        constraints: const BoxConstraints(minWidth: 44, minHeight: 36),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: color.withValues(alpha: 0.45)),
+          border: Border.all(color: LoopinPalette.display.withValues(alpha: 0.45)),
         ),
-        child: Text(
-          label,
-          style: TextStyle(fontFamily: LoopinFonts.display, fontSize: 14, color: color),
+        child: Icon(
+          // En libre no hay clic
+          free ? Icons.visibility_outlined : iconFor(c.clickMode),
+          size: 20,
+          color: LoopinPalette.display,
         ),
       ),
     );
@@ -549,8 +786,11 @@ double _recordProgress(EngineStatus s) {
     return s.loopBarFrames > 0 ? (1 + s.loopRecorded / s.loopBarFrames).clamp(0.0, 1.0) : 0;
   }
   if (s.loopTarget > 0) return (s.loopRecorded / s.loopTarget).clamp(0.0, 1.0);
-  // Sin final fijado: una vuelta por cada vuelta de la base (o por compás)
-  final lap = s.baseLength > 0 ? s.baseLength : s.loopBarFrames;
+  // Sin final fijado: una vuelta por cada vuelta de la base, por compás o
+  // (en libre, sin compás aún) cada 4 segundos
+  final lap = s.baseLength > 0
+      ? s.baseLength
+      : (s.loopBarFrames > 0 ? s.loopBarFrames : s.sampleRate * 4);
   return lap > 0 ? (s.loopRecorded % lap) / lap : 0;
 }
 
@@ -788,7 +1028,7 @@ class _PedalLook {
   final String? text;
 }
 
-_PedalLook _pedalLook(EngineStatus s) {
+_PedalLook _pedalLook(EngineStatus s, {required LoopMode mode, required bool startOnSound}) {
   final selected = s.tracks[s.selectedTrack];
   final sel = s.selectedTrack + 1;
   final active = s.activeTrack >= 0 ? s.activeTrack + 1 : sel;
@@ -800,10 +1040,23 @@ _PedalLook _pedalLook(EngineStatus s) {
       return _PedalLook(
         color: null,
         title: 'LISTO',
-        subtitle: 'Toca para grabar la pista $sel, con 1 compás de cuenta',
-        icon: Icons.fiber_manual_record,
+        subtitle: startOnSound
+            ? 'Toca y empieza a tocar: la pista $sel arranca con tu primera nota'
+            : (mode == LoopMode.free
+                  ? 'Toca para grabar la pista $sel (sin metrónomo)'
+                  : 'Toca para grabar la pista $sel, con 1 compás de cuenta'),
+        icon: startOnSound ? Icons.hearing : Icons.fiber_manual_record,
       );
     case LoopState.armed:
+      if (s.loopWaiting) {
+        return const _PedalLook(
+          color: LoopinPalette.count,
+          title: 'ESPERANDO',
+          subtitle: 'Empieza a tocar: la grabación arranca con tu primera nota',
+          progress: 1,
+          icon: Icons.hearing,
+        );
+      }
       return _PedalLook(
         color: LoopinPalette.count,
         title: 'PREPÁRATE',
@@ -819,7 +1072,9 @@ _PedalLook _pedalLook(EngineStatus s) {
       return _PedalLook(
         color: LoopinPalette.rec,
         title: 'GRABANDO · PISTA $active',
-        subtitle: target > 0 ? 'Compás $barNow de $target' : 'Compás $barNow · toca para cerrar',
+        subtitle: bar <= 0
+            ? 'Toca para cerrar: el tempo saldrá del loop'
+            : (target > 0 ? 'Compás $barNow de $target' : 'Compás $barNow · toca para cerrar'),
         progress: _recordProgress(s),
         icon: Icons.stop,
       );
@@ -876,20 +1131,31 @@ class _PedalArea extends StatelessWidget {
     final c = view.controller;
     final p = view.palette;
     if (!view.s.running) return _AudioOff(view: view);
-    final look = _pedalLook(view.s);
+    final look = _pedalLook(view.s, mode: c.loopMode, startOnSound: c.startOnSound);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Footswitch(
-          size: size,
-          color: look.color,
-          progress: look.progress,
-          glow: look.glow,
-          icon: look.icon,
-          text: look.text,
-          semanticLabel: 'Botón principal. ${look.title}. ${look.subtitle}',
-          onDown: c.pedalDown,
-          onUp: c.pedalUp,
+        // La arandela del pulsador se ilumina en cada tiempo (roja en el
+        // primero): el tempo se ve sin tener que oír el clic
+        BeatBuilder(
+          active: view.s.playing,
+          beatNow: c.beatNow,
+          builder: (context, now) {
+            final flash = now == null ? 0.0 : (1 - now.phase / 0.35).clamp(0.0, 1.0);
+            return Footswitch(
+              size: size,
+              color: look.color,
+              progress: look.progress,
+              glow: look.glow,
+              icon: look.icon,
+              text: look.text,
+              pulse: flash,
+              pulseColor: now != null && now.beat == 0 ? LoopinPalette.rec : LoopinPalette.display,
+              semanticLabel: 'Botón principal. ${look.title}. ${look.subtitle}',
+              onDown: c.pedalDown,
+              onUp: c.pedalUp,
+            );
+          },
         ),
         const SizedBox(height: 10),
         // El estado, grande: se tiene que leer con el móvil en el suelo

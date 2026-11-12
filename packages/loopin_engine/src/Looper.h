@@ -7,6 +7,7 @@
 #include <limits>
 #include <vector>
 
+#include "OnsetDetector.h"
 #include "Transport.h"
 
 namespace loopin {
@@ -81,6 +82,7 @@ class Looper {
   enum class Mode : int32_t {
     kSync = 0,    // graba N compases y se cierra solo
     kManual = 1,  // se cierra al pulsar
+    kFree = 2,    // sin metrónomo: el primer loop marca el tempo
   };
 
   static constexpr int32_t kMaxSeconds = 60;
@@ -103,6 +105,13 @@ class Looper {
   void select(int32_t track);   // no hace nada mientras se graba
   void selectNext();
   void setAutoAdvance(bool on) { autoAdvance_ = on; }
+  // La primera pista no cuenta: espera a que suene la guitarra y empieza
+  // justo en ese ataque (que pasa a ser el primer tiempo del compás 1).
+  void setStartOnSound(bool on) { startOnSound_ = on; }
+  // Mueve todo lo grabado frames muestras antes (o después, si es negativo).
+  // Para corregir la latencia a oído: si la compensación se queda corta en d,
+  // todo lo grabado suena d tarde. No hace nada mientras se graba.
+  bool shiftAudio(int64_t frames, int64_t now);
   void setMode(Mode mode) { mode_ = mode; }
   void setSyncBars(int32_t bars);
   void setLatency(int32_t frames);
@@ -134,8 +143,10 @@ class Looper {
     }
     return out * volume_;
   }
-  // Escribe en las pistas la entrada que ya ha llegado, compensada.
-  void capture(const InputRing& in);
+  // Escribe en las pistas la entrada que ya ha llegado, compensada. now =
+  // índice de la próxima muestra de salida. También busca el primer ataque
+  // si se está esperando a que suene la guitarra.
+  void capture(const InputRing& in, int64_t now);
   // Trabajo de fondo acotado: sumar o borrar capas y pistas (budget muestras).
   void background(int32_t budget);
 
@@ -144,9 +155,14 @@ class Looper {
   Mode mode() const { return mode_; }
   int32_t syncBars() const { return syncBars_; }
   bool autoAdvance() const { return autoAdvance_; }
+  bool startOnSound() const { return startOnSound_; }
+  // Esperando a que suene la guitarra para empezar la primera pista
+  bool waiting() const { return waiting_; }
   bool locksTempo() const { return state_ != State::kEmpty; }
   // Durante la cuenta de entrada el clic suena aunque esté apagado.
-  bool forcesClick() const { return state_ == State::kArmed && baseLen_ == 0; }
+  bool forcesClick() const {
+    return state_ == State::kArmed && baseLen_ == 0 && !waiting_ && mode_ != Mode::kFree;
+  }
   int32_t selected() const { return selected_; }
   // Pista en la que se está grabando (o a punto), −1 si ninguna.
   int32_t active() const { return busy() ? active_ : -1; }
@@ -228,6 +244,8 @@ class Looper {
 
   void fireEvent(int64_t n);
   void arm(int64_t now);
+  void startFirstAt(int64_t start, int64_t now);
+  bool closeFree(int64_t now);
   void closeRecording(int64_t now);
   void finishRecording(int64_t now);
   void cancelRecording();
@@ -259,6 +277,14 @@ class Looper {
   float volume_ = 1.0f;
   int32_t latency_ = 0;
   bool autoAdvance_ = false;
+  bool startOnSound_ = false;
+
+  // Esperando el primer ataque
+  bool waiting_ = false;
+  int64_t scanPos_ = -1;    // próxima muestra de entrada por mirar (−1 = desde ya)
+  int32_t warmup_ = 0;      // muestras para medir el ruido antes de escuchar
+  float noisePeak_ = 0.0f;
+  OnsetDetector onset_;
 
   int32_t selected_ = 0;  // pista que usará el siguiente toque
   int32_t active_ = 0;    // pista en la que se graba

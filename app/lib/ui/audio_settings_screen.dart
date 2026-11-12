@@ -5,6 +5,23 @@ import 'package:flutter/services.dart';
 import 'package:loopin_engine/loopin_engine.dart';
 
 import '../engine/engine_controller.dart';
+import 'latency_tap_screen.dart';
+
+/// Qué hace cada modo del micrófono, en palabras sencillas.
+String micModeHelp(InputPreset p) => switch (p) {
+  InputPreset.unprocessed =>
+    'El sonido tal cual llega al micrófono, sin ningún arreglo. Es el ideal para un '
+        'instrumento. Si el móvil no lo admite, Android usa el modo Normal.',
+  InputPreset.voicePerformance =>
+    'Pensado para cantar o tocar en directo con poco retardo. No todos los móviles lo tienen.',
+  InputPreset.voiceRecognition =>
+    'El del dictado por voz. Android le obliga a no subir ni bajar el volumen solo, así '
+        'que suena natural, pero en algunos móviles tiene más retardo.',
+  InputPreset.camcorder => 'El que usa la cámara al grabar vídeo. Puede llevar filtros.',
+  InputPreset.generic =>
+    'El de una grabación cualquiera. Puede subir y bajar el volumen solo, lo que '
+        'estropea los loops.',
+};
 
 class AudioSettingsScreen extends StatelessWidget {
   const AudioSettingsScreen({super.key, required this.controller});
@@ -150,7 +167,10 @@ class _MonitorCard extends StatelessWidget {
         DropdownButtonFormField<InputPreset>(
           initialValue: c.inputPreset,
           isExpanded: true,
-          decoration: const InputDecoration(labelText: 'Modo del micrófono'),
+          decoration: const InputDecoration(
+            labelText: 'Modo del micrófono',
+            helperText: 'Cuánto «arregla» Android el sonido antes de que llegue a Loopin',
+          ),
           items: [
             for (final p in InputPreset.values)
               DropdownMenuItem(
@@ -161,6 +181,14 @@ class _MonitorCard extends StatelessWidget {
           onChanged: (p) {
             if (p != null) c.setInputPreset(p);
           },
+        ),
+        const SizedBox(height: 6),
+        Text(micModeHelp(c.inputPreset), style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 4),
+        Text(
+          'Si suenan igual, quédate con el que dé menos latencia (lo mides abajo). Solo se nota '
+          'al escucharte en directo: los loops cuadran con cualquiera porque la latencia se compensa.',
+          style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 6),
         if (s.running)
@@ -201,9 +229,7 @@ class _MonitorCard extends StatelessWidget {
           ],
         ),
         Text(
-          'Toca fuerte: el nivel debe llegar a naranja sin ponerse rojo.\n'
-          'Para elegir el modo del micrófono, graba el mismo riff en cada modo '
-          '(al cambiarlo, el loop se conserva parado) y quédate con el que mejor suene.',
+          'Toca fuerte: el nivel debe llegar a naranja sin ponerse rojo.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         SwitchListTile(
@@ -236,54 +262,44 @@ class _LatencyCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final measuring = s.latencyState == LatencyState.running;
-    final recordingNow =
-        s.loopState == LoopState.armed ||
-        s.loopState == LoopState.recording ||
-        s.loopState == LoopState.overdubbing;
+    final c = controller;
+    final recordingNow = c.recordingNow;
     final estimate = (s.outputLatencyMs >= 0 && s.inputLatencyMs >= 0)
         ? s.outputLatencyMs + s.inputLatencyMs
         : -1.0;
-    final c = controller;
     final source = switch (c.latencySource) {
       LatencySource.measured => 'medida',
       LatencySource.estimated => 'estimada por Android, sin medir',
       LatencySource.none => 'sin medir',
     };
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final small = theme.textTheme.bodySmall;
+    final current = c.compensationTargetMs.clamp(0.0, 500.0);
     return _Section(
       title: 'Latencia',
       children: [
+        Text(
+          'Lo que tarda el sonido en salir del móvil y volver a entrar. Loopin lo descuenta al '
+          'grabar para que el loop caiga en el tiempo. Cambia según por dónde entra y sale el '
+          'sonido (altavoz, cascos, interfaz), así que se guarda una para cada caso.',
+          style: small,
+        ),
+        const SizedBox(height: 10),
         if (s.running) ...[
-          Text('Ruta: ${c.routeLabel}'),
-          const SizedBox(height: 4),
+          Text('Ahora: ${c.routeLabel}', style: small),
+          const SizedBox(height: 2),
           Text(
-            'Compensación al grabar: ${_ms(c.compensationMs)} ($source)',
+            'Compensación: ${_ms(c.compensationMs)} ($source)',
             style: TextStyle(
               fontWeight: FontWeight.bold,
-              color: c.latencySource == LatencySource.measured ? null : cs.error,
+              color: c.latencySource == LatencySource.measured ? null : theme.colorScheme.error,
             ),
           ),
-          Text(
-            'Se guarda una medida para cada combinación de entrada, salida y modo '
-            'del micrófono, y se usa sola al cambiar de una a otra.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
         ],
-        Text(
-          'Estimación de Android: salida ${_ms(s.outputLatencyMs)} + '
-          'entrada ${_ms(s.inputLatencyMs)} = ${_ms(estimate)}',
-        ),
-        Text('Buffer de salida: ${s.bufferSizeFrames} muestras (${_ms(s.bufferMs)})'),
-        if (s.running)
-          Text(
-            'Entrada: ${s.inputExclusive ? 'exclusivo' : 'compartido'} · '
-            '${s.inputLowLatency ? 'baja latencia' : 'SIN baja latencia'} · '
-            'bloque ${s.inputFramesPerBurst} · buffer ${s.inputBufferFrames} · '
-            'máx. por callback ${s.inputMaxRead}',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        const SizedBox(height: 12),
+        // 1. Con el altavoz (automática)
+        Text('Con el altavoz o una interfaz', style: theme.textTheme.titleSmall),
+        const SizedBox(height: 4),
         FilledButton.tonalIcon(
           // No mientras se graba: los pulsos acabarían dentro del loop
           onPressed: s.running && !measuring && !recordingNow ? controller.measureLatency : null,
@@ -294,37 +310,110 @@ class _LatencyCard extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.speed),
-          label: Text(
-            measuring ? 'Midiendo… clic ${s.latencyProgress}/5' : 'Medir latencia de ida y vuelta',
-          ),
+          label: Text(measuring ? 'Midiendo… clic ${s.latencyProgress}/5' : 'Medir sola'),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         switch (s.latencyState) {
           LatencyState.done => Text(
-            'Ida y vuelta: ${_ms(s.latencyMs)} (${s.latencyFrames} muestras) · guardada',
-            style: Theme.of(context).textTheme.titleLarge,
+            'Medida: ${_ms(s.latencyMs)} · guardada',
+            style: theme.textTheme.titleMedium,
           ),
           LatencyState.failed => Text(
             'No se oyeron los clics. Sube el volumen o revisa el cable.',
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+            style: TextStyle(color: theme.colorScheme.error),
           ),
           _ => const SizedBox.shrink(),
         },
-        const SizedBox(height: 8),
         Text(
-          'Altavoz y micro: sin cascos, volumen alto y en silencio.\n'
-          'Cascos y micro: pon un auricular pegado al micro de abajo del móvil.\n'
-          'Interfaz USB: une con un cable la salida de auriculares y la entrada.',
-          style: Theme.of(context).textTheme.bodySmall,
+          'Altavoz: sin cascos, volumen alto y en silencio. Interfaz: une con un cable la salida '
+          'de auriculares y la entrada.',
+          style: small,
+        ),
+        const SizedBox(height: 14),
+        // 2. Tocando (cascos)
+        Text('Con cascos', style: theme.textTheme.titleSmall),
+        const SizedBox(height: 4),
+        FilledButton.tonalIcon(
+          onPressed: s.running && !recordingNow
+              ? () => Navigator.of(context)
+                    .push(MaterialPageRoute<void>(builder: (_) => LatencyTapScreen(controller: c)))
+              : null,
+          icon: const Icon(Icons.touch_app),
+          label: const Text('Medir tocando al clic'),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Con cascos el clic no vuelve al micrófono: tocas tú al ritmo de unos clics y se '
+          'mide cuánto tarda tu golpe en llegar.',
+          style: small,
+        ),
+        const SizedBox(height: 14),
+        // 3. A mano
+        Text('A mano', style: theme.textTheme.titleSmall),
+        Row(
+          children: [
+            IconButton(
+              tooltip: 'Restar 1 ms',
+              onPressed: s.running && !recordingNow
+                  ? () => c.setLatencyManually(current - 1)
+                  : null,
+              icon: const Icon(Icons.remove),
+            ),
+            Expanded(
+              child: Slider(
+                max: 500,
+                divisions: 500,
+                value: current,
+                label: '${current.round()} ms',
+                onChanged: s.running && !recordingNow
+                    ? (v) => c.setLatencyManually(v.roundToDouble())
+                    : null,
+                semanticFormatterCallback: (v) => '${v.round()} milisegundos',
+              ),
+            ),
+            IconButton(
+              tooltip: 'Sumar 1 ms',
+              onPressed: s.running && !recordingNow
+                  ? () => c.setLatencyManually(current + 1)
+                  : null,
+              icon: const Icon(Icons.add),
+            ),
+            SizedBox(width: 64, child: Text('${current.round()} ms', textAlign: TextAlign.end)),
+          ],
+        ),
+        Text(
+          'Para afinar a oído: graba un loop con el clic encendido dando golpes secos en los '
+          'tiempos y mueve esto hasta que el loop y el clic suenen a la vez. Lo grabado se '
+          'mueve contigo. Si el loop suena tarde, sube; si suena antes, baja.',
+          style: small,
         ),
         if (c.latencySource == LatencySource.measured)
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton(
               onPressed: c.forgetLatency,
-              child: const Text('Olvidar la medida de esta ruta'),
+              child: const Text('Olvidar la latencia de esta ruta'),
             ),
           ),
+        ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          title: const Text('Detalles'),
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Estimación de Android: salida ${_ms(s.outputLatencyMs)} + entrada '
+                '${_ms(s.inputLatencyMs)} = ${_ms(estimate)}\n'
+                'Buffer de salida: ${s.bufferSizeFrames} muestras (${_ms(s.bufferMs)})\n'
+                '${s.running ? 'Entrada: ${s.inputExclusive ? 'exclusivo' : 'compartido'} · '
+                          '${s.inputLowLatency ? 'baja latencia' : 'SIN baja latencia'} · '
+                          'bloque ${s.inputFramesPerBurst} · buffer ${s.inputBufferFrames} · '
+                          'máx. por callback ${s.inputMaxRead}' : ''}',
+                style: small,
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }

@@ -34,6 +34,7 @@ void InputRing::reset() {
 
 void Looper::prepare(int32_t sampleRate, Transport* transport, int32_t maxSeconds) {
   transport_ = transport;
+  onset_.prepare(sampleRate);
   const int64_t capacity = int64_t(sampleRate) * maxSeconds;
   const bool keep = sampleRate == sampleRate_ && capacity == capacity_ && anyContent();
   sampleRate_ = sampleRate;
@@ -166,6 +167,7 @@ bool Looper::canUndo() const {
 }
 
 int64_t Looper::recordedFrames(int64_t now) const {
+  if (waiting_) return 0;
   if (recordingTrack()) return now - recStart_;
   if (state_ == State::kOverdubbing) {
     // Overdub esperando al compás: negativo, lo que falta para empezar
@@ -231,7 +233,12 @@ void Looper::fireEvent(int64_t n) {
     state_ = State::kRecording;
     nextEvent_ = recEnd_;
   } else if (state_ == State::kRecording) {
-    finishRecording(n);
+    // En libre, si no se ha cerrado (60 s), hay que calcular el tempo
+    if (baseLen_ == 0 && mode_ == Mode::kFree && !userClosed_) {
+      closeRecording(n);
+    } else {
+      finishRecording(n);
+    }
   }
 }
 
@@ -244,6 +251,32 @@ void Looper::arm(int64_t now) {
   userClosed_ = false;
   stopAfterRec_ = false;
   newLen_ = 0;
+  waiting_ = false;
+  if (baseLen_ == 0 && (startOnSound_ || mode_ == Mode::kFree)) {
+    // Sin cuenta de entrada y en silencio: o se espera a que suene la
+    // guitarra o (en libre) se empieza ya
+    transport_->stop();
+    barFrames_ = 0;
+    t.layers = 0;
+    state_ = State::kArmed;
+    if (startOnSound_) {
+      waiting_ = true;
+      scanPos_ = -1;
+      warmup_ = sampleRate_ * 15 / 100;  // 150 ms para medir el ruido
+      noisePeak_ = 0.0f;
+      recStart_ = recEnd_ = kNever;
+      nextEvent_ = kNever;
+      t.winOpen = false;
+    } else {
+      recStart_ = now;
+      recEnd_ = now + capacity_;
+      t.winOpen = true;
+      t.winStart = recStart_;
+      t.winEnd = recEnd_;
+      nextEvent_ = recStart_;
+    }
+    return;
+  }
   if (baseLen_ == 0) {
     // Primer loop, siempre con cuenta de entrada: el metrónomo vuelve a
     // empezar en el tiempo 1 justo al pulsar (aunque ya estuviera sonando),
@@ -272,9 +305,67 @@ void Looper::arm(int64_t now) {
   nextEvent_ = recStart_;
 }
 
+// Empieza la primera pista en la muestra de salida `start` (que puede estar
+// en el pasado: el ataque se detecta cuando ya ha llegado a la entrada).
+void Looper::startFirstAt(int64_t start, int64_t now) {
+  Track& t = tr(active_);
+  start = std::min(start, now);
+  waiting_ = false;
+  recStart_ = start;
+  if (mode_ == Mode::kFree) {
+    recEnd_ = start + capacity_;
+  } else {
+    // El compás 1 empieza donde ha empezado a tocar
+    transport_->stop();
+    transport_->playFrom(now - start);
+    barFrames_ = transport_->samplesPerBar();
+    const int64_t bars =
+        mode_ == Mode::kSync ? std::min<int64_t>(syncBars_, maxBars()) : maxBars();
+    recEnd_ = start + bars * barFrames_;
+  }
+  t.winOpen = true;
+  t.winStart = recStart_;
+  t.winEnd = recEnd_;
+  // Lo que ya ha entrado desde el ataque también se graba
+  capN_ = std::min(capN_, recStart_);
+  state_ = State::kRecording;
+  nextEvent_ = recEnd_;
+}
+
+// Libre: el primer loop dura lo que se haya tocado y de ahí sale el tempo. Se
+// busca el número de compases que da un tempo entre 70 y 140 BPM y se ajusta
+// la duración a un número entero de muestras por tiempo (se quitan como mucho
+// unas decenas de muestras, menos de 1 ms). Devuelve false si es demasiado
+// corto (menos de un compás a 240 BPM): entonces se anula.
+bool Looper::closeFree(int64_t now) {
+  Track& t = tr(active_);
+  const int64_t len = std::min(now - recStart_, capacity_);
+  const int64_t beats = transport_->beatsPerBar();
+  const int64_t minLen = int64_t(Transport::computeSamplesPerBeat(sampleRate_, Transport::kMaxBpm)) * beats;
+  if (len < minLen) return false;
+  // Con más compases, cada uno es más corto y el tempo más rápido: el menor
+  // número de compases (1, 2, 4…) que llegue a 70 BPM. Doblar desde menos de
+  // 70 deja por debajo de 140. Si con 1 compás ya pasa de 140, se queda así.
+  int64_t bars = 1;
+  while (bars < 64 && 60.0 * sampleRate_ * double(bars * beats) / double(len) < 70.0) bars *= 2;
+  const int64_t spb = len / (bars * beats);
+  transport_->setBpm(60.0 * sampleRate_ / double(spb));
+  barFrames_ = spb * beats;
+  recEnd_ = recStart_ + bars * barFrames_;
+  t.winEnd = recEnd_;
+  // El tempo arranca con el loop (salvo si se está parando todo)
+  if (!stopAfterRec_) transport_->playFrom(now - recStart_);
+  finishRecording(now);
+  return true;
+}
+
 void Looper::closeRecording(int64_t now) {
   if (userClosed_) return;
   userClosed_ = true;
+  if (baseLen_ == 0 && mode_ == Mode::kFree) {
+    if (!closeFree(now)) cancelRecording();
+    return;
+  }
   Track& t = tr(active_);
   const int64_t elapsed = now - recStart_;
   int64_t bars = static_cast<int64_t>(std::llround(double(elapsed) / double(barFrames_)));
@@ -341,6 +432,7 @@ void Looper::finishRecording(int64_t now) {
 
 void Looper::cancelRecording() {
   Track& t = tr(active_);
+  waiting_ = false;
   t.winOpen = false;
   // Lo que ya se había escrito se borra en segundo plano
   const int64_t written = std::clamp<int64_t>(capN_ - t.winStart, 0, capacity_);
@@ -676,9 +768,43 @@ void Looper::doubleTap(int64_t now) {
   }
 }
 
+// ---------------------------------------------------------------- latencia
+
+bool Looper::shiftAudio(int64_t frames, int64_t now) {
+  if (busy() || frames == 0) return false;
+  // Lo que está en la posición p del buffer tenía que estar en p − frames:
+  // basta con que cada pista empiece a sonar frames muestras antes
+  for (Track& t : tracks_) {
+    if (t.len == 0) continue;
+    t.origin -= frames;
+    t.playPos = wrap(now - t.origin, t.len);
+  }
+  return true;
+}
+
 // ---------------------------------------------------------------- captura
 
-void Looper::capture(const InputRing& in) {
+void Looper::capture(const InputRing& in, int64_t now) {
+  if (waiting_) {
+    // Primero se mide el ruido de fondo (150 ms) y luego se busca el primer
+    // ataque por encima de él
+    if (scanPos_ < 0) scanPos_ = in.end();
+    scanPos_ = std::max(scanPos_, in.begin());
+    for (; scanPos_ < in.end(); ++scanPos_) {
+      const float x = in.at(scanPos_);
+      if (warmup_ > 0) {
+        noisePeak_ = std::max(noisePeak_, std::fabs(x));
+        if (--warmup_ == 0) onset_.reset(std::clamp(3.0f * noisePeak_, 0.02f, 0.5f), 0);
+        continue;
+      }
+      if (onset_.push(x)) {
+        // El ataque se nota un poco después de empezar: 2 ms antes
+        const int64_t start = scanPos_ - latency_ - sampleRate_ / 500;
+        startFirstAt(start, now);
+        break;
+      }
+    }
+  }
   const int64_t end = in.end() - latency_;  // se pueden capturar los n < end
   bool open = false;
   for (const Track& t : tracks_) open = open || t.winOpen;

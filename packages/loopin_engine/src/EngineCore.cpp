@@ -13,6 +13,7 @@ void EngineCore::prepare(int32_t sampleRate) {
   transport_.setSampleRate(sampleRate_);
   metronome_.prepare(sampleRate_);
   latency_.prepare(sampleRate_);
+  tap_.prepare(sampleRate_);
   // 6 s de entrada: cubre la latencia (≤ 0,5 s), el margen para empezar a
   // grabar un poco tarde (≤ 1 s) y bloques grandes.
   ring_.prepare(sampleRate_ * 6);
@@ -43,7 +44,31 @@ void EngineCore::apply(const Command& cmd) {
       if (!looper_.locksTempo()) transport_.setBeatsPerBar(static_cast<int32_t>(cmd.value));
       break;
     case Command::Type::kSetClickEnabled:
-      clickEnabled_ = cmd.value != 0.0;
+      // Antiguo: encendido = siempre; apagado = solo en la cuenta
+      clickMode_ = cmd.value != 0.0 ? ClickMode::kAlways : ClickMode::kCountIn;
+      break;
+    case Command::Type::kSetClickMode:
+      clickMode_ = static_cast<ClickMode>(std::clamp(static_cast<int32_t>(cmd.value), 0, 2));
+      break;
+    case Command::Type::kSetMeter:
+      if (!looper_.locksTempo())
+        transport_.setMeter(static_cast<int32_t>(cmd.value), static_cast<uint32_t>(cmd.arg));
+      break;
+    case Command::Type::kStartTapCalibration:
+      // No mientras se graba: los clics acabarían dentro del loop
+      if (!latency_.active() && !tap_.active() && looper_.active() < 0) tap_.start();
+      break;
+    case Command::Type::kCancelTapCalibration:
+      tap_.cancel();
+      break;
+    case Command::Type::kNudgeLatency: {
+      const int32_t old = looper_.latency();
+      looper_.setLatency(static_cast<int32_t>(cmd.value));
+      looper_.shiftAudio(looper_.latency() - old, now);
+      break;
+    }
+    case Command::Type::kSetStartOnSound:
+      looper_.setStartOnSound(cmd.value != 0.0);
       break;
     case Command::Type::kSetClickVolume:
       clickVolume_ = std::clamp(static_cast<float>(cmd.value), 0.0f, 1.0f);
@@ -76,7 +101,7 @@ void EngineCore::apply(const Command& cmd) {
       looper_.clearAll(now);
       break;
     case Command::Type::kSetLoopMode:
-      looper_.setMode(cmd.value != 0.0 ? Looper::Mode::kManual : Looper::Mode::kSync);
+      looper_.setMode(static_cast<Looper::Mode>(std::clamp(static_cast<int32_t>(cmd.value), 0, 2)));
       break;
     case Command::Type::kSetSyncBars:
       looper_.setSyncBars(static_cast<int32_t>(cmd.value));
@@ -144,20 +169,27 @@ void EngineCore::process(const float* in, int32_t inFrames, int32_t inChannels, 
   if (ring_.end() - monRead_ > int64_t(monChunk_) + n) monRead_ = ring_.end() - n;
   monRead_ = std::max(monRead_, ring_.begin());
 
-  const bool measuring = latency_.active();
-
+  // Mientras se mide la latencia (con el altavoz o tocando) solo suena lo
+  // del medidor
+  const bool measuring = latency_.active() || tap_.active();
   for (int32_t i = 0; i < n; ++i) {
+    // El looper va primero: si en esta muestra empieza a grabar, el clic de
+    // este tiempo ya no es de la cuenta de entrada
+    const float loop = looper_.render(outPos_ + i);
     if (transport_.tick()) {
-      metronome_.trigger(
-          Metronome::accentFor(transport_.beat(), transport_.beatsPerBar()));
+      metronome_.trigger(Metronome::accentFor(transport_.beat(), transport_.accentMask()));
+      // Se decide al empezar cada clic (un clic nunca se corta a medias). En
+      // libre no hay metrónomo; en la cuenta de entrada suena salvo en «nunca»
+      clickGate_ = looper_.mode() != Looper::Mode::kFree &&
+                   (clickMode_ == ClickMode::kAlways ||
+                    (clickMode_ == ClickMode::kCountIn && looper_.forcesClick()));
     }
     const float click = metronome_.next();
-    const float loop = looper_.render(outPos_ + i);
     float mon = 0.0f;
     if (monRead_ < ring_.end()) mon = ring_.at(monRead_++);
     float s = 0.0f;
     if (!measuring) {
-      if (clickEnabled_ || looper_.forcesClick()) s += click * clickVolume_;
+      if (clickGate_) s += click * clickVolume_;
       if (monitorEnabled_) s += mon * monitorVolume_;
       s += loop;
     }
@@ -166,10 +198,11 @@ void EngineCore::process(const float* in, int32_t inFrames, int32_t inChannels, 
 
   // El medidor añade su pulso a outMono_ (con todo lo demás en silencio)
   latency_.process(inMono_.data(), inFrames, inStart, outMono_.data(), n, outPos_);
+  tap_.process(inMono_.data(), inFrames, inStart, outMono_.data(), n, outPos_);
   outPos_ += n;
 
   // Lo que ha entrado se graba en el loop (con la latencia compensada)
-  looper_.capture(ring_);
+  looper_.capture(ring_, outPos_);
   looper_.background(kBackgroundBudget);
 
   for (int32_t i = 0; i < n; ++i) {
@@ -218,6 +251,16 @@ void EngineCore::publish() {
     aTrackLength_[i].store(looper_.trackLength(i), std::memory_order_relaxed);
     aTrackPosition_[i].store(looper_.trackPosition(i), std::memory_order_relaxed);
   }
+  aBeatFrames_.store(transport_.framesSinceBeat(), std::memory_order_relaxed);
+  aAccentMask_.store(static_cast<int32_t>(transport_.accentMask()), std::memory_order_relaxed);
+  aClickMode_.store(static_cast<int32_t>(clickMode_), std::memory_order_relaxed);
+  aLoopWaiting_.store(looper_.waiting() ? 1 : 0, std::memory_order_relaxed);
+  aStartOnSound_.store(looper_.startOnSound() ? 1 : 0, std::memory_order_relaxed);
+  aTapClicks_.store(tap_.clicks(), std::memory_order_relaxed);
+  aTapHits_.store(tap_.hits(), std::memory_order_relaxed);
+  aTapFrames_.store(tap_.resultFrames(), std::memory_order_relaxed);
+  aTapSpread_.store(tap_.spreadFrames(), std::memory_order_relaxed);
+  aTapState_.store(static_cast<int32_t>(tap_.state()), std::memory_order_release);
 
   // El estado va el último: quien lo lea como «hecho» ve ya el resultado.
   aLatencyState_.store(static_cast<int32_t>(latency_.state()), std::memory_order_release);
@@ -260,6 +303,16 @@ CoreStatus EngineCore::status() const {
     s.trackLength[i] = aTrackLength_[i].load(std::memory_order_relaxed);
     s.trackPosition[i] = aTrackPosition_[i].load(std::memory_order_relaxed);
   }
+  s.tapState = aTapState_.load(std::memory_order_acquire);
+  s.tapClicks = aTapClicks_.load(std::memory_order_relaxed);
+  s.tapHits = aTapHits_.load(std::memory_order_relaxed);
+  s.tapFrames = aTapFrames_.load(std::memory_order_relaxed);
+  s.tapSpread = aTapSpread_.load(std::memory_order_relaxed);
+  s.beatFrames = aBeatFrames_.load(std::memory_order_relaxed);
+  s.accentMask = aAccentMask_.load(std::memory_order_relaxed);
+  s.clickMode = aClickMode_.load(std::memory_order_relaxed);
+  s.loopWaiting = aLoopWaiting_.load(std::memory_order_relaxed);
+  s.startOnSound = aStartOnSound_.load(std::memory_order_relaxed);
   return s;
 }
 

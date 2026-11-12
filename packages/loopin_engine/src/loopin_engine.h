@@ -28,6 +28,11 @@ extern "C" {
 #define LOOPIN_LATENCY_DONE 2
 #define LOOPIN_LATENCY_FAILED 3
 
+// Cuándo suena el clic
+#define LOOPIN_CLICK_SILENT 0    // nunca: metrónomo solo visual
+#define LOOPIN_CLICK_COUNT_IN 1  // solo en la cuenta de entrada
+#define LOOPIN_CLICK_ALWAYS 2
+
 // Modo del micrófono (valores de Android / Oboe InputPreset)
 #define LOOPIN_PRESET_GENERIC 1
 #define LOOPIN_PRESET_CAMCORDER 5
@@ -125,6 +130,20 @@ typedef struct {
   float track_volume[LOOPIN_TRACKS];
   int64_t track_length[LOOPIN_TRACKS];  // 1, 2 o 4 veces la base (0 = vacía)
   int64_t track_position[LOOPIN_TRACKS];
+
+  // Metrónomo
+  int32_t beat_frames;        // muestras ya sonadas del tiempo actual
+  int32_t accent_mask;        // tiempos con acento medio (bit k = tiempo k)
+  int32_t click_mode;         // LOOPIN_CLICK_*
+  // Empezar al tocar
+  int32_t start_on_sound;
+  int32_t loop_waiting;       // 1 = esperando a que suene la guitarra
+  // Calibración tocando al clic
+  int32_t tap_state;          // LOOPIN_LATENCY_* (mismos valores)
+  int32_t tap_clicks;         // clics que ya han sonado (de 16)
+  int32_t tap_hits;           // golpes que cuentan (de 12)
+  int32_t tap_frames;         // resultado en muestras
+  int32_t tap_spread;         // dispersión de los golpes en muestras
 } LoopinStatus;
 
 // Abre los streams de entrada y salida y empieza a procesar audio.
@@ -138,9 +157,14 @@ FFI_PLUGIN_EXPORT void loopin_pause(void);
 FFI_PLUGIN_EXPORT void loopin_set_bpm(double bpm);
 // beats_per_bar: 4 (4/4), 3 (3/4) o 6 (6/8, el tiempo es la corchea)
 FFI_PLUGIN_EXPORT void loopin_set_beats_per_bar(int32_t beats_per_bar);
+// Compás con acentos: accent_mask marca con un bit cada tiempo con acento
+// medio (el tiempo 0 siempre es fuerte). En los compases de 8 el tiempo es la
+// corchea. Ej.: 6/8 → (6, 1 << 3); 7/8 en 2+2+3 → (7, (1 << 2) | (1 << 4)).
+FFI_PLUGIN_EXPORT void loopin_set_meter(int32_t beats_per_bar, int32_t accent_mask);
 
 // Metrónomo
 FFI_PLUGIN_EXPORT void loopin_set_click_enabled(int32_t enabled);
+FFI_PLUGIN_EXPORT void loopin_set_click_mode(int32_t mode);  // LOOPIN_CLICK_*
 FFI_PLUGIN_EXPORT void loopin_set_click_volume(float volume);
 
 // Entrada. El modo del micrófono se aplica al abrir el audio (loopin_start).
@@ -161,6 +185,10 @@ FFI_PLUGIN_EXPORT void loopin_set_monitor_volume(float volume);
 
 // Mide la latencia de ida y vuelta emitiendo clics y detectándolos en la entrada.
 FFI_PLUGIN_EXPORT void loopin_measure_latency(void);
+// Calibración tocando al clic (con cascos, donde el clic no vuelve al micro):
+// 4 clics para entrar y 12 que cuentan, a 80 BPM.
+FFI_PLUGIN_EXPORT void loopin_start_tap_calibration(void);
+FFI_PLUGIN_EXPORT void loopin_cancel_tap_calibration(void);
 
 // Looper. El botón principal hace de pedal sobre la pista seleccionada:
 //   toque: graba → reproduce → overdub → reproduce → overdub…
@@ -189,6 +217,11 @@ FFI_PLUGIN_EXPORT void loopin_set_loop_volume(float volume);
 // Compensación de latencia de la grabación: la latencia de ida y vuelta en
 // muestras (la que da loopin_measure_latency para la entrada y salida en uso).
 FFI_PLUGIN_EXPORT void loopin_set_latency_compensation(int32_t frames);
+// Ajuste a mano: cambia la compensación y mueve lo ya grabado lo mismo que
+// cambie (para corregirla a oído con un loop sonando).
+FFI_PLUGIN_EXPORT void loopin_nudge_latency(int32_t frames);
+// La primera pista espera a que suene la guitarra y empieza en ese ataque.
+FFI_PLUGIN_EXPORT void loopin_set_start_on_sound(int32_t enabled);
 
 // Copia el estado actual en *out.
 FFI_PLUGIN_EXPORT void loopin_get_status(LoopinStatus* out);

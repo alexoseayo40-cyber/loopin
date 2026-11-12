@@ -26,14 +26,34 @@ void Transport::setBpm(double bpm) {
 }
 
 void Transport::setBeatsPerBar(int32_t beatsPerBar) {
+  setMeter(beatsPerBar, 0);
+}
+
+void Transport::setMeter(int32_t beatsPerBar, uint32_t accentMask) {
   pendingBeatsPerBar_ = std::clamp(beatsPerBar, 1, 16);
-  if (!playing_) beatsPerBar_ = pendingBeatsPerBar_;
+  pendingAccentMask_ = accentMask & ~1u;
+  if (!playing_) {
+    beatsPerBar_ = pendingBeatsPerBar_;
+    accentMask_ = pendingAccentMask_;
+  }
+}
+
+void Transport::playFrom(int64_t elapsed) {
+  play();
+  if (elapsed <= 0) return;
+  const int64_t beats = elapsed / samplesPerBeat_;
+  posInBeat_ = static_cast<int32_t>(elapsed % samplesPerBeat_);
+  currentBeat_ = static_cast<int32_t>(beats % beatsPerBar_);
+  currentBar_ = static_cast<int32_t>(beats / beatsPerBar_);
+  posInBar_ = int64_t(currentBeat_) * samplesPerBeat_ + posInBeat_;
+  framePosition_ = elapsed;
 }
 
 void Transport::play() {
   bpm_ = pendingBpm_;
   samplesPerBeat_ = computeSamplesPerBeat(sampleRate_, bpm_);
   beatsPerBar_ = pendingBeatsPerBar_;
+  accentMask_ = pendingAccentMask_;
   posInBeat_ = 0;
   posInBar_ = 0;
   currentBeat_ = 0;
@@ -60,6 +80,7 @@ void Transport::advanceBeat() {
     posInBar_ = 0;
     ++currentBar_;
     beatsPerBar_ = pendingBeatsPerBar_;
+    accentMask_ = pendingAccentMask_;
   }
   if (pendingBpm_ != bpm_) {
     bpm_ = pendingBpm_;

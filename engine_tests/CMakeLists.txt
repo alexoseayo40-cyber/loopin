@@ -18,6 +18,7 @@ add_executable(loopin_engine_tests
   ${SRC}/LatencyMeter.cpp
   ${SRC}/Looper.cpp
   ${SRC}/Metronome.cpp
+  ${SRC}/TapCalibrator.cpp
   ${SRC}/Transport.cpp
 )
 target_include_directories(loopin_engine_tests PRIVATE ${SRC})
