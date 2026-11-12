@@ -9,6 +9,7 @@
 // texto `…Help`, que la app enseña plegado detrás de un «?».
 import 'package:loopin_engine/loopin_engine.dart';
 
+import '../engine/engine_controller.dart' show RecordDuck;
 import '../engine/meter.dart';
 import '../engine/pedal_keys.dart';
 import '../ui/theme.dart';
@@ -286,6 +287,28 @@ class Strings {
       'pista nueva sin mirar la pantalla. Con las 4 llenas, el toque graba encima de la '
       'última. Apagado, todo va a la misma pista, como en un pedal clásico.';
 
+  String get recordDuckTitle => 'Al grabar con el altavoz';
+  String get recordDuckLine => 'Lo que ya suena, mientras grabas';
+  String get recordDuckHelp =>
+      'Con el altavoz y el micrófono del móvil, el micrófono recoge lo que suena y lo graba '
+      'otra vez en la pista nueva (o en el overdub): se duplica y se acumula. Mientras '
+      'grabas, lo que ya suena puede seguir normal, sonar más bajo o callarse; vuelve al '
+      'acabar de grabar. El tempo lo sigues viendo en las luces y en el pulsador. Con '
+      'cascos o una interfaz suena siempre normal. El clic en «siempre» también se graba: '
+      'mejor «solo la cuenta».';
+  String recordDuckName(RecordDuck d) => switch (d) {
+    RecordDuck.normal => 'Normal',
+    RecordDuck.low => 'Más bajo',
+    RecordDuck.silent => 'Silencio',
+  };
+
+  /// Al grabar con lo demás callado o más bajo: «Compás 2 de 4 · lo demás, en silencio»
+  String withDuck(String line, RecordDuck d) => switch (d) {
+    RecordDuck.normal => line,
+    RecordDuck.low => '$line · lo demás, más bajo',
+    RecordDuck.silent => '$line · lo demás, en silencio',
+  };
+
   String get externalControls => 'Controles externos';
   String get externalControlsHelp =>
       'Para tocar sin manos. El botón principal hace lo mismo que el pulsador grande '
@@ -488,6 +511,8 @@ class ReportStrings {
   String xrunsSinceOpen(int n) => 'Cortes desde que se abrió el audio: $n';
   String metronome(String meter, String click, String onSound) =>
       'Metrónomo: $meter · clic: $click · empezar al tocar: $onSound';
+  String recordDuck(String setting, bool speaker) =>
+      'Al grabar con el altavoz: $setting${speaker ? ' (ruta con altavoz: se aplica)' : ' (ahora no se aplica)'}';
   String looper(String state, String mode, int? baseBars, String autoAdvance) =>
       'Looper: $state · $mode'
       '${baseBars != null ? ' · base de ${tr.bars(baseBars)}' : ''}'

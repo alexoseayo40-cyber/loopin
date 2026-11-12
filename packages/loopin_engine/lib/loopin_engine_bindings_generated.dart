@@ -402,6 +402,20 @@ class LoopinEngineBindings {
   late final _loopin_set_loop_volume = _loopin_set_loop_volumePtr
       .asFunction<void Function(double)>();
 
+  /// Volumen de lo que ya suena mientras se graba una pista o un overdub
+  /// (1 = normal, 0 = silencio). Con el altavoz y el micro del móvil, lo que
+  /// suena se volvería a grabar.
+  void loopin_set_record_duck(double gain) {
+    return _loopin_set_record_duck(gain);
+  }
+
+  late final _loopin_set_record_duckPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Float)>>(
+        'loopin_set_record_duck',
+      );
+  late final _loopin_set_record_duck = _loopin_set_record_duckPtr
+      .asFunction<void Function(double)>();
+
   /// Compensación de latencia de la grabación: la latencia de ida y vuelta en
   /// muestras (la que da loopin_measure_latency para la entrada y salida en uso).
   void loopin_set_latency_compensation(int frames) {

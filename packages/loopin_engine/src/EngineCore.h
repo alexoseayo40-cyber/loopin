@@ -37,6 +37,7 @@ struct Command {
     kSetSyncBars,
     kSetLatencyFrames,  // compensación de la grabación (muestras)
     kSetLoopVolume,
+    kSetRecordDuck,     // volumen de lo que suena mientras se graba (0–1)
     // Pistas (arg = pista, de 0 a 3)
     kSelectTrack,
     kSelectNextTrack,

@@ -31,6 +31,22 @@ export 'meter.dart';
 export 'pedal_keys.dart' show LearnedKey, PedalAction;
 export 'report.dart';
 
+/// Qué hacen las pistas que ya suenan mientras se graba otra (o un overdub),
+/// con el altavoz y el micrófono del móvil.
+enum RecordDuck {
+  /// Suenan normal (y el micrófono las vuelve a grabar).
+  normal(1.0),
+
+  /// Suenan más bajas (−18 dB).
+  low(0.125),
+
+  /// Se callan mientras se graba.
+  silent(0.0);
+
+  const RecordDuck(this.gain);
+  final double gain;
+}
+
 class EngineController extends ChangeNotifier {
   EngineController({LoopinEngine? engine}) : _engine = engine ?? LoopinEngine.instance {
     _lifecycle = AppLifecycleListener(onHide: _onHide, onShow: _onShow);
@@ -82,6 +98,11 @@ class EngineController extends ChangeNotifier {
 
   /// Tras grabar una pista, la selección pasa sola a la siguiente vacía.
   bool autoAdvance = true;
+
+  /// Lo que suena mientras se graba, si se graba con el altavoz y el
+  /// micrófono del móvil (con cascos o interfaz siempre suena normal).
+  RecordDuck recordDuck = RecordDuck.silent;
+  double _appliedDuck = -1;
 
   /// Volumen de cada pista (lo que marca el deslizador).
   final List<double> trackVolumes = List.filled(kTrackCount, 1.0);
@@ -169,6 +190,7 @@ class EngineController extends ChangeNotifier {
       return false;
     }
     _routes.reset(); // la latencia se elige en cuanto se sepa la ruta
+    _appliedDuck = -1; // y lo de silenciar al grabar, también
     _applySettings();
     if (_wantPlaying) {
       _engine.play();
@@ -216,6 +238,7 @@ class EngineController extends ChangeNotifier {
       }
       _wantPlaying = status.playing;
       _updateRoute();
+      _applyRecordDuck();
       if (prev.latencyState == LatencyState.running && status.latencyState == LatencyState.done) {
         _routes.saveMeasured(_currentRouteKey, status.latencyFrames);
       }
@@ -435,6 +458,31 @@ class EngineController extends ChangeNotifier {
 
   /// Para o arranca todo (lo mismo que el doble toque).
   void toggleTransport() => togglePlay();
+
+  /// La salida es el altavoz del móvil y la entrada su micrófono: lo que
+  /// suena vuelve a entrar.
+  bool get speakerRoute {
+    final input = _device(status.inputDeviceId, input: true);
+    final output = _device(status.outputDeviceId, input: false);
+    return input != null && input.isBuiltinMic && output != null && output.isBuiltinSpeaker;
+  }
+
+  /// Volumen de lo que suena mientras se graba, con la ruta de ahora.
+  double get recordDuckGain => speakerRoute ? recordDuck.gain : 1.0;
+
+  void _applyRecordDuck() {
+    final gain = recordDuckGain;
+    if (gain == _appliedDuck) return;
+    _appliedDuck = gain;
+    _engine.setRecordDuck(gain);
+  }
+
+  void setRecordDuck(RecordDuck d) {
+    recordDuck = d;
+    _prefs.set(Prefs.recordDuck, d.name);
+    if (status.running) _applyRecordDuck();
+    notifyListeners();
+  }
 
   void setLoopMode(LoopMode mode) {
     loopMode = mode;
@@ -678,6 +726,8 @@ class EngineController extends ChangeNotifier {
     }
 
     autoAdvance = await _prefs.getBool(Prefs.autoAdvance) ?? autoAdvance;
+    final duck = await _prefs.get(Prefs.recordDuck);
+    recordDuck = RecordDuck.values.firstWhere((d) => d.name == duck, orElse: () => recordDuck);
 
     // Metrónomo y looper
     final savedBpm = double.tryParse(await _prefs.get(Prefs.bpm) ?? '');

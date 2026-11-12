@@ -79,6 +79,7 @@ void loopin_set_auto_advance(int32_t enabled) {
 void loopin_set_loop_mode(int32_t mode) { post(Command::Type::kSetLoopMode, mode); }
 void loopin_set_sync_bars(int32_t bars) { post(Command::Type::kSetSyncBars, bars); }
 void loopin_set_loop_volume(float volume) { post(Command::Type::kSetLoopVolume, volume); }
+void loopin_set_record_duck(float gain) { post(Command::Type::kSetRecordDuck, gain); }
 void loopin_set_latency_compensation(int32_t frames) {
   post(Command::Type::kSetLatencyFrames, frames);
 }

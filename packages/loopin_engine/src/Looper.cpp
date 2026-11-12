@@ -23,6 +23,9 @@ void Looper::prepare(int32_t sampleRate, Transport* transport, int32_t maxSecond
   const int64_t capacity = int64_t(sampleRate) * maxSeconds;
   const bool keep = sampleRate == sampleRate_ && capacity == capacity_ && anyContent();
   sampleRate_ = sampleRate;
+  duckLead_ = sampleRate / 40;
+  duckStep_ = 2.0f / float(duckLead_);
+  duck_ = 1.0f;
 
   if (!keep) {
     capacity_ = capacity;

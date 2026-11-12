@@ -47,6 +47,9 @@ class AudioDevice {
   final String address;
 
   bool get isBuiltinMic => type == 15;
+
+  /// El altavoz del móvil (o el auricular de llamada).
+  bool get isBuiltinSpeaker => type == 2 || type == 1;
 }
 
 /// Estado del test de latencia.
@@ -405,6 +408,9 @@ class LoopinEngine {
   void setLoopMode(LoopMode mode) => _b.loopin_set_loop_mode(mode.index);
   void setSyncBars(int bars) => _b.loopin_set_sync_bars(bars);
   void setLoopVolume(double v) => _b.loopin_set_loop_volume(v);
+
+  /// Volumen de lo que ya suena mientras se graba (1 = normal, 0 = silencio).
+  void setRecordDuck(double gain) => _b.loopin_set_record_duck(gain);
 
   /// Latencia de ida y vuelta (muestras) que se compensa al grabar.
   void setLatencyCompensation(int frames) => _b.loopin_set_latency_compensation(frames);

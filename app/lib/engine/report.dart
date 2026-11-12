@@ -67,6 +67,7 @@ extension EngineReport on EngineController {
         s.hasLoops ? s.baseBars : null,
         tr.yesNo(autoAdvance),
       ),
+      r.recordDuck(tr.recordDuckName(recordDuck).toLowerCase(), speakerRoute),
       for (var i = 0; i < s.tracks.length; i++)
         if (s.tracks[i].state != LoopState.empty)
           r.track(

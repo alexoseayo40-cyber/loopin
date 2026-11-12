@@ -112,6 +112,9 @@ void EngineCore::apply(const Command& cmd) {
     case Command::Type::kSetLoopVolume:
       looper_.setVolume(static_cast<float>(cmd.value));
       break;
+    case Command::Type::kSetRecordDuck:
+      looper_.setRecordDuck(static_cast<float>(cmd.value));
+      break;
     case Command::Type::kSelectTrack:
       looper_.select(cmd.arg);
       break;

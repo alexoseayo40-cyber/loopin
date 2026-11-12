@@ -219,6 +219,10 @@ FFI_PLUGIN_EXPORT void loopin_set_auto_advance(int32_t enabled);
 FFI_PLUGIN_EXPORT void loopin_set_loop_mode(int32_t mode);
 FFI_PLUGIN_EXPORT void loopin_set_sync_bars(int32_t bars);
 FFI_PLUGIN_EXPORT void loopin_set_loop_volume(float volume);
+// Volumen de lo que ya suena mientras se graba una pista o un overdub
+// (1 = normal, 0 = silencio). Con el altavoz y el micro del móvil, lo que
+// suena se volvería a grabar.
+FFI_PLUGIN_EXPORT void loopin_set_record_duck(float gain);
 // Compensación de latencia de la grabación: la latencia de ida y vuelta en
 // muestras (la que da loopin_measure_latency para la entrada y salida en uso).
 FFI_PLUGIN_EXPORT void loopin_set_latency_compensation(int32_t frames);

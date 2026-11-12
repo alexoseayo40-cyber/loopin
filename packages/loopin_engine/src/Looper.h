@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <limits>
@@ -93,6 +94,11 @@ class Looper {
   void setVolume(float volume);  // volumen general de los loops
   void setTrackVolume(int32_t track, float volume);
   void setTrackMuted(int32_t track, bool muted);
+  // Volumen de lo que ya suena mientras se graba (1 = normal, 0 = silencio).
+  // Con el altavoz y el micrófono del móvil, lo que suena vuelve a entrar por
+  // el micrófono y se grabaría otra vez encima.
+  void setRecordDuck(float gain) { recordDuck_ = std::clamp(gain, 0.0f, 1.0f); }
+  float recordDuck() const { return recordDuck_; }
 
   // --- Por muestra / por bloque (hilo de audio) ---
   // Una muestra de salida. Llamar después de transport.tick() de esa muestra.
@@ -115,6 +121,19 @@ class Looper {
         if (t.gain - target < 1e-4f && target - t.gain < 1e-4f) t.gain = target;
       }
       out += s * t.gain;
+    }
+    // Mientras se graba, lo que suena baja (o se calla). Empieza a bajar un
+    // poco antes del inicio para que ya esté abajo cuando empiece a grabar;
+    // vuelve justo al acabar. Como el micrófono oye la salida con la latencia
+    // de retraso, lo que sonó antes del inicio o después del final cae fuera
+    // de la grabación.
+    if (recordDuck_ < 1.0f || duck_ != 1.0f) {
+      const float target =
+          writingAt(n) || writingAt(n + duckLead_) ? recordDuck_ : 1.0f;
+      // Rampa recta de 12,5 ms: ya está abajo del todo cuando empieza a grabar
+      if (duck_ < target) duck_ = std::min(target, duck_ + duckStep_);
+      else if (duck_ > target) duck_ = std::max(target, duck_ - duckStep_);
+      out *= duck_;
     }
     return out * volume_;
   }
@@ -222,6 +241,14 @@ class Looper {
     return state_ == State::kArmed || state_ == State::kRecording;
   }
   bool anyContent() const;
+  // En la muestra de salida n se está grabando (una pista o un overdub)
+  bool writingAt(int64_t n) const {
+    if (recordingTrack() && n >= recStart_ && n < recEnd_) return true;
+    for (const Layer& l : layers_)
+      if (l.st == Layer::St::kRecording && l.winOpen && n >= l.winStart && n < l.winEnd)
+        return true;
+    return false;
+  }
 
   void fireEvent(int64_t n);
   void arm(int64_t now);
@@ -256,6 +283,10 @@ class Looper {
   Mode mode_ = Mode::kSync;
   int32_t syncBars_ = 4;
   float volume_ = 1.0f;
+  float recordDuck_ = 1.0f;  // volumen de lo que suena mientras se graba
+  float duck_ = 1.0f;        // el aplicado (sigue a recordDuck_ poco a poco)
+  int64_t duckLead_ = 1200;  // empieza a bajar 25 ms antes de grabar
+  float duckStep_ = 1.0f / 600;  // por muestra: de arriba abajo en la mitad
   int32_t latency_ = 0;
   bool autoAdvance_ = false;
   bool startOnSound_ = false;

@@ -43,6 +43,7 @@ class SettingsScreen extends StatelessWidget {
                       value: c.autoAdvance,
                       onChanged: c.setAutoAdvance,
                     ),
+                    _RecordDuckSection(controller: c),
                     _Header(tr.externalControls, help: tr.externalControlsHelp),
                     _ControlsSection(controller: c),
                     _Header(tr.audio),
@@ -202,6 +203,43 @@ class _ChassisSwatch extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+
+/// Qué hace lo que ya suena mientras se graba con el altavoz.
+class _RecordDuckSection extends StatelessWidget {
+  const _RecordDuckSection({required this.controller});
+
+  final EngineController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = controller;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OptionTile(
+          leading: const Icon(Icons.speaker_phone),
+          title: tr.recordDuckTitle,
+          subtitle: Text(tr.recordDuckLine),
+          help: tr.recordDuckHelp,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: SegmentedButton<RecordDuck>(
+            segments: [
+              for (final d in RecordDuck.values)
+                ButtonSegment(value: d, label: Text(tr.recordDuckName(d))),
+            ],
+            showSelectedIcon: false,
+            selected: {c.recordDuck},
+            onSelectionChanged: (v) => c.setRecordDuck(v.first),
+          ),
+        ),
+      ],
     );
   }
 }

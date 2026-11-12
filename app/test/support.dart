@@ -18,6 +18,8 @@ class FakeEngine implements LoopinEngine {
   @override
   void play() => calls.add('play');
   @override
+  void setRecordDuck(double gain) => calls.add('duck $gain');
+  @override
   void pause() => calls.add('pause');
   @override
   void loopPress() => calls.add('press');
@@ -164,6 +166,7 @@ void mockPlatform() {
             ],
             'outputs': [
               {'id': 20, 'type': 2, 'name': 'speaker', 'address': ''},
+              {'id': 30, 'type': 4, 'name': 'cascos', 'address': ''},
             ],
           };
         default:

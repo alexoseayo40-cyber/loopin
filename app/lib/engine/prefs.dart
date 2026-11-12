@@ -24,6 +24,7 @@ class Prefs {
   static const loopMode = 'loopMode';
   static const syncBars = 'syncBars';
   static const startOnSound = 'startOnSound';
+  static const recordDuck = 'recordDuck';
 
   Future<String?> get(String key) async {
     try {

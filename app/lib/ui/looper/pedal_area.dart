@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:loopin_engine/loopin_engine.dart';
 
+import '../../engine/engine_controller.dart' show RecordDuck;
 import '../../l10n/strings.dart';
 import '../pedal_widgets.dart';
 import '../theme.dart';
@@ -30,7 +31,14 @@ class PedalLook {
   final String? text;
 }
 
-PedalLook pedalLook(EngineStatus s, {required LoopMode mode, required bool startOnSound}) {
+/// [duck]: lo que pasa con lo que ya suena mientras se graba (para decirlo
+/// debajo; normal si no se aplica).
+PedalLook pedalLook(
+  EngineStatus s, {
+  required LoopMode mode,
+  required bool startOnSound,
+  RecordDuck duck = RecordDuck.normal,
+}) {
   final selected = s.tracks[s.selectedTrack];
   final sel = s.selectedTrack + 1;
   final active = s.activeTrack >= 0 ? s.activeTrack + 1 : sel;
@@ -72,7 +80,10 @@ PedalLook pedalLook(EngineStatus s, {required LoopMode mode, required bool start
         title: tr.recordingTitle(active),
         subtitle: bar <= 0
             ? tr.recordingFree
-            : (target > 0 ? tr.barOf(barNow, target) : tr.barOpen(barNow)),
+            : tr.withDuck(
+                target > 0 ? tr.barOf(barNow, target) : tr.barOpen(barNow),
+                s.hasLoops ? duck : RecordDuck.normal,
+              ),
         progress: recordProgress(s),
         icon: Icons.stop,
       );
@@ -101,7 +112,7 @@ PedalLook pedalLook(EngineStatus s, {required LoopMode mode, required bool start
       return PedalLook(
         color: LoopinPalette.dub,
         title: tr.overdubTitle(active),
-        subtitle: tr.tapToFinish,
+        subtitle: tr.withDuck(tr.tapToFinish, duck),
         progress: track.progress,
         glow: true,
         icon: Icons.stop,
@@ -133,7 +144,12 @@ class PedalArea extends StatelessWidget {
       listenable: c.live,
       builder: (context, _) {
         final p = view.palette;
-        final look = pedalLook(view.s, mode: c.loopMode, startOnSound: c.startOnSound);
+        final look = pedalLook(
+          view.s,
+          mode: c.loopMode,
+          startOnSound: c.startOnSound,
+          duck: c.speakerRoute ? c.recordDuck : RecordDuck.normal,
+        );
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [

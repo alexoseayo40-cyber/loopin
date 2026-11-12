@@ -41,6 +41,8 @@ struct Rig {
   std::mt19937 rng;
   int32_t inJitter = 300;  // la entrada va hasta 300 muestras por detrás
   std::function<float(int64_t)> player = [](int64_t) { return 0.0f; };
+  // Lo que suena por el altavoz y vuelve a entrar por el micrófono (0 = cascos)
+  float bleed = 0.0f;
   std::function<void(int64_t, float)> onOut;
   bool keep = true;
   std::vector<float> hist;  // toda la salida (canal izquierdo), hist[n]
@@ -74,7 +76,11 @@ struct Rig {
       const int64_t avail = outPos + n - (inJitter > 0 ? int64_t(rng() % inJitter) : 0);
       const int32_t m =
           int32_t(std::clamp<int64_t>(avail - inPos, 0, EngineCore::kMaxBlockFrames));
-      for (int32_t k = 0; k < m; ++k) inBuf[k] = player(inPos + k - L);
+      for (int32_t k = 0; k < m; ++k) {
+        const int64_t o = inPos + k - L;  // la salida que suena en el aire ahora
+        inBuf[k] = player(o);
+        if (bleed != 0.0f && o >= 0 && o < int64_t(hist.size())) inBuf[k] += bleed * hist[o];
+      }
       inPos += m;
       core.process(inBuf.data(), m, 1, outBuf.data(), n, 2);
       for (int32_t i = 0; i < n; ++i) {
@@ -1436,6 +1442,67 @@ void testClickModes() {
   }
 }
 
+// Con el altavoz y el micrófono del móvil, lo que suena vuelve a entrar. Al
+// grabar la pista 2 (y al hacer overdub) lo que ya suena se calla, así no se
+// graba otra vez encima.
+void testRecordDuck() {
+  std::printf("Silenciar lo que suena mientras se graba (altavoz + micro)\n");
+  const int32_t sr = 48000;
+  const int32_t L = 6068;  // la latencia medida en el móvil de Alex
+  const int64_t bar = 96000;
+
+  // Devuelve cuánto se ha colado en la pista 2 (máximo) y lo más alto que
+  // sonó mientras se grababa (sin contar los bordes)
+  auto run = [&](float duck, bool overdub) {
+    Rig r(sr, L, 71);
+    r.post(T::kSetBpm, 120);
+    r.post(T::kSetLoopMode, 0);
+    r.post(T::kSetSyncBars, 2);
+    r.post(T::kSetAutoAdvance, overdub ? 0 : 1);
+    r.post(T::kSetRecordDuck, duck);
+    r.bleed = 1.0f;
+    // Pista 1: cuenta de 1 compás y 2 compases tocando
+    const int64_t t0 = 1000, base0 = t0 + bar;
+    r.player = [&](int64_t n) {
+      return n >= base0 && n < base0 + 2 * bar ? sig(1, n - base0) : 0.0f;
+    };
+    r.postAt(t0, T::kLoopPress);
+    r.runTo(base0 + 4 * bar + L + 10);  // grabada y sonando una vuelta
+    CHECK(r.state() == St::kPlaying);
+    const int64_t ref = base0 + 4 * bar;  // una vuelta solo con la pista 1
+    // Pista 2 (u overdub): el músico no toca nada; solo entra lo que suena
+    r.postAt(base0 + 6 * bar + bar / 2, T::kLoopPress);
+    const int64_t recFrom = base0 + 7 * bar;  // empieza en el siguiente compás
+    r.runTo(recFrom + 2 * bar + L + 10);
+    if (overdub) r.postAt(recFrom + 2 * bar + L + 20, T::kLoopPress);  // acaba el overdub
+    r.runTo(base0 + 14 * bar);
+    CHECK(r.state() == St::kPlaying);
+    // Lo grabado de más = lo que suena ahora menos lo que sonaba antes
+    float leaked = 0.0f;
+    const int64_t now = base0 + 12 * bar;
+    for (int64_t k = 0; k < 2 * bar; ++k)
+      leaked = std::max(leaked, std::fabs(r.hist[now + k] - r.hist[ref + k]));
+    float during = 0.0f;
+    for (int64_t n = recFrom + sr / 100; n < recFrom + 2 * bar - sr / 100; ++n)
+      during = std::max(during, std::fabs(r.hist[n]));
+    return std::pair<float, float>{leaked, during};
+  };
+
+  for (bool overdub : {false, true}) {
+    const auto [leakNormal, duringNormal] = run(1.0f, overdub);
+    const auto [leakSilent, duringSilent] = run(0.0f, overdub);
+    const auto [leakLow, duringLow] = run(0.125f, overdub);
+    std::printf("  %s: se cuela %.4f normal · %.4f bajo · %.5f en silencio\n",
+                overdub ? "overdub" : "pista 2", leakNormal, leakLow, leakSilent);
+    CHECK(leakNormal > 0.01f);          // sin silenciar, se graba otra vez
+    CHECK(duringNormal > 0.01f);
+    CHECK(duringSilent == 0.0f);        // en silencio mientras graba
+    CHECK(leakSilent < leakNormal / 300); // y casi nada en la pista (< −50 dB)
+    CHECK(leakLow < leakNormal / 6);    // bajo: −18 dB
+    CHECK(duringLow > 0.0f && duringLow < duringNormal / 6);
+  }
+}
+
 }  // namespace
 
 void runLooperTests() {
@@ -1455,4 +1522,5 @@ void runLooperTests() {
   testFreeMode();
   testNudgeLatency();
   testClickModes();
+  testRecordDuck();
 }
