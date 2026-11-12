@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "EngineCore.h"
+#include "LoadMeter.h"
 
 namespace loopin {
 
@@ -41,6 +42,10 @@ class AudioEngine : public oboe::AudioStreamDataCallback, public oboe::AudioStre
   // trompicones).
   int32_t inputMaxRead() const { return inputMaxReadPublished_.load(std::memory_order_relaxed); }
 
+  // Carga del callback (media y pico del último segundo, mayor pico desde que
+  // se abrió el audio), en fracciones del tiempo disponible.
+  const LoadMeter& load() const { return load_; }
+
   // Hilo de errores de Oboe (p. ej. se desenchufan los auriculares)
   void onErrorAfterClose(oboe::AudioStream* stream, oboe::Result error) override;
 
@@ -66,6 +71,7 @@ class AudioEngine : public oboe::AudioStreamDataCallback, public oboe::AudioStre
   int32_t inputMaxRead_ = 0;
   int32_t diagCallbacks_ = 0;
   std::atomic<int32_t> inputMaxReadPublished_{0};
+  LoadMeter load_;
 };
 
 }  // namespace loopin

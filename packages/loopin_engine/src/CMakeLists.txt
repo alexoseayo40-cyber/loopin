@@ -11,6 +11,8 @@ set(LOOPIN_CORE_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/EngineCore.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/LatencyMeter.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/Looper.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/LooperBuffers.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/LooperRecord.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/Metronome.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/TapCalibrator.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/Transport.cpp

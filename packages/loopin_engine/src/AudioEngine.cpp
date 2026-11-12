@@ -5,6 +5,7 @@
 #include <android/log.h>
 
 #include <algorithm>
+#include <chrono>
 
 #define LOG_TAG "loopin"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -95,6 +96,7 @@ oboe::Result AudioEngine::openAudio() {
   inputMaxRead_ = 0;
   diagCallbacks_ = 0;
   inputMaxReadPublished_.store(0, std::memory_order_relaxed);
+  load_.prepare(output_->getSampleRate());
 
   // La entrada primero, para que ya esté en marcha cuando llegue el primer
   // callback de la salida.
@@ -134,6 +136,8 @@ void AudioEngine::closeStreams() {
 
 oboe::DataCallbackResult AudioEngine::onAudioReady(oboe::AudioStream* stream, void* audioData,
                                                    int32_t numFrames) {
+  // Lo que tarda el callback entero (leer la entrada incluido) cuenta como carga
+  const auto t0 = std::chrono::steady_clock::now();
   if (tuner_) tuner_->tune();
   auto* out = static_cast<float*>(audioData);
   const int32_t outChannels = stream->getChannelCount();
@@ -172,6 +176,11 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(oboe::AudioStream* stream, vo
   }
 
   core_.process(inBuf_.data(), got, inChannels, out, numFrames, outChannels);
+
+  load_.add(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - t0)
+                .count(),
+            numFrames);
 
   inputMaxRead_ = std::max(inputMaxRead_, got);
   if (++diagCallbacks_ * numFrames >= core_.sampleRate() * 2) {

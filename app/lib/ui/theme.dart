@@ -3,15 +3,7 @@
 import 'package:flutter/material.dart';
 
 /// Color del chasis del pedal. Cada uno tiene versión clara y oscura.
-enum Chassis {
-  classic('Clásico'),
-  red('Rojo'),
-  green('Verde'),
-  blue('Azul');
-
-  const Chassis(this.label);
-  final String label;
-}
+enum Chassis { classic, red, green, blue }
 
 /// Tema (claro, oscuro o el del sistema) y color del chasis.
 @immutable

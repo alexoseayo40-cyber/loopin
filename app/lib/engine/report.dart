@@ -1,0 +1,90 @@
+// Loopin — «Copiar resultados»: resumen para pegar en el plan del proyecto
+// SPDX-License-Identifier: GPL-3.0-or-later
+import 'package:loopin_engine/loopin_engine.dart';
+
+import '../l10n/strings.dart';
+import 'engine_controller.dart';
+
+extension EngineReport on EngineController {
+  /// Resumen del móvil, la ruta de audio, la latencia, la carga y el looper.
+  String report() {
+    final s = status;
+    final r = tr.report;
+    String ms(double v) => tr.ms(v);
+    final api = switch (s.audioApi) {
+      AudioApi.aaudio => 'AAudio',
+      AudioApi.openSles => 'OpenSL ES',
+      AudioApi.unknown => '—',
+    };
+    final source = switch (latencySource) {
+      LatencySource.measured => r.measured,
+      LatencySource.estimated => r.estimated,
+      LatencySource.none => r.unmeasured,
+    };
+    String mode(bool exclusive) => exclusive ? tr.exclusiveMode : tr.sharedMode;
+    String low(bool on) => on ? tr.lowLatency : r.normalLatency;
+    return [
+      tr.reportTitle,
+      r.phone(
+        '${deviceInfo['model'] ?? '—'}',
+        '${deviceInfo['android'] ?? '—'}',
+        tr.yesNo(deviceInfo['lowLatency']),
+        tr.yesNo(deviceInfo['proAudio']),
+      ),
+      r.route(routeLabel),
+      r.mic(
+        s.inputPreset == null ? '—' : tr.presetName(s.inputPreset!),
+        s.presetFallback,
+        tr.yesNo(deviceInfo['unprocessed']),
+        inputGainDb,
+      ),
+      r.stream(api, s.sampleRate, s.framesPerBurst, s.bufferSizeFrames, ms(s.bufferMs)),
+      r.output(mode(s.exclusive), low(s.lowLatency)),
+      r.input(
+        mode(s.inputExclusive),
+        low(s.inputLowLatency),
+        s.inputFramesPerBurst,
+        s.inputBufferFrames,
+        s.inputMaxRead,
+        tr.channels(s.inputChannels),
+      ),
+      r.estimate(ms(s.outputLatencyMs), ms(s.inputLatencyMs)),
+      if (s.latencyState == LatencyState.done) r.roundTrip(ms(s.latencyMs), s.latencyFrames),
+      r.compensation(ms(compensationMs), source),
+      tr.engineLoad(tr.percent(s.cpuLoad), tr.percent(s.cpuLoadPeak), tr.percent(s.cpuLoadMax)),
+      if (s.playing || s.framePosition > 0)
+        r.metronomeRun(s.bpm.round(), s.playSeconds / 60, xrunsSincePlay),
+      // Cortes desde que se abrió el audio (el buffer sube si los hay)
+      if (s.xrunCount >= 0) r.xrunsSinceOpen(s.xrunCount),
+      r.metronome(
+        tr.meterChip(timeSignature),
+        tr.clickModeName(clickMode).toLowerCase(),
+        tr.yesNo(startOnSound),
+      ),
+      r.looper(
+        tr.loopStateName(s.loopState),
+        tr.loopModeName(loopMode),
+        s.hasLoops ? s.baseBars : null,
+        tr.yesNo(autoAdvance),
+      ),
+      for (var i = 0; i < s.tracks.length; i++)
+        if (s.tracks[i].state != LoopState.empty)
+          r.track(
+            i + 1,
+            tr.loopStateName(s.tracks[i].state),
+            s.tracks[i].hasLoop && s.loopBarFrames > 0
+                ? (s.tracks[i].length / s.loopBarFrames).round()
+                : null,
+            s.tracks[i].layers,
+            s.tracks[i].muted,
+          ),
+      r.controls(
+        tr.yesNo(volumeKeys),
+        tr.yesNo(headsetKey),
+        learnedKeys.isEmpty
+            ? tr.none
+            : learnedKeys.map((k) => tr.keyName(k.code, k.name)).join(', '),
+      ),
+    ].join('\n');
+  }
+}

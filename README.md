@@ -2,20 +2,17 @@
 
 Looper de guitarra libre para Android: varias pistas que cuadran al compás, metrónomo y backing tracks.
 
-> **Estado:** Etapa 2, looper de una pista: grabar, reproducir, overdub, deshacer y borrar, sincronizado con el metrónomo y con la latencia compensada.
+> **Estado:** Etapa 3.5. Looper de 4 pistas con interfaz de pedal, metrónomo con 10 compases, modo libre, «empezar al tocar», controles externos y latencia compensada (medida sola, tocando al clic o a mano). Próximo: batería.
 
 ## Cómo se usa
 
-El botón grande hace de pedal (actúa al pulsar, no al soltar):
+El botón grande hace de pedal (actúa al pulsar, no al soltar) sobre la pista elegida:
 
-- **Toque:** grabar → reproducir → overdub → reproducir → overdub… El overdub empieza en el primer tiempo del siguiente compás (te da tiempo a volver a la guitarra) y acaba al pulsar.
-- **Mantener:** deshacer la última capa.
+- **Toque:** pista vacía → graba; pista con loop → graba encima (overdub, desde el siguiente compás). Con el avance automático, al cerrar una pista queda elegida la siguiente vacía.
+- **Mantener:** deshacer lo último (una capa o la pista recién grabada).
 - **Doble toque:** parar / arrancar todo.
 
-Modos de grabación:
-
-- **Sincronizado:** al pulsar, el metrónomo empieza de cero (aunque ya estuviera sonando), cuenta 1 compás y graba 1, 2, 4 u 8 compases.
-- **Manual:** vuelve a tocar para cerrar; el loop se ajusta al compás más cercano (si pulsas tarde se recorta, si pulsas pronto sigue hasta el final del compás). También empieza con 1 compás de cuenta desde que pulsas.
+Modos de grabación: **sincronizado** (1, 2, 4 u 8 compases), **manual** (se cierra al pulsar, al compás más cercano) y **libre** (sin metrónomo: el tempo sale del primer loop). La primera pista lleva 1 compás de cuenta, o arranca con la primera nota si está encendido «empezar al tocar».
 
 Mide la latencia una vez por cada combinación de entrada y salida (Ajustes › Audio y latencia): se guarda y se aplica sola.
 
@@ -25,6 +22,9 @@ Licencia: [GPLv3](LICENSE).
 
 ```
 app/                        App Flutter (interfaz)
+  lib/engine/               Estado y órdenes al motor, latencia por ruta, teclas externas
+  lib/ui/                   Pantallas; ui/looper/ son las piezas de la del looper
+  lib/l10n/strings.dart     Todos los textos (preparado para traducir)
 packages/loopin_engine/     Plugin FFI: puente Dart ↔ motor C++
   src/                      Motor C++ (Oboe)
   src/third_party/oboe/     Oboe 1.11.0 (submódulo de git)
@@ -68,3 +68,4 @@ build\engine_tests\Release\loopin_engine_tests.exe
 - En cada callback se lee **toda** la entrada que haya llegado (no un bloque fijo, como hace `oboe::FullDuplexStream`), así no se acumula retraso. Entrada y salida se cuentan por separado y no necesitan bloques iguales.
 - El looper decide todo (inicio, fin, overdub) en índices de salida, que es lo que oye el músico. La muestra de entrada *j* se tocó mientras sonaba la salida *j − latencia*, y se escribe en esa posición del loop: la escritura va con retraso, a medida que llega la entrada (un anillo de 6 s guarda lo último).
 - Cada overdub va a una capa aparte para poder deshacerlo. Al acabar el siguiente overdub, la capa anterior se suma al loop base poco a poco en segundo plano; como lo que suena es la suma de todo, no se nota.
+- La carga del callback (media y pico de cada segundo, en % del tiempo disponible) se ve en Audio y latencia › Detalles técnicos y en «Copiar resultados».

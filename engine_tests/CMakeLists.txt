@@ -17,6 +17,8 @@ add_executable(loopin_engine_tests
   ${SRC}/EngineCore.cpp
   ${SRC}/LatencyMeter.cpp
   ${SRC}/Looper.cpp
+  ${SRC}/LooperBuffers.cpp
+  ${SRC}/LooperRecord.cpp
   ${SRC}/Metronome.cpp
   ${SRC}/TapCalibrator.cpp
   ${SRC}/Transport.cpp

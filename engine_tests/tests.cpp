@@ -10,6 +10,7 @@
 #include "EngineCore.h"
 #include "OnsetDetector.h"
 #include "LatencyMeter.h"
+#include "LoadMeter.h"
 #include "Metronome.h"
 #include "SpscQueue.h"
 #include "Transport.h"
@@ -324,6 +325,30 @@ static void testSpscQueue() {
   CHECK_EQ(sum, (long long)N * (N + 1) / 2);
 }
 
+static void testLoadMeter() {
+  std::printf("Carga del callback: media y pico de cada segundo\n");
+  LoadMeter m;
+  m.prepare(48000);
+  // 256 muestras a 48 kHz = 5,333 ms disponibles
+  const int64_t avail = 5333333;
+  // Antes de completar un segundo no se publica nada
+  m.add(avail / 10, 256);
+  CHECK(m.average() == 0.0f);
+  // 187 bloques más (188 × 256 ≥ 48000): 10 % y uno al 50 %
+  for (int i = 0; i < 186; ++i) m.add(avail / 10, 256);
+  m.add(avail / 2, 256);
+  CHECK(std::fabs(m.peak() - 0.5f) < 0.001f);
+  CHECK(std::fabs(m.average() - (187 * 0.1f + 0.5f) / 188) < 0.001f);
+  CHECK(std::fabs(m.maxPeak() - 0.5f) < 0.001f);
+  // El segundo siguiente, más tranquilo: el pico baja, el máximo se queda
+  for (int i = 0; i < 188; ++i) m.add(avail / 20, 256);
+  CHECK(std::fabs(m.peak() - 0.05f) < 0.001f);
+  CHECK(std::fabs(m.average() - 0.05f) < 0.001f);
+  CHECK(std::fabs(m.maxPeak() - 0.5f) < 0.001f);
+  std::printf("  media %.1f %% · pico %.1f %% · máximo %.1f %%\n", 100 * m.average(),
+              100 * m.peak(), 100 * m.maxPeak());
+}
+
 int main() {
   std::printf("=== Etapa 1: transporte, metrónomo y latencia ===\n");
   testSamplesPerBeat();
@@ -338,6 +363,7 @@ int main() {
   testInputGain();
   testLatencyMeter();
   testSpscQueue();
+  testLoadMeter();
   std::printf("\n=== Looper ===\n");
   runLooperTests();
   if (gFailures == 0) {

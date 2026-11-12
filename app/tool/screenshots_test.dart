@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:loopin/engine/engine_controller.dart';
+import 'package:loopin/ui/audio_settings_screen.dart';
 import 'package:loopin/ui/looper_screen.dart';
 import 'package:loopin/ui/settings_screen.dart';
 import 'package:loopin/ui/theme.dart';
@@ -53,6 +54,7 @@ void main() {
     Chassis chassis = Chassis.classic,
     Brightness brightness = Brightness.dark,
     bool settings = false,
+    bool audio = false,
   }) async {
     setScreen(tester, size, pixelRatio: 2);
     final engine = FakeEngine()..next = fakeStatus(state, playing: state != LoopState.stopped);
@@ -62,11 +64,14 @@ void main() {
       MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: base.copyWith(textTheme: base.textTheme.apply(fontFamily: 'Roboto')),
-        home: settings ? SettingsScreen(controller: c) : LooperScreen(controller: c),
+        home: audio
+            ? AudioSettingsScreen(controller: c)
+            : (settings ? SettingsScreen(controller: c) : LooperScreen(controller: c)),
       ),
     );
     await c.startAudio();
     await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 400)); // que acaben las animaciones
     await expectLater(find.byType(MaterialApp), matchesGoldenFile('screenshots/$name.png'));
     c.stopAudio();
     c.dispose();
@@ -146,5 +151,7 @@ void main() {
     'tablet apaisada',
     (t) => shot(t, 'tablet-apaisada', const Size(1280, 800), state: LoopState.playing),
   );
-  testWidgets('ajustes', (t) => shot(t, 'ajustes', phone, settings: true));
+  // Pantallas largas: se hacen altas para que se vea todo
+  testWidgets('ajustes', (t) => shot(t, 'ajustes', const Size(393, 1100), settings: true));
+  testWidgets('audio', (t) => shot(t, 'audio-y-latencia', const Size(393, 1700), audio: true));
 }

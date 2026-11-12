@@ -7,36 +7,11 @@
 #include <limits>
 #include <vector>
 
+#include "InputRing.h"
 #include "OnsetDetector.h"
 #include "Transport.h"
 
 namespace loopin {
-
-// Últimas muestras de entrada (mono, ya con ganancia), indexadas por su índice
-// absoluto de entrada. El looper lee de aquí con retraso (la latencia) y el
-// monitor lee lo más reciente.
-class InputRing {
- public:
-  // Fuera del hilo de audio. Tamaño: la potencia de 2 que cubra minFrames.
-  void prepare(int32_t minFrames);
-  void reset();
-
-  inline void push(float s) {
-    data_[static_cast<size_t>(end_) & mask_] = s;
-    ++end_;
-  }
-  inline float at(int64_t idx) const { return data_[static_cast<size_t>(idx) & mask_]; }
-  int64_t end() const { return end_; }  // índice de la próxima muestra que llegue
-  int64_t begin() const {               // la más antigua que aún se conserva
-    const int64_t size = static_cast<int64_t>(data_.size());
-    return end_ > size ? end_ - size : 0;
-  }
-
- private:
-  std::vector<float> data_;
-  size_t mask_ = 0;
-  int64_t end_ = 0;
-};
 
 // Cuatro pistas sincronizadas con el transporte.
 //
@@ -191,6 +166,12 @@ class Looper {
 
  private:
   static constexpr float kGainSmoothing = 0.004f;
+
+  // Módulo siempre positivo
+  static int64_t wrap(int64_t a, int64_t m) {
+    const int64_t r = a % m;
+    return r < 0 ? r + m : r;
+  }
 
   struct Track {
     std::vector<float> data;

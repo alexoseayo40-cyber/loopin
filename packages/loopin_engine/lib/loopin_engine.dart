@@ -10,17 +10,17 @@ import 'loopin_engine_bindings_generated.dart';
 /// API de audio que ha elegido Oboe.
 enum AudioApi { unknown, openSles, aaudio }
 
-/// Modo del micrófono (InputPreset de Android).
+/// Modo del micrófono (InputPreset de Android). Los nombres para mostrar
+/// están en los textos de la app.
 enum InputPreset {
-  unprocessed(9, 'Sin procesar'),
-  voicePerformance(10, 'Actuación en directo'),
-  voiceRecognition(6, 'Reconocimiento de voz'),
-  camcorder(5, 'Vídeo'),
-  generic(1, 'Normal');
+  unprocessed(9),
+  voicePerformance(10),
+  voiceRecognition(6),
+  camcorder(5),
+  generic(1);
 
-  const InputPreset(this.code, this.label);
+  const InputPreset(this.code);
   final int code;
-  final String label;
 
   static InputPreset? fromCode(int code) {
     for (final p in values) {
@@ -47,24 +47,6 @@ class AudioDevice {
   final String address;
 
   bool get isBuiltinMic => type == 15;
-
-  /// Nombre para mostrar, en español.
-  String get label {
-    final extra = address.isNotEmpty ? ' ($address)' : '';
-    return switch (type) {
-      15 => 'Micrófono del móvil$extra',
-      2 => 'Altavoz del móvil',
-      1 => 'Auricular de llamada',
-      3 => 'Auriculares con cable (micro)',
-      4 => 'Auriculares con cable',
-      5 || 6 => 'Entrada de línea',
-      7 || 26 => 'Bluetooth: $name (con retardo)',
-      8 || 27 => 'Bluetooth: $name (con retardo)',
-      11 || 12 => 'USB: $name',
-      22 => 'Cascos USB: $name',
-      _ => name.isNotEmpty ? name : 'Dispositivo $type',
-    };
-  }
 }
 
 /// Estado del test de latencia.
@@ -92,31 +74,25 @@ enum LoopState {
 /// Modo de grabación (mismo orden que LOOPIN_MODE_*).
 enum LoopMode {
   /// Graba N compases y se cierra solo.
-  sync('Sincronizado'),
+  sync,
 
   /// Se cierra al pulsar.
-  manual('Manual'),
+  manual,
 
   /// Sin metrónomo: el primer loop dura lo que se toque y marca el tempo.
-  free('Libre');
-
-  const LoopMode(this.label);
-  final String label;
+  free,
 }
 
 /// Cuándo suena el clic del metrónomo (mismo orden que LOOPIN_CLICK_*).
 enum ClickMode {
   /// Nunca: el metrónomo solo se ve.
-  silent('Solo visual'),
+  silent,
 
   /// Solo en la cuenta de entrada.
-  countIn('Solo la cuenta'),
+  countIn,
 
   /// Siempre.
-  always('Siempre');
-
-  const ClickMode(this.label);
-  final String label;
+  always,
 }
 
 /// Número de pistas del looper.
@@ -214,6 +190,9 @@ class EngineStatus {
     this.tapHits = 0,
     this.tapFrames = 0,
     this.tapSpread = 0,
+    this.cpuLoad = 0,
+    this.cpuLoadPeak = 0,
+    this.cpuLoadMax = 0,
   });
 
   final bool running;
@@ -331,6 +310,13 @@ class EngineStatus {
 
   /// Dispersión de los golpes en muestras.
   final int tapSpread;
+
+  /// Carga del callback de audio: fracción del tiempo disponible (1.0 =
+  /// 100 %; por encima, el audio se corta). Media y pico del último segundo y
+  /// mayor pico desde que se abrió el audio.
+  final double cpuLoad;
+  final double cpuLoadPeak;
+  final double cpuLoadMax;
 
   static const tapCountInClicks = 4;
   static const tapCountedClicks = 12;
@@ -508,16 +494,9 @@ class LoopinEngine {
       tapHits: s.tap_hits,
       tapFrames: s.tap_frames,
       tapSpread: s.tap_spread,
+      cpuLoad: s.cpu_load_avg,
+      cpuLoadPeak: s.cpu_load_peak,
+      cpuLoadMax: s.cpu_load_max,
     );
   }
-
-  /// Mensaje legible para un código de error de Oboe.
-  static String describeError(int code) => switch (code) {
-        -899 => 'El dispositivo de audio se ha desconectado',
-        -889 => 'El dispositivo de audio no está disponible',
-        -883 => 'Formato de audio no soportado',
-        -887 => 'No hay memoria suficiente',
-        -881 => 'El servicio de audio de Android no responde',
-        _ => 'Error de audio ($code)',
-      };
 }

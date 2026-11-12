@@ -678,6 +678,20 @@ final class LoopinStatus extends ffi.Struct {
   /// dispersión de los golpes en muestras
   @ffi.Int32()
   external int tap_spread;
+
+  /// Carga del callback de audio: fracción del tiempo disponible (1.0 = 100 %;
+  /// por encima, el audio se corta)
+  /// media del último segundo
+  @ffi.Float()
+  external double cpu_load_avg;
+
+  /// pico del último segundo
+  @ffi.Float()
+  external double cpu_load_peak;
+
+  /// mayor pico desde que se abrió el audio
+  @ffi.Float()
+  external double cpu_load_max;
 }
 
 const int LOOPIN_TRACKS = 4;

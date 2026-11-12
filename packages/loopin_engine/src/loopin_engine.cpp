@@ -127,6 +127,11 @@ void loopin_get_status(LoopinStatus* out) {
         input->getPerformanceMode() == oboe::PerformanceMode::LowLatency ? 1 : 0;
     out->input_max_read = e.inputMaxRead();
   }
+  if (out->running) {
+    out->cpu_load_avg = e.load().average();
+    out->cpu_load_peak = e.load().peak();
+    out->cpu_load_max = e.load().maxPeak();
+  }
 
   out->playing = c.playing ? 1 : 0;
   out->bar = c.bar;

@@ -3,7 +3,9 @@
 import 'package:flutter/material.dart';
 
 import '../engine/engine_controller.dart';
+import '../l10n/strings.dart';
 import 'audio_settings_screen.dart';
+import 'help.dart';
 import 'theme.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -19,76 +21,65 @@ class SettingsScreen extends StatelessWidget {
       onPopInvokedWithResult: (didPop, _) {
         if (didPop && c.learning != null) c.cancelLearning();
       },
-      child: _build(context),
-    );
-  }
-
-  Widget _build(BuildContext context) {
-    final c = controller;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Ajustes')),
-      body: ListenableBuilder(
-        listenable: Listenable.merge([c, c.appearance]),
-        builder: (context, _) {
-          return Center(
-            child: ConstrainedBox(
-              // En tablet o apaisado no se estira de lado a lado
-              constraints: const BoxConstraints(maxWidth: 640),
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: 24),
-                children: [
-                  const _Header('Apariencia'),
-                  _AppearanceSection(controller: c),
-                  const _Header('Looper'),
-                  SwitchListTile(
-                    title: const Text('Avance automático'),
-                    subtitle: const Text(
-                      'Al cerrar una pista se elige sola la siguiente vacía, así cada '
-                      'toque graba una pista nueva. Apagado, todo va a la misma pista, '
-                      'como en un pedal clásico.',
+      child: Scaffold(
+        appBar: AppBar(title: Text(tr.settings)),
+        body: ListenableBuilder(
+          listenable: Listenable.merge([c, c.appearance]),
+          builder: (context, _) {
+            return Center(
+              child: ConstrainedBox(
+                // En tablet o apaisado no se estira de lado a lado
+                constraints: const BoxConstraints(maxWidth: 640),
+                child: ListView(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  children: [
+                    _Header(tr.appearance),
+                    _AppearanceSection(controller: c),
+                    _Header(tr.looper),
+                    OptionTile.toggle(
+                      title: tr.autoAdvance,
+                      subtitle: tr.autoAdvanceLine,
+                      help: tr.autoAdvanceHelp,
+                      value: c.autoAdvance,
+                      onChanged: c.setAutoAdvance,
                     ),
-                    value: c.autoAdvance,
-                    onChanged: c.setAutoAdvance,
-                  ),
-                  const _Header('Controles externos'),
-                  _ControlsSection(controller: c),
-                  const _Header('Audio'),
-                  ListTile(
-                    leading: const Icon(Icons.graphic_eq),
-                    title: const Text('Audio y latencia'),
-                    subtitle: const Text('Entrada, micrófono, escucharte y medir la latencia'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => AudioSettingsScreen(controller: c)),
+                    _Header(tr.externalControls, help: tr.externalControlsHelp),
+                    _ControlsSection(controller: c),
+                    _Header(tr.audio),
+                    ListTile(
+                      leading: const Icon(Icons.graphic_eq),
+                      title: Text(tr.audioAndLatency),
+                      subtitle: Text(tr.audioAndLatencyLine),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(builder: (_) => AudioSettingsScreen(controller: c)),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
 }
 
 class _Header extends StatelessWidget {
-  const _Header(this.text);
+  const _Header(this.text, {this.help});
 
   final String text;
+  final String? help;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 6),
-      child: Semantics(
-        header: true,
-        child: Text(
-          text,
-          style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.primary),
-        ),
-      ),
+    return SectionTitle(
+      text,
+      help: help,
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
+      style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.primary),
     );
   }
 }
@@ -110,21 +101,21 @@ class _AppearanceSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SegmentedButton<ThemeMode>(
-            segments: const [
+            segments: [
               ButtonSegment(
                 value: ThemeMode.system,
-                label: Text('Sistema'),
-                icon: Icon(Icons.brightness_auto),
+                label: Text(tr.themeSystem),
+                icon: const Icon(Icons.brightness_auto),
               ),
               ButtonSegment(
                 value: ThemeMode.light,
-                label: Text('Claro'),
-                icon: Icon(Icons.light_mode),
+                label: Text(tr.themeLight),
+                icon: const Icon(Icons.light_mode),
               ),
               ButtonSegment(
                 value: ThemeMode.dark,
-                label: Text('Oscuro'),
-                icon: Icon(Icons.dark_mode),
+                label: Text(tr.themeDark),
+                icon: const Icon(Icons.dark_mode),
               ),
             ],
             showSelectedIcon: false,
@@ -132,7 +123,7 @@ class _AppearanceSection extends StatelessWidget {
             onSelectionChanged: (v) => controller.setThemeMode(v.first),
           ),
           const SizedBox(height: 16),
-          Text('Color del pedal', style: Theme.of(context).textTheme.bodyMedium),
+          Text(tr.pedalColor, style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 8),
           Wrap(
             spacing: 12,
@@ -173,7 +164,7 @@ class _ChassisSwatch extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      label: 'Color ${chassis.label}',
+      label: tr.chassisSemantics(chassis),
       excludeSemantics: true,
       child: InkWell(
         onTap: onTap,
@@ -206,7 +197,7 @@ class _ChassisSwatch extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              Text(chassis.label, style: Theme.of(context).textTheme.labelMedium),
+              Text(tr.chassisName(chassis), style: Theme.of(context).textTheme.labelMedium),
             ],
           ),
         ),
@@ -226,53 +217,38 @@ class _ControlsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = controller;
     final theme = Theme.of(context);
+    final lastCode = c.lastKeyCode;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-          child: Text(
-            'Para tocar sin manos. El botón principal hace lo mismo que el pulsador grande '
-            '(toque, mantener y doble toque). El secundario cambia de pista con un toque y '
-            'deshace si lo mantienes.',
-            style: theme.textTheme.bodySmall,
-          ),
-        ),
-        SwitchListTile(
-          secondary: const Icon(Icons.volume_up),
-          title: const Text('Botones de volumen'),
-          subtitle: const Text(
-            'Subir = principal, bajar = secundario. Valen los del móvil y los del cable de '
-            'los cascos. Mientras esté activado no cambian el volumen dentro de Loopin.',
-          ),
+        OptionTile.toggle(
+          leading: const Icon(Icons.volume_up),
+          title: tr.volumeKeys,
+          subtitle: tr.volumeKeysLine,
+          help: tr.volumeKeysHelp,
           value: c.volumeKeys,
           onChanged: c.setVolumeKeys,
         ),
-        SwitchListTile(
-          secondary: const Icon(Icons.headset_mic),
-          title: const Text('Botón de los cascos'),
-          subtitle: const Text(
-            'El botón central de los cascos hace de botón principal. Mejor solo con toques: '
-            'en muchos cascos, mantenerlo abre el asistente de voz.',
-          ),
+        OptionTile.toggle(
+          leading: const Icon(Icons.headset_mic),
+          title: tr.headsetKey,
+          subtitle: tr.headsetKeyLine,
+          help: tr.headsetKeyHelp,
           value: c.headsetKey,
           onChanged: c.setHeadsetKey,
         ),
         for (final action in PedalAction.values) _LearnTile(controller: c, action: action),
-        if (c.lastKeyName != null)
+        if (lastCode != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Text(
-              'Última tecla recibida: ${_short(c.lastKeyName!)} → '
-              '${c.lastKeyAction?.label.toLowerCase() ?? '—'}',
+              tr.lastKey(tr.keyName(lastCode, c.lastKeyName), c.lastKeyAction),
               style: theme.textTheme.bodySmall,
             ),
           ),
       ],
     );
   }
-
-  static String _short(String name) => name.startsWith('KEYCODE_') ? name.substring(8) : name;
 }
 
 /// Teclas de un pedal Bluetooth (o de un teclado) asignadas a una acción.
@@ -290,43 +266,35 @@ class _LearnTile extends StatelessWidget {
         if (k.action == action) k,
     ];
     final learning = c.learning == action;
-    return ListTile(
+    return OptionTile(
       leading: Icon(action == PedalAction.main ? Icons.radio_button_checked : Icons.skip_next),
-      title: Text('Pedal Bluetooth: ${action.label.toLowerCase()}'),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            learning
-                ? 'Pulsa ahora el botón del pedal…'
-                : (keys.isEmpty
-                      ? 'Sin asignar. Toca «Aprender» y pulsa el botón del pedal.'
-                      : 'Teclas asignadas:'),
-          ),
-          if (keys.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  for (final k in keys)
-                    InputChip(
-                      label: Text(k.label),
-                      deleteButtonTooltipMessage: 'Quitar ${k.label}',
-                      onDeleted: () => c.forgetKey(k.code),
+      title: tr.bluetoothPedal(action),
+      help: tr.learnHelp,
+      subtitle: learning
+          ? Text(tr.pressPedalNow)
+          : (keys.isEmpty
+                ? Text(tr.notAssigned)
+                : Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        for (final k in keys)
+                          InputChip(
+                            label: Text(tr.keyName(k.code, k.name)),
+                            deleteButtonTooltipMessage: tr.removeKey(tr.keyName(k.code, k.name)),
+                            onDeleted: () => c.forgetKey(k.code),
+                          ),
+                      ],
                     ),
-                ],
-              ),
-            ),
-        ],
-      ),
+                  )),
       trailing: learning
-          ? TextButton(onPressed: c.cancelLearning, child: const Text('Cancelar'))
+          ? TextButton(onPressed: c.cancelLearning, child: Text(tr.cancel))
           : FilledButton.tonal(
               key: ValueKey('learn-${action.name}'),
               onPressed: () => c.startLearning(action),
-              child: const Text('Aprender'),
+              child: Text(tr.learn),
             ),
     );
   }

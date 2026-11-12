@@ -180,7 +180,7 @@ class Footswitch extends StatefulWidget {
     this.text,
     this.pulse = 0,
     this.pulseColor = LoopinPalette.display,
-    this.semanticLabel = 'Botón principal',
+    required this.semanticLabel,
   });
 
   final double size;

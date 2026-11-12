@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:loopin_engine/loopin_engine.dart';
 
 import '../engine/engine_controller.dart';
+import '../l10n/strings.dart';
+import 'help.dart';
 
 class LatencyTapScreen extends StatefulWidget {
   const LatencyTapScreen({super.key, required this.controller});
@@ -25,7 +27,8 @@ class _LatencyTapScreenState extends State<LatencyTapScreen> with SingleTickerPr
   @override
   void initState() {
     super.initState();
-    widget.controller.addListener(_onChange);
+    // Los clics cambian a cada momento: llegan por live
+    widget.controller.live.addListener(_onChange);
   }
 
   void _onChange() {
@@ -37,7 +40,7 @@ class _LatencyTapScreenState extends State<LatencyTapScreen> with SingleTickerPr
 
   @override
   void dispose() {
-    widget.controller.removeListener(_onChange);
+    widget.controller.live.removeListener(_onChange);
     // Si se sale a medias, se para
     if (widget.controller.status.tapState == LatencyState.running) {
       widget.controller.cancelTapCalibration();
@@ -51,9 +54,9 @@ class _LatencyTapScreenState extends State<LatencyTapScreen> with SingleTickerPr
     final c = widget.controller;
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Medir tocando')),
+      appBar: AppBar(title: Text(tr.measureTappingTitle)),
       body: ListenableBuilder(
-        listenable: c,
+        listenable: Listenable.merge([c, c.live]),
         builder: (context, _) {
           final s = c.status;
           final running = s.tapState == LatencyState.running;
@@ -68,20 +71,12 @@ class _LatencyTapScreenState extends State<LatencyTapScreen> with SingleTickerPr
               child: ListView(
                 padding: const EdgeInsets.all(20),
                 children: [
-                  Text(
-                    'Para cuando usas cascos y el clic no puede volver solo al micrófono.',
-                    style: theme.textTheme.titleMedium,
-                  ),
+                  Text(tr.tapIntro, style: theme.textTheme.titleMedium),
                   const SizedBox(height: 12),
-                  const Text(
-                    '1. Ponte los cascos y coge la guitarra.\n'
-                    '2. Sonarán 16 clics. Escucha los 4 primeros y, con los 12 siguientes, '
-                    'da un golpe seco en cada clic: un rasgueo con las cuerdas apagadas con la '
-                    'otra mano, o un golpe en la caja.\n'
-                    '3. Toca como lo harías con un metrónomo: no hace falta ser perfecto.',
-                  ),
+                  Text(tr.tapSteps),
                   const SizedBox(height: 24),
-                  // El clic que suena, también a la vista
+                  // El clic que suena, también a la vista; el botón, justo debajo para
+                  // que no se mueva al aparecer el resultado
                   Center(
                     child: AnimatedBuilder(
                       animation: _flash,
@@ -100,7 +95,9 @@ class _LatencyTapScreenState extends State<LatencyTapScreen> with SingleTickerPr
                           ),
                           child: Text(
                             running
-                                ? (click <= countIn ? 'Escucha\n$click' : '${click - countIn} / 12')
+                                ? (click <= countIn
+                                      ? tr.tapListen(click)
+                                      : tr.tapCount(click - countIn, EngineStatus.tapCountedClicks))
                                 : '',
                             textAlign: TextAlign.center,
                             style: theme.textTheme.headlineSmall,
@@ -110,28 +107,6 @@ class _LatencyTapScreenState extends State<LatencyTapScreen> with SingleTickerPr
                     ),
                   ),
                   const SizedBox(height: 16),
-                  if (running)
-                    Text(
-                      counting ? 'Golpes que cuentan: ${s.tapHits}' : 'Prepárate…',
-                      textAlign: TextAlign.center,
-                    ),
-                  if (s.tapState == LatencyState.done) ...[
-                    Text(
-                      'Latencia: ${(s.tapFrames * ms).round()} ms · guardada',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(_quality(s.tapSpread * ms, s.tapHits), textAlign: TextAlign.center),
-                  ],
-                  if (s.tapState == LatencyState.failed)
-                    Text(
-                      'No se oyeron bastantes golpes (hacen falta 6 de 12). Sube la ganancia de '
-                      'entrada o golpea más fuerte, y repite.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: theme.colorScheme.error),
-                    ),
-                  const SizedBox(height: 20),
                   FilledButton.icon(
                     style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
                     onPressed: !s.running || c.recordingNow
@@ -139,21 +114,42 @@ class _LatencyTapScreenState extends State<LatencyTapScreen> with SingleTickerPr
                         : (running ? c.cancelTapCalibration : c.startTapCalibration),
                     icon: Icon(running ? Icons.stop : Icons.play_arrow),
                     label: Text(
-                      running ? 'Parar' : (s.tapState == LatencyState.idle ? 'Empezar' : 'Repetir'),
+                      running
+                          ? tr.tapStop
+                          : (s.tapState == LatencyState.idle ? tr.tapStart : tr.tapRepeat),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  if (running)
+                    Text(
+                      counting ? tr.tapHits(s.tapHits) : tr.tapGetReady,
+                      textAlign: TextAlign.center,
+                    ),
+                  if (s.tapState == LatencyState.done) ...[
+                    Text(
+                      tr.tapResult((s.tapFrames * ms).round()),
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      tr.tapQuality((s.tapSpread * ms).round(), s.tapHits),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                  if (s.tapState == LatencyState.failed)
+                    Text(
+                      tr.tapFailed,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: theme.colorScheme.error),
+                    ),
                   if (c.recordingNow)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 8),
-                      child: Text('Termina de grabar antes de medir.', textAlign: TextAlign.center),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(tr.finishRecordingFirst, textAlign: TextAlign.center),
                     ),
                   const SizedBox(height: 16),
-                  Text(
-                    'Lo que se mide es lo que tarda tu golpe en llegar respecto al clic que oyes: '
-                    'la latencia del móvil más tu forma de tocar. Por eso, con esta medida, lo '
-                    'que grabes cae justo en el tiempo.',
-                    style: theme.textTheme.bodySmall,
-                  ),
+                  HelpLine(tr.tapWhat, help: tr.tapHelp),
                 ],
               ),
             ),
@@ -161,16 +157,5 @@ class _LatencyTapScreenState extends State<LatencyTapScreen> with SingleTickerPr
         },
       ),
     );
-  }
-
-  static String _quality(double spreadMs, int hits) {
-    final spread = spreadMs.round();
-    if (spread <= 10) {
-      return 'Muy regular (±$spread ms, $hits golpes). Buena medida.';
-    }
-    if (spread <= 25) {
-      return 'Regular (±$spread ms, $hits golpes). Vale; si quieres afinar, repite.';
-    }
-    return 'Bastante irregular (±$spread ms). Repite con golpes más secos.';
   }
 }

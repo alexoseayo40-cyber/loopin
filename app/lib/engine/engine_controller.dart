@@ -1,7 +1,16 @@
 // Loopin — estado de la app y órdenes al motor
 // SPDX-License-Identifier: GPL-3.0-or-later
+//
+// El controlador está repartido en piezas:
+//   engine_controller.dart  audio, metrónomo, looper, pistas, entrada y
+//                           apariencia (este archivo)
+//   meter.dart              compases
+//   latency_routes.dart     latencia guardada por ruta
+//   pedal_keys.dart         controles externos (teclas)
+//   prefs.dart              ajustes guardados
+//   status_change.dart      qué cambios del motor se redibujan
+//   report.dart             «Copiar resultados»
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart' show ThemeMode;
@@ -9,114 +18,42 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:loopin_engine/loopin_engine.dart';
 
+import '../l10n/strings.dart';
 import '../ui/theme.dart';
+import 'latency_routes.dart';
+import 'meter.dart';
+import 'pedal_keys.dart';
+import 'prefs.dart';
+import 'status_change.dart';
 
-/// Un compás: cómo se agrupan sus tiempos. En los de 8, el tiempo (y el BPM)
-/// es la corchea.
-class TimeSignature {
-  const TimeSignature(this.label, this.groups);
-
-  /// «7/8»
-  final String label;
-
-  /// Tiempos de cada grupo: [2, 2, 3] en 7/8. El primero de cada grupo lleva
-  /// acento (el del compás, más fuerte).
-  final List<int> groups;
-
-  int get beats => groups.fold(0, (a, b) => a + b);
-
-  /// Bit k = el tiempo k empieza un grupo (acento medio). El 0 no cuenta.
-  int get accentMask {
-    var mask = 0, beat = 0;
-    for (final g in groups) {
-      if (beat > 0) mask |= 1 << beat;
-      beat += g;
-    }
-    return mask;
-  }
-
-  /// El tiempo k empieza un grupo (incluido el 0).
-  bool startsGroup(int beat) => beat == 0 || (accentMask >> beat) & 1 == 1;
-
-  /// «2+2+3» (vacío si es un solo grupo)
-  String get grouping => groups.length > 1 ? groups.join('+') : '';
-
-  /// En los compases de 8 el pulso es la corchea.
-  bool get eighths => label.endsWith('/8');
-}
-
-/// Compases disponibles.
-const List<TimeSignature> kTimeSignatures = [
-  TimeSignature('4/4', [4]),
-  TimeSignature('3/4', [3]),
-  TimeSignature('2/4', [2]),
-  TimeSignature('5/4', [3, 2]),
-  TimeSignature('7/4', [4, 3]),
-  TimeSignature('6/8', [3, 3]),
-  TimeSignature('9/8', [3, 3, 3]),
-  TimeSignature('12/8', [3, 3, 3, 3]),
-  TimeSignature('5/8', [3, 2]),
-  TimeSignature('7/8', [2, 2, 3]),
-];
-
-/// El tiempo que se está oyendo y cuánto lleva (de 0 a 1).
-typedef BeatNow = ({int beat, double phase});
-
-/// Compases que se pueden grabar en modo sincronizado.
-const List<int> kSyncBarOptions = [1, 2, 4, 8];
-
-/// De dónde sale la compensación de latencia que se está usando.
-enum LatencySource {
-  /// Medida (con el altavoz o tocando) o ajustada a mano para esta ruta.
-  measured,
-
-  /// Sin medir: estimación de Android (puede fallar bastante).
-  estimated,
-
-  /// Sin medir y sin estimación.
-  none,
-}
-
-/// Lo que puede hacer un botón externo (botones de volumen, botón de los
-/// cascos, pedal Bluetooth…).
-enum PedalAction {
-  /// Como el botón grande: toque, mantener y doble toque.
-  main('Botón principal'),
-
-  /// Toque: siguiente pista. Mantener: deshacer.
-  secondary('Botón secundario');
-
-  const PedalAction(this.label);
-  final String label;
-}
-
-/// Una tecla aprendida (de un pedal Bluetooth, un teclado…).
-class LearnedKey {
-  const LearnedKey({required this.code, required this.name, required this.action});
-
-  /// Código de tecla de Android (KeyEvent.KEYCODE_*).
-  final int code;
-  final String name;
-  final PedalAction action;
-
-  /// Nombre corto para mostrar: «PAGE_DOWN» en vez de «KEYCODE_PAGE_DOWN».
-  String get label => name.startsWith('KEYCODE_') ? name.substring(8) : name;
-}
+export 'latency_routes.dart' show LatencySource;
+export 'meter.dart';
+export 'pedal_keys.dart' show LearnedKey, PedalAction;
+export 'report.dart';
 
 class EngineController extends ChangeNotifier {
   EngineController({LoopinEngine? engine}) : _engine = engine ?? LoopinEngine.instance {
     _lifecycle = AppLifecycleListener(onHide: _onHide, onShow: _onShow);
-    _keys.setMethodCallHandler(_onKeyCall);
+    _routes = LatencyRoutes(apply: _engine.setLatencyCompensation, prefs: _prefs);
+    _keys = PedalKeys(onAction: _onPedalKey, onChanged: notifyListeners, prefs: _prefs);
     _prefsLoaded = _loadPrefs();
   }
 
-  late final Future<void> _prefsLoaded;
-
   final LoopinEngine _engine;
+  final Prefs _prefs = const Prefs();
   static const _channel = MethodChannel('loopin/permissions');
-  static const _keys = MethodChannel('loopin/keys');
   late final AppLifecycleListener _lifecycle;
+  late final LatencyRoutes _routes;
+  late final PedalKeys _keys;
+  late final Future<void> _prefsLoaded;
   Timer? _poll;
+
+  /// Avisa en cada consulta al motor (30 veces por segundo). Solo lo escuchan
+  /// las piezas que se mueven (anillos, pulsador, nivel de entrada…). El
+  /// controlador en sí solo avisa cuando cambia algo que se ve en el resto de
+  /// la pantalla (ver [layoutChanged]).
+  Listenable get live => _live;
+  final _Pulse _live = _Pulse();
 
   // Lo que el usuario ha pedido (se reaplica si el audio se reinicia)
   double bpm = 92;
@@ -162,6 +99,16 @@ class EngineController extends ChangeNotifier {
   /// Datos del móvil (modelo, si admite micrófono sin procesar…)
   Map<String, Object?> deviceInfo = const {};
 
+  /// El móvil dice si admite el micrófono «sin procesar» (null = no se sabe).
+  bool? get unprocessedSupported => switch (deviceInfo['unprocessed']) {
+    final bool v => v,
+    _ => null,
+  };
+
+  /// El modo del micrófono que conviene en este móvil.
+  InputPreset get recommendedPreset =>
+      unprocessedSupported == false ? InputPreset.voiceRecognition : InputPreset.unprocessed;
+
   // Prueba de estabilidad: cortes desde que arrancó el metrónomo
   int _xrunsAtPlay = 0;
   int get xrunsSincePlay => status.xrunCount < 0 ? -1 : status.xrunCount - _xrunsAtPlay;
@@ -176,9 +123,7 @@ class EngineController extends ChangeNotifier {
     error = null;
     final mic = await _channel.invokeMethod<String>('requestMicrophone');
     if (mic != 'granted') {
-      error = mic == 'permanentlyDenied'
-          ? 'Sin permiso de micrófono. Actívalo en Ajustes › Apps › Loopin › Permisos.'
-          : 'Loopin necesita el micrófono para escuchar la guitarra.';
+      error = mic == 'permanentlyDenied' ? tr.micDeniedForever : tr.micNeeded;
       notifyListeners();
       return;
     }
@@ -190,9 +135,7 @@ class EngineController extends ChangeNotifier {
         // como el modo normal (que puede llevar control automático de
         // ganancia). «Reconocimiento de voz» está obligado por Android a ir
         // sin control de ganancia ni reducción de ruido: es mejor opción.
-        if (!_presetChosenByUser && deviceInfo['unprocessed'] == false) {
-          inputPreset = InputPreset.voiceRecognition;
-        }
+        if (!_presetChosenByUser) inputPreset = recommendedPreset;
       } on PlatformException {
         // no pasa nada: solo es informativo
       }
@@ -221,12 +164,11 @@ class EngineController extends ChangeNotifier {
     _engine.setInputDevice(inputDeviceId < 0 ? 0 : inputDeviceId);
     final code = _engine.start();
     if (code != 0) {
-      error = LoopinEngine.describeError(code);
+      error = tr.audioError(code);
       _wantRunning = false;
       return false;
     }
-    _routeKey = null; // la latencia se elige en cuanto se sepa la ruta
-    _appliedLatency = -1;
+    _routes.reset(); // la latencia se elige en cuanto se sepa la ruta
     _applySettings();
     if (_wantPlaying) {
       _engine.play();
@@ -257,13 +199,15 @@ class EngineController extends ChangeNotifier {
 
   void _tick() {
     final prev = status;
+    final source = latencySource;
+    final applied = _routes.applied;
     status = _engine.status();
     _statusAt = _clock.elapsedMicroseconds;
     if (status.running) {
       // Con loop, el tempo es el del motor (en libre lo calcula él)
       if (tempoLocked && status.bpm > 0) bpm = status.bpm;
       if (prev.tapState == LatencyState.running && status.tapState == LatencyState.done) {
-        _saveMeasuredLatency(status.tapFrames);
+        _routes.saveMeasured(_currentRouteKey, status.tapFrames);
       }
       // El looper también arranca y para el metrónomo (cuenta de entrada,
       // doble toque): lo que quiere el usuario es lo que está pasando.
@@ -273,7 +217,7 @@ class EngineController extends ChangeNotifier {
       _wantPlaying = status.playing;
       _updateRoute();
       if (prev.latencyState == LatencyState.running && status.latencyState == LatencyState.done) {
-        _saveMeasuredLatency(status.latencyFrames);
+        _routes.saveMeasured(_currentRouteKey, status.latencyFrames);
       }
     }
     // Si se desconecta algo (auriculares, interfaz USB), se reabre solo.
@@ -283,9 +227,13 @@ class EngineController extends ChangeNotifier {
         await refreshDevices(); // se ha enchufado o quitado algo
         if (_wantRunning) _openStream();
         _restarting = false;
+        notifyListeners(); // por si no se ha podido abrir (error)
       });
     }
-    notifyListeners();
+    _live.fire();
+    if (layoutChanged(prev, status) || source != latencySource || applied != _routes.applied) {
+      notifyListeners();
+    }
   }
 
   void _onHide() {
@@ -325,7 +273,7 @@ class EngineController extends ChangeNotifier {
     if (tempoLocked) return;
     bpm = value.clamp(40, 240).roundToDouble();
     _engine.setBpm(bpm);
-    _setPref(_bpmPrefKey, bpm.toStringAsFixed(0));
+    _prefs.set(Prefs.bpm, bpm.toStringAsFixed(0));
     notifyListeners();
   }
 
@@ -347,14 +295,14 @@ class EngineController extends ChangeNotifier {
     if (tempoLocked) return;
     timeSignature = ts;
     _engine.setMeter(ts.beats, ts.accentMask);
-    _setPref(_meterPrefKey, ts.label);
+    _prefs.set(Prefs.meter, ts.label);
     notifyListeners();
   }
 
   void setClickMode(ClickMode mode) {
     clickMode = mode;
     _engine.setClickMode(mode);
-    _setPref(_clickModePrefKey, mode.name);
+    _prefs.set(Prefs.clickMode, mode.name);
     notifyListeners();
   }
 
@@ -481,7 +429,7 @@ class EngineController extends ChangeNotifier {
   void setAutoAdvance(bool on) {
     autoAdvance = on;
     _engine.setAutoAdvance(on);
-    _setPref(_autoAdvancePrefKey, on ? '1' : '0');
+    _prefs.setBool(Prefs.autoAdvance, on);
     notifyListeners();
   }
 
@@ -491,21 +439,21 @@ class EngineController extends ChangeNotifier {
   void setLoopMode(LoopMode mode) {
     loopMode = mode;
     _engine.setLoopMode(mode);
-    _setPref(_loopModePrefKey, mode.name);
+    _prefs.set(Prefs.loopMode, mode.name);
     notifyListeners();
   }
 
   void setSyncBars(int bars) {
     syncBars = bars;
     _engine.setSyncBars(bars);
-    _setPref(_syncBarsPrefKey, '$bars');
+    _prefs.set(Prefs.syncBars, '$bars');
     notifyListeners();
   }
 
   void setStartOnSound(bool on) {
     startOnSound = on;
     _engine.setStartOnSound(on);
-    _setPref(_startOnSoundPrefKey, on ? '1' : '0');
+    _prefs.setBool(Prefs.startOnSound, on);
     notifyListeners();
   }
 
@@ -558,7 +506,8 @@ class EngineController extends ChangeNotifier {
 
   String deviceLabel(int id, {required bool input}) {
     if (id <= 0) return '—';
-    return _device(id, input: input)?.label ?? 'dispositivo $id';
+    final d = _device(id, input: input);
+    return d == null ? tr.unknownDevice(id) : tr.deviceName(d);
   }
 
   /// Cambiar el modo del micrófono obliga a reabrir el audio (el loop se
@@ -566,7 +515,7 @@ class EngineController extends ChangeNotifier {
   void setInputPreset(InputPreset preset) {
     inputPreset = preset;
     _presetChosenByUser = true;
-    _savePreset();
+    _prefs.set(Prefs.inputPreset, '${preset.code}');
     if (_wantRunning) {
       _engine.stop();
       _openStream();
@@ -596,20 +545,14 @@ class EngineController extends ChangeNotifier {
 
   // ---------- Latencia ----------
   //
-  // La latencia de ida y vuelta depende de por dónde entra y sale el sonido
-  // (altavoz + micro, cascos USB + micro, interfaz…). Se guarda una medida por
-  // cada combinación y se aplica sola al cambiar de ruta.
+  // Se guarda una por ruta (ver LatencyRoutes) y se aplica sola al cambiar.
 
-  /// Medidas guardadas: clave de ruta → muestras (a la frecuencia de la ruta).
-  Map<String, int> _savedLatencies = {};
-  String? _routeKey;
-  LatencySource latencySource = LatencySource.none;
+  LatencySource get latencySource => _routes.source;
 
   /// Nombre legible de la ruta actual.
   String get routeLabel =>
-      '${deviceLabel(status.inputDeviceId, input: true)} → '
-      '${deviceLabel(status.outputDeviceId, input: false)}'
-      ' · ${status.inputPreset?.label ?? '—'}';
+      '${tr.nowRoute(deviceLabel(status.inputDeviceId, input: true), deviceLabel(status.outputDeviceId, input: false))}'
+      ' · ${status.inputPreset == null ? '—' : tr.presetName(status.inputPreset!)}';
 
   String _deviceKey(int id, {required bool input}) {
     final d = _device(id, input: input);
@@ -624,55 +567,21 @@ class EngineController extends ChangeNotifier {
       // El modo del micro también cambia la latencia (más o menos procesado)
       '|preset=${status.inputPreset?.code ?? 0}';
 
-  int _appliedLatency = -1;
-
-  void _applyLatency(int frames, LatencySource source) {
-    latencySource = source;
-    if (frames != _appliedLatency) {
-      _appliedLatency = frames;
-      _engine.setLatencyCompensation(frames);
-    }
-  }
-
   void _updateRoute() {
     if (status.inputDeviceId <= 0 || status.outputDeviceId <= 0) return;
-    final key = _currentRouteKey;
-    // Con la misma ruta solo se vuelve a mirar si aún no había ningún valor
-    // (la estimación de Android tarda un poco en estar disponible).
-    if (key == _routeKey && latencySource != LatencySource.none) return;
-    if (key != _routeKey) _appliedLatency = -1;
-    _routeKey = key;
-    final saved = _savedLatencies[key];
-    if (saved != null) {
-      _applyLatency(saved, LatencySource.measured);
-      return;
-    }
     // Sin medir: la estimación de Android (salida + entrada) si la hay
     final est = status.outputLatencyMs >= 0 && status.inputLatencyMs >= 0
         ? status.outputLatencyMs + status.inputLatencyMs
         : -1.0;
-    if (est > 0) {
-      _applyLatency((est * status.sampleRate / 1000).round(), LatencySource.estimated);
-    } else {
-      _applyLatency(0, LatencySource.none);
-    }
-  }
-
-  void _saveMeasuredLatency(int frames) {
-    final key = _routeKey ?? _currentRouteKey;
-    _savedLatencies[key] = frames;
-    _applyLatency(frames, LatencySource.measured);
-    _savePrefs();
+    _routes.update(
+      _currentRouteKey,
+      estimateFrames: est > 0 ? (est * status.sampleRate / 1000).round() : 0,
+    );
   }
 
   /// Olvida la medida de la ruta actual (vuelve a la estimación).
   void forgetLatency() {
-    final key = _routeKey;
-    if (key == null) return;
-    _savedLatencies.remove(key);
-    _routeKey = null;
-    _savePrefs();
-    notifyListeners();
+    if (_routes.forget()) notifyListeners();
   }
 
   void measureLatency() {
@@ -699,19 +608,14 @@ class EngineController extends ChangeNotifier {
   void setLatencyManually(double ms) {
     if (!status.running || status.sampleRate <= 0 || recordingNow) return;
     final frames = (ms.clamp(0, 500) * status.sampleRate / 1000).round();
-    final key = _routeKey ?? _currentRouteKey;
-    _routeKey = key;
-    _savedLatencies[key] = frames;
-    latencySource = LatencySource.measured;
-    _appliedLatency = frames;
+    _routes.setManually(_currentRouteKey, frames);
     _engine.nudgeLatency(frames);
-    _savePrefs();
     notifyListeners();
   }
 
   /// Compensación que se ha pedido (aunque el motor aún no la haya aplicado).
-  double get compensationTargetMs => status.sampleRate > 0 && _appliedLatency >= 0
-      ? 1000 * _appliedLatency / status.sampleRate
+  double get compensationTargetMs => status.sampleRate > 0 && _routes.applied >= 0
+      ? 1000 * _routes.applied / status.sampleRate
       : compensationMs;
 
   /// Compensación en uso, en ms.
@@ -722,110 +626,27 @@ class EngineController extends ChangeNotifier {
 
   void setThemeMode(ThemeMode mode) {
     appearance.value = appearance.value.copyWith(mode: mode);
-    _setPref(_themePrefKey, mode.name);
+    _prefs.set(Prefs.themeMode, mode.name);
   }
 
   void setChassis(Chassis chassis) {
     appearance.value = appearance.value.copyWith(chassis: chassis);
-    _setPref(_chassisPrefKey, chassis.name);
+    _prefs.set(Prefs.chassis, chassis.name);
   }
 
   // ---------- Controles externos ----------
   //
-  // Android entrega las teclas a MainActivity, que nos pasa solo las que nos
-  // interesan (y se las queda, para que los botones de volumen no cambien el
-  // volumen mientras hacen de pedal).
+  // Ver PedalKeys. Aquí solo se reparte lo que hace cada acción.
 
-  /// Subir volumen = botón principal; bajar volumen = botón secundario.
-  bool volumeKeys = false;
+  bool get volumeKeys => _keys.volumeKeys;
+  bool get headsetKey => _keys.headsetKey;
+  List<LearnedKey> get learnedKeys => _keys.learned;
+  PedalAction? get learning => _keys.learning;
+  int? get lastKeyCode => _keys.lastKeyCode;
+  String get lastKeyName => _keys.lastKeyName;
+  PedalAction? get lastKeyAction => _keys.lastKeyAction;
 
-  /// El botón central de los cascos (o de un mando multimedia) = principal.
-  bool headsetKey = true;
-
-  /// Teclas aprendidas (pedal Bluetooth, teclado…).
-  List<LearnedKey> learnedKeys = const [];
-
-  /// Si no es null, la próxima tecla que se pulse se asigna a esta acción.
-  PedalAction? learning;
-
-  /// La última tecla recibida, para comprobar que el pedal funciona.
-  String? lastKeyName;
-  PedalAction? lastKeyAction;
-
-  static const _keyVolumeUp = 24, _keyVolumeDown = 25;
-  static const _keyHeadsetHook = 79, _keyPlayPause = 85, _keyPlay = 126, _keyPause = 127;
-  static const _keyMediaNext = 87;
-
-  PedalAction? _actionFor(int code) {
-    for (final k in learnedKeys) {
-      if (k.code == code) return k.action;
-    }
-    if (volumeKeys) {
-      if (code == _keyVolumeUp) return PedalAction.main;
-      if (code == _keyVolumeDown) return PedalAction.secondary;
-    }
-    if (headsetKey) {
-      if (code == _keyHeadsetHook ||
-          code == _keyPlayPause ||
-          code == _keyPlay ||
-          code == _keyPause) {
-        return PedalAction.main;
-      }
-      if (code == _keyMediaNext) return PedalAction.secondary;
-    }
-    return null;
-  }
-
-  Future<void> _syncKeyCapture() async {
-    final codes = <int>{
-      for (final k in learnedKeys) k.code,
-      if (volumeKeys) ...[_keyVolumeUp, _keyVolumeDown],
-      if (headsetKey) ...[_keyHeadsetHook, _keyPlayPause, _keyPlay, _keyPause, _keyMediaNext],
-    };
-    try {
-      await _keys.invokeMethod<void>('setCapture', {
-        'codes': codes.toList(),
-        'learning': learning != null,
-      });
-    } on Object {
-      // sin Android (tests): no hay teclas que capturar
-    }
-  }
-
-  Future<Object?> _onKeyCall(MethodCall call) async {
-    if (call.method != 'key') return null;
-    final args = call.arguments as Map<Object?, Object?>;
-    handleKey(
-      (args['code'] as num).toInt(),
-      down: args['down'] == true,
-      repeat: (args['repeat'] as num?)?.toInt() ?? 0,
-      name: (args['name'] as String?) ?? '',
-    );
-    return null;
-  }
-
-  /// Una tecla externa se ha pulsado o soltado.
-  void handleKey(int code, {required bool down, int repeat = 0, String name = ''}) {
-    final toLearn = learning;
-    if (toLearn != null) {
-      if (!down || repeat > 0) return;
-      learnedKeys = [
-        for (final k in learnedKeys)
-          if (k.code != code) k,
-        LearnedKey(code: code, name: name.isEmpty ? 'tecla $code' : name, action: toLearn),
-      ];
-      learning = null;
-      _saveKeys();
-      _syncKeyCapture();
-      notifyListeners();
-      return;
-    }
-    final action = _actionFor(code);
-    if (action == null || repeat > 0) return;
-    if (down) {
-      lastKeyName = name.isEmpty ? 'tecla $code' : name;
-      lastKeyAction = action;
-    }
+  void _onPedalKey(PedalAction action, {required bool down}) {
     switch (action) {
       case PedalAction.main:
         down ? pedalDown() : pedalUp();
@@ -834,89 +655,21 @@ class EngineController extends ChangeNotifier {
     }
   }
 
-  void setVolumeKeys(bool on) {
-    volumeKeys = on;
-    _setPref(_volumeKeysPrefKey, on ? '1' : '0');
-    _syncKeyCapture();
-    notifyListeners();
-  }
+  /// Una tecla externa se ha pulsado o soltado.
+  void handleKey(int code, {required bool down, int repeat = 0, String name = ''}) =>
+      _keys.handle(code, down: down, repeat: repeat, name: name);
 
-  void setHeadsetKey(bool on) {
-    headsetKey = on;
-    _setPref(_headsetKeyPrefKey, on ? '1' : '0');
-    _syncKeyCapture();
-    notifyListeners();
-  }
-
-  void startLearning(PedalAction action) {
-    learning = action;
-    _syncKeyCapture();
-    notifyListeners();
-  }
-
-  void cancelLearning() {
-    learning = null;
-    _syncKeyCapture();
-    notifyListeners();
-  }
-
-  void forgetKey(int code) {
-    learnedKeys = [
-      for (final k in learnedKeys)
-        if (k.code != code) k,
-    ];
-    _saveKeys();
-    _syncKeyCapture();
-    notifyListeners();
-  }
-
-  void _saveKeys() {
-    _setPref(
-      _learnedKeysPrefKey,
-      jsonEncode([
-        for (final k in learnedKeys) {'code': k.code, 'name': k.name, 'action': k.action.name},
-      ]),
-    );
-  }
+  void setVolumeKeys(bool on) => _keys.setVolumeKeys(on);
+  void setHeadsetKey(bool on) => _keys.setHeadsetKey(on);
+  void startLearning(PedalAction action) => _keys.startLearning(action);
+  void cancelLearning() => _keys.cancelLearning();
+  void forgetKey(int code) => _keys.forget(code);
 
   // ---------- Ajustes guardados ----------
 
-  static const _latencyPrefKey = 'latencies';
-  static const _presetPrefKey = 'inputPreset';
-  static const _autoAdvancePrefKey = 'autoAdvance';
-  static const _themePrefKey = 'themeMode';
-  static const _chassisPrefKey = 'chassis';
-  static const _volumeKeysPrefKey = 'volumeKeys';
-  static const _headsetKeyPrefKey = 'headsetKey';
-  static const _learnedKeysPrefKey = 'learnedKeys';
-  static const _bpmPrefKey = 'bpm';
-  static const _meterPrefKey = 'meter';
-  static const _clickModePrefKey = 'clickMode';
-  static const _loopModePrefKey = 'loopMode';
-  static const _syncBarsPrefKey = 'syncBars';
-  static const _startOnSoundPrefKey = 'startOnSound';
-
-  Future<String?> _getPref(String key) async {
-    try {
-      return await _channel.invokeMethod<String>('prefsGet', {'key': key});
-    } on Object {
-      return null; // sin ajustes guardados (o en un test sin Android)
-    }
-  }
-
-  Future<void> _setPref(String key, String value) async {
-    try {
-      await _channel.invokeMethod<void>('prefsSet', {'key': key, 'value': value});
-    } on Object {
-      // no se pudo guardar: vale solo para esta sesión
-    }
-  }
-
-  Future<void> _savePreset() => _setPref(_presetPrefKey, '${inputPreset.code}');
-
   Future<void> _loadPrefs() async {
     // Modo del micrófono elegido por el usuario
-    final preset = await _getPref(_presetPrefKey);
+    final preset = await _prefs.get(Prefs.inputPreset);
     for (final p in InputPreset.values) {
       if (preset != null && '${p.code}' == preset) {
         inputPreset = p;
@@ -924,141 +677,36 @@ class EngineController extends ChangeNotifier {
       }
     }
 
-    final advance = await _getPref(_autoAdvancePrefKey);
-    if (advance != null) autoAdvance = advance == '1';
+    autoAdvance = await _prefs.getBool(Prefs.autoAdvance) ?? autoAdvance;
 
     // Metrónomo y looper
-    final savedBpm = double.tryParse(await _getPref(_bpmPrefKey) ?? '');
+    final savedBpm = double.tryParse(await _prefs.get(Prefs.bpm) ?? '');
     if (savedBpm != null) bpm = savedBpm.clamp(40, 240);
-    final meter = await _getPref(_meterPrefKey);
+    final meter = await _prefs.get(Prefs.meter);
     timeSignature = kTimeSignatures.firstWhere(
       (t) => t.label == meter,
       orElse: () => kTimeSignatures.first,
     );
-    final click = await _getPref(_clickModePrefKey);
+    final click = await _prefs.get(Prefs.clickMode);
     clickMode = ClickMode.values.firstWhere((m) => m.name == click, orElse: () => ClickMode.always);
-    final mode = await _getPref(_loopModePrefKey);
+    final mode = await _prefs.get(Prefs.loopMode);
     loopMode = LoopMode.values.firstWhere((m) => m.name == mode, orElse: () => LoopMode.sync);
-    final bars = int.tryParse(await _getPref(_syncBarsPrefKey) ?? '');
+    final bars = int.tryParse(await _prefs.get(Prefs.syncBars) ?? '');
     if (bars != null && kSyncBarOptions.contains(bars)) syncBars = bars;
-    startOnSound = await _getPref(_startOnSoundPrefKey) == '1';
+    startOnSound = await _prefs.getBool(Prefs.startOnSound) ?? false;
 
     // Apariencia
-    final theme = await _getPref(_themePrefKey);
-    final chassis = await _getPref(_chassisPrefKey);
+    final theme = await _prefs.get(Prefs.themeMode);
+    final chassis = await _prefs.get(Prefs.chassis);
     appearance.value = Appearance(
       mode: ThemeMode.values.firstWhere((m) => m.name == theme, orElse: () => ThemeMode.system),
       chassis: Chassis.values.firstWhere((c) => c.name == chassis, orElse: () => Chassis.classic),
     );
 
-    // Controles externos
-    final volume = await _getPref(_volumeKeysPrefKey);
-    if (volume != null) volumeKeys = volume == '1';
-    final headset = await _getPref(_headsetKeyPrefKey);
-    if (headset != null) headsetKey = headset == '1';
-    try {
-      final raw = await _getPref(_learnedKeysPrefKey);
-      if (raw != null) {
-        learnedKeys = [
-          for (final e in jsonDecode(raw) as List)
-            LearnedKey(
-              code: ((e as Map<String, dynamic>)['code'] as num).toInt(),
-              name: (e['name'] as String?) ?? '',
-              action: PedalAction.values.firstWhere(
-                (a) => a.name == e['action'],
-                orElse: () => PedalAction.main,
-              ),
-            ),
-        ];
-      }
-    } on Object {
-      learnedKeys = const [];
-    }
-    await _syncKeyCapture();
-
-    // Latencias medidas
-    try {
-      final raw = await _getPref(_latencyPrefKey);
-      if (raw != null) {
-        final m = jsonDecode(raw) as Map<String, dynamic>;
-        _savedLatencies = {for (final e in m.entries) e.key: (e.value as num).toInt()};
-        _routeKey = null; // volver a elegir con lo cargado
-      }
-    } on Object {
-      // ajustes ilegibles: se vuelve a medir
-    }
+    await _keys.load();
+    await _routes.load();
     notifyListeners();
   }
-
-  Future<void> _savePrefs() => _setPref(_latencyPrefKey, jsonEncode(_savedLatencies));
-
-  // ---------- Informe ----------
-
-  /// Resumen para copiar y pegar en el plan del proyecto.
-  String report() {
-    final s = status;
-    String ms(double v) => v < 0 ? '—' : '${v.toStringAsFixed(1)} ms';
-    final api = switch (s.audioApi) {
-      AudioApi.aaudio => 'AAudio',
-      AudioApi.openSles => 'OpenSL ES',
-      AudioApi.unknown => '—',
-    };
-    final model = deviceInfo['model'] ?? '—';
-    final android = deviceInfo['android'] ?? '—';
-    String yesNo(Object? v) => v == true ? 'sí' : (v == false ? 'no' : '—');
-    final source = switch (latencySource) {
-      LatencySource.measured => 'medida',
-      LatencySource.estimated => 'estimada por Android',
-      LatencySource.none => 'sin medir',
-    };
-    return [
-      'Loopin · Etapa 3',
-      'Móvil: $model · Android $android · baja latencia: ${yesNo(deviceInfo['lowLatency'])} · '
-          'pro audio: ${yesNo(deviceInfo['proAudio'])}',
-      'Ruta: $routeLabel',
-      'Micrófono: ${s.inputPreset?.label ?? '—'}${s.presetFallback ? ' (el modo pedido falló)' : ''} · '
-          'sin procesar admitido: ${yesNo(deviceInfo['unprocessed'])} · ganancia +${inputGainDb.toStringAsFixed(0)} dB',
-      'API: $api · ${s.sampleRate} Hz · bloque ${s.framesPerBurst} · '
-          'buffer ${s.bufferSizeFrames} (${ms(s.bufferMs)})',
-      'Salida: ${s.exclusive ? 'exclusivo' : 'compartido'} · '
-          '${s.lowLatency ? 'baja latencia' : 'latencia normal'}',
-      'Entrada: ${s.inputExclusive ? 'exclusivo' : 'compartido'} · '
-          '${s.inputLowLatency ? 'baja latencia' : 'latencia normal'} · '
-          'bloque ${s.inputFramesPerBurst} · buffer ${s.inputBufferFrames} · '
-          'máx. leído por callback ${s.inputMaxRead} · ${s.inputChannels} canal(es)',
-      'Estimación de Oboe: salida ${ms(s.outputLatencyMs)} + entrada ${ms(s.inputLatencyMs)}',
-      if (s.latencyState == LatencyState.done)
-        'Ida y vuelta medida: ${ms(s.latencyMs)} (${s.latencyFrames} muestras)',
-      'Compensación al grabar: ${ms(compensationMs)} ($source)',
-      if (s.playing || s.framePosition > 0)
-        'Metrónomo: ${s.bpm.toStringAsFixed(0)} BPM · '
-            '${(s.playSeconds / 60).toStringAsFixed(1)} min · cortes: $xrunsSincePlay',
-      // Cortes desde que se abrió el audio (el buffer sube si los hay)
-      if (s.xrunCount >= 0) 'Cortes desde que se abrió el audio: ${s.xrunCount}',
-      'Metrónomo: ${timeSignature.label}'
-          '${timeSignature.grouping.isEmpty ? '' : ' (${timeSignature.grouping})'}'
-          ' · clic: ${clickMode.label.toLowerCase()} · empezar al tocar: ${startOnSound ? 'sí' : 'no'}',
-      'Looper: ${_stateName(s.loopState)} · ${loopMode.label}'
-          '${s.hasLoops ? ' · base de ${s.baseBars} compases' : ''}'
-          ' · avance automático: ${autoAdvance ? 'sí' : 'no'}',
-      for (var i = 0; i < s.tracks.length; i++)
-        if (s.tracks[i].state != LoopState.empty)
-          'Pista ${i + 1}: ${_stateName(s.tracks[i].state)}'
-              '${s.tracks[i].hasLoop && s.loopBarFrames > 0 ? ' · ${(s.tracks[i].length / s.loopBarFrames).round()} compases · ${s.tracks[i].layers} capa(s)' : ''}'
-              '${s.tracks[i].muted ? ' · en silencio' : ''}',
-      'Controles externos: volumen ${volumeKeys ? 'sí' : 'no'} · cascos ${headsetKey ? 'sí' : 'no'}'
-          ' · teclas aprendidas: ${learnedKeys.isEmpty ? 'ninguna' : learnedKeys.map((k) => k.label).join(', ')}',
-    ].join('\n');
-  }
-
-  static String _stateName(LoopState st) => switch (st) {
-    LoopState.empty => 'vacío',
-    LoopState.armed => 'cuenta de entrada o esperando',
-    LoopState.recording => 'grabando',
-    LoopState.playing => 'sonando',
-    LoopState.overdubbing => 'overdub',
-    LoopState.stopped => 'parado',
-  };
 
   bool _disposed = false;
 
@@ -1073,12 +721,18 @@ class EngineController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _lifecycle.dispose();
-    _keys.setMethodCallHandler(null);
+    _keys.dispose();
     appearance.dispose();
+    _live.dispose();
     _poll?.cancel();
     _holdTimer?.cancel();
     _secondaryTimer?.cancel();
     _engine.stop();
     super.dispose();
   }
+}
+
+/// Avisa a quien escuche, sin más.
+class _Pulse extends ChangeNotifier {
+  void fire() => notifyListeners();
 }

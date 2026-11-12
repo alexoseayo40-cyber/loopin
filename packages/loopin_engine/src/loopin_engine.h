@@ -144,6 +144,11 @@ typedef struct {
   int32_t tap_hits;           // golpes que cuentan (de 12)
   int32_t tap_frames;         // resultado en muestras
   int32_t tap_spread;         // dispersión de los golpes en muestras
+  // Carga del callback de audio: fracción del tiempo disponible (1.0 = 100 %;
+  // por encima, el audio se corta)
+  float cpu_load_avg;         // media del último segundo
+  float cpu_load_peak;        // pico del último segundo
+  float cpu_load_max;         // mayor pico desde que se abrió el audio
 } LoopinStatus;
 
 // Abre los streams de entrada y salida y empieza a procesar audio.
