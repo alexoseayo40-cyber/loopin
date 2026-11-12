@@ -376,13 +376,22 @@ void main() {
     expect(c.clickMode, ClickMode.silent);
     expect(engine.calls, contains('click silent'));
 
-    await pick('Modo de grabación', find.text('Empezar al tocar (sin cuenta, pista 1)'));
+    // Sincronizado: compases en su propio selector
+    await pick('Compases que graba', find.text('2 compases'));
+    expect(c.syncBars, 2);
+    expect(find.text('2 C'), findsOneWidget);
+
+    // Empezar al tocar: botón aparte, un toque
+    await tester.tap(find.byKey(const ValueKey('on-sound-toggle')));
+    await tester.pump();
     expect(c.startOnSound, isTrue);
     expect(engine.calls, contains('onSound true'));
-    expect(find.textContaining('arranca con tu primera nota'), findsOneWidget);
+    expect(find.textContaining('Toca y empieza a tocar'), findsOneWidget);
+    expect(find.textContaining('sin cuenta'), findsOneWidget); // el aviso de abajo
 
-    await pick('Modo de grabación', find.textContaining('Libre ·'));
+    await pick('Modo de grabación', find.text('Libre'));
     expect(c.loopMode, LoopMode.free);
+    expect(find.byTooltip('Compases que graba'), findsNothing);
     expect(find.text('LIBRE: EL TEMPO SALDRÁ DEL LOOP'), findsOneWidget);
     expect(find.text('TAP · TOCA AL RITMO'), findsNothing);
 

@@ -477,9 +477,16 @@ class _TempoDisplay extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 6),
             child: Row(
               children: [
-                Expanded(child: _MeterMenu(view: view)),
+                Expanded(flex: 4, child: _MeterMenu(view: view)),
                 const SizedBox(width: 6),
-                Expanded(flex: 2, child: _ModeMenu(view: view)),
+                Expanded(flex: 4, child: _ModeMenu(view: view)),
+                // Los compases solo cuentan en sincronizado
+                if (view.controller.loopMode == LoopMode.sync) ...[
+                  const SizedBox(width: 6),
+                  Expanded(flex: 3, child: _BarsMenu(view: view)),
+                ],
+                const SizedBox(width: 6),
+                _OnSoundToggle(view: view),
                 const SizedBox(width: 6),
                 _ClickMenu(view: view),
               ],
@@ -591,11 +598,10 @@ class _BeatBar extends StatelessWidget {
 
 /// Un valor de la pantalla de tempo que abre un menú al tocarlo.
 class _DisplayChip extends StatelessWidget {
-  const _DisplayChip({required this.label, required this.enabled, this.icon});
+  const _DisplayChip({required this.label, required this.enabled});
 
   final String label;
   final bool enabled;
-  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -618,7 +624,6 @@ class _DisplayChip extends StatelessWidget {
               maxLines: 1,
               style: TextStyle(fontFamily: LoopinFonts.display, fontSize: 14, color: color),
             ),
-            if (icon != null) ...[const SizedBox(width: 6), Icon(icon, size: 16, color: color)],
           ],
         ),
       ),
@@ -657,66 +662,126 @@ class _MeterMenu extends StatelessWidget {
   }
 }
 
-/// Modo de grabación y «empezar al tocar».
+/// El modo solo cuenta al empezar a grabar.
+bool _modeLocked(EngineStatus s) =>
+    s.loopState == LoopState.armed || s.loopState == LoopState.recording;
+
+/// Modo de grabación: sincronizado, manual o libre.
 class _ModeMenu extends StatelessWidget {
   const _ModeMenu({required this.view});
 
   final _View view;
 
-  static const _manual = -1, _free = -2, _onSound = -3;
+  @override
+  Widget build(BuildContext context) {
+    final c = view.controller;
+    final enabled = !_modeLocked(view.s);
+    return PopupMenuButton<LoopMode>(
+      tooltip: 'Modo de grabación',
+      enabled: enabled,
+      initialValue: c.loopMode,
+      onSelected: c.setLoopMode,
+      itemBuilder: (_) => [
+        for (final m in LoopMode.values)
+          PopupMenuItem(
+            value: m,
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(m.label),
+              subtitle: Text(switch (m) {
+                LoopMode.sync => 'Graba los compases que elijas y se cierra solo',
+                LoopMode.manual => 'Se cierra cuando vuelves a pulsar',
+                LoopMode.free => 'Sin metrónomo: el tempo sale del primer loop',
+              }),
+            ),
+          ),
+      ],
+      child: _DisplayChip(
+        label: switch (c.loopMode) {
+          LoopMode.sync => 'SYNC',
+          LoopMode.manual => 'MANUAL',
+          LoopMode.free => 'LIBRE',
+        },
+        enabled: enabled,
+      ),
+    );
+  }
+}
+
+/// Compases que graba el modo sincronizado.
+class _BarsMenu extends StatelessWidget {
+  const _BarsMenu({required this.view});
+
+  final _View view;
 
   @override
   Widget build(BuildContext context) {
     final c = view.controller;
-    final s = view.s;
-    // El modo solo cuenta al empezar a grabar
-    final busy = s.loopState == LoopState.armed || s.loopState == LoopState.recording;
-    final value = switch (c.loopMode) {
-      LoopMode.sync => c.syncBars,
-      LoopMode.manual => _manual,
-      LoopMode.free => _free,
-    };
-    final label = switch (c.loopMode) {
-      LoopMode.sync => 'SYNC · ${c.syncBars} C',
-      LoopMode.manual => 'MANUAL',
-      LoopMode.free => 'LIBRE',
-    };
+    final enabled = !_modeLocked(view.s);
     return PopupMenuButton<int>(
-      tooltip: 'Modo de grabación',
-      enabled: !busy,
-      initialValue: value,
-      onSelected: (v) {
-        switch (v) {
-          case _manual:
-            c.setLoopMode(LoopMode.manual);
-          case _free:
-            c.setLoopMode(LoopMode.free);
-          case _onSound:
-            c.setStartOnSound(!c.startOnSound);
-          default:
-            c.setLoopMode(LoopMode.sync);
-            c.setSyncBars(v);
-        }
-      },
+      tooltip: 'Compases que graba',
+      enabled: enabled,
+      initialValue: c.syncBars,
+      onSelected: c.setSyncBars,
       itemBuilder: (_) => [
-        for (final b in kSyncBarOptions)
-          PopupMenuItem(value: b, child: Text('Sincronizado · ${_bars(b)} (se cierra solo)')),
-        const PopupMenuItem(value: _manual, child: Text('Manual · se cierra al pulsar')),
-        const PopupMenuItem(
-          value: _free,
-          child: Text('Libre · sin metrónomo, el tempo sale del loop'),
-        ),
-        const PopupMenuDivider(),
-        CheckedPopupMenuItem(
-          value: _onSound,
-          checked: c.startOnSound,
-          child: const Text('Empezar al tocar (sin cuenta, pista 1)'),
-        ),
+        for (final b in kSyncBarOptions) PopupMenuItem(value: b, child: Text(_bars(b))),
       ],
-      child: _DisplayChip(
-        label: label,
-        enabled: !busy,
-        icon: c.startOnSound ? Icons.hearing : null,
+      child: _DisplayChip(label: '${c.syncBars} C', enabled: enabled),
+    );
+  }
+}
+
+/// «Empezar al tocar»: un toque lo enciende o lo apaga. Encendido, la pista 1
+/// no tiene cuenta de entrada: arranca con la primera nota.
+class _OnSoundToggle extends StatelessWidget {
+  const _OnSoundToggle({required this.view});
+
+  final _View view;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = view.controller;
+    final on = c.startOnSound;
+    final enabled = !_modeLocked(view.s);
+    final color = enabled ? LoopinPalette.display : LoopinPalette.displayDim;
+    return Tooltip(
+      message: on ? 'Empezar al tocar: sí' : 'Empezar al tocar: no',
+      child: Semantics(
+        button: true,
+        toggled: on,
+        label: 'Empezar al tocar',
+        excludeSemantics: true,
+        child: InkWell(
+          key: const ValueKey('on-sound-toggle'),
+          borderRadius: BorderRadius.circular(6),
+          onTap: enabled
+              ? () {
+                  c.setStartOnSound(!on);
+                  ScaffoldMessenger.of(context)
+                    ..hideCurrentSnackBar()
+                    ..showSnackBar(
+                      SnackBar(
+                        duration: const Duration(seconds: 3),
+                        content: Text(
+                          !on
+                              ? 'Empezar al tocar: la pista 1 arranca con tu primera nota, sin cuenta'
+                              : 'Empezar al tocar, apagado: la pista 1 tiene 1 compás de cuenta',
+                        ),
+                      ),
+                    );
+                }
+              : null,
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 36),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              color: on ? color.withValues(alpha: 0.2) : null,
+              border: Border.all(color: color.withValues(alpha: on ? 1 : 0.45)),
+            ),
+            child: Icon(on ? Icons.hearing : Icons.hearing_disabled, size: 20, color: color),
+          ),
+        ),
       ),
     );
   }
