@@ -8,6 +8,7 @@ import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -15,6 +16,12 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private var pendingMicResult: MethodChannel.Result? = null
+
+    // Controles externos: teclas que hacen de pedal (botones de volumen, botón
+    // de los cascos, pedal Bluetooth…). Dart dice cuáles quiere.
+    private var keysChannel: MethodChannel? = null
+    private var capturedKeys: Set<Int> = emptySet()
+    private var learningKeys = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,6 +33,18 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        keysChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "loopin/keys").also {
+            it.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "setCapture" -> {
+                        capturedKeys = (call.argument<List<Int>>("codes") ?: emptyList()).toSet()
+                        learningKeys = call.argument<Boolean>("learning") ?: false
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "loopin/permissions")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -48,6 +67,30 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun prefs() = getSharedPreferences("loopin", MODE_PRIVATE)
+
+    // Las teclas que hacen de pedal se pasan a Dart y no siguen su camino (así
+    // los botones de volumen no cambian el volumen). Aquí llegan antes que a
+    // nadie y sin esperas: el toque tiene que notarse al instante. Mientras se
+    // «aprende» un pedal, se pasa cualquier tecla salvo las del sistema.
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val channel = keysChannel
+        val code = event.keyCode
+        val wanted = if (learningKeys) code !in SYSTEM_KEYS else code in capturedKeys
+        val downOrUp = event.action == KeyEvent.ACTION_DOWN || event.action == KeyEvent.ACTION_UP
+        if (channel != null && wanted && downOrUp) {
+            channel.invokeMethod(
+                "key",
+                mapOf(
+                    "code" to code,
+                    "down" to (event.action == KeyEvent.ACTION_DOWN),
+                    "repeat" to event.repeatCount,
+                    "name" to KeyEvent.keyCodeToString(code),
+                )
+            )
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
 
     // Lo que el móvil dice que sabe hacer con el audio
     private fun audioInfo(): Map<String, Any> {
@@ -110,6 +153,15 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val MIC_REQUEST = 4201
+
+        // Teclas que nunca se capturan, ni al aprender un pedal
+        private val SYSTEM_KEYS = setOf(
+            KeyEvent.KEYCODE_BACK,
+            KeyEvent.KEYCODE_HOME,
+            KeyEvent.KEYCODE_APP_SWITCH,
+            KeyEvent.KEYCODE_POWER,
+            KeyEvent.KEYCODE_MENU,
+        )
 
         // Entradas que sirven para tocar (fuera teléfono, radio FM, eco…)
         private val INPUT_TYPES = setOf(

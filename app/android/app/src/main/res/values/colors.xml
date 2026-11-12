@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fondo del icono: el chasis negro del pedal -->
+    <color name="ic_launcher_background">#1B1B1D</color>
+    <!-- Fondo mientras arranca la app (tema claro): el chasis crema -->
+    <color name="launch_background">#E8E1CE</color>
+</resources>

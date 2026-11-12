@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 
 import 'engine/engine_controller.dart';
 import 'ui/looper_screen.dart';
+import 'ui/theme.dart';
 
 void main() {
   runApp(const LoopinApp());
@@ -34,16 +35,18 @@ class _LoopinAppState extends State<LoopinApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Loopin',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.deepOrange,
-          brightness: Brightness.dark,
-        ),
+    // El tema (claro, oscuro o el del sistema) y el color del chasis se eligen
+    // en Ajustes
+    return ValueListenableBuilder<Appearance>(
+      valueListenable: _controller.appearance,
+      builder: (context, look, _) => MaterialApp(
+        title: 'Loopin',
+        debugShowCheckedModeBanner: false,
+        theme: buildLoopinTheme(look.chassis, Brightness.light),
+        darkTheme: buildLoopinTheme(look.chassis, Brightness.dark),
+        themeMode: look.mode,
+        home: LooperScreen(controller: _controller),
       ),
-      home: LooperScreen(controller: _controller),
     );
   }
 }

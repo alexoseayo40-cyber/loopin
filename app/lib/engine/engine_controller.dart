@@ -4,9 +4,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:loopin_engine/loopin_engine.dart';
+
+import '../ui/theme.dart';
 
 /// Compases disponibles: tiempos por compás → nombre.
 const Map<int, String> kTimeSignatures = {4: '4/4', 3: '3/4', 6: '6/8'};
@@ -26,9 +29,36 @@ enum LatencySource {
   none,
 }
 
+/// Lo que puede hacer un botón externo (botones de volumen, botón de los
+/// cascos, pedal Bluetooth…).
+enum PedalAction {
+  /// Como el botón grande: toque, mantener y doble toque.
+  main('Botón principal'),
+
+  /// Toque: siguiente pista. Mantener: deshacer.
+  secondary('Botón secundario');
+
+  const PedalAction(this.label);
+  final String label;
+}
+
+/// Una tecla aprendida (de un pedal Bluetooth, un teclado…).
+class LearnedKey {
+  const LearnedKey({required this.code, required this.name, required this.action});
+
+  /// Código de tecla de Android (KeyEvent.KEYCODE_*).
+  final int code;
+  final String name;
+  final PedalAction action;
+
+  /// Nombre corto para mostrar: «PAGE_DOWN» en vez de «KEYCODE_PAGE_DOWN».
+  String get label => name.startsWith('KEYCODE_') ? name.substring(8) : name;
+}
+
 class EngineController extends ChangeNotifier {
   EngineController({LoopinEngine? engine}) : _engine = engine ?? LoopinEngine.instance {
     _lifecycle = AppLifecycleListener(onHide: _onHide, onShow: _onShow);
+    _keys.setMethodCallHandler(_onKeyCall);
     _prefsLoaded = _loadPrefs();
   }
 
@@ -36,6 +66,7 @@ class EngineController extends ChangeNotifier {
 
   final LoopinEngine _engine;
   static const _channel = MethodChannel('loopin/permissions');
+  static const _keys = MethodChannel('loopin/keys');
   late final AppLifecycleListener _lifecycle;
   Timer? _poll;
 
@@ -59,6 +90,15 @@ class EngineController extends ChangeNotifier {
   LoopMode loopMode = LoopMode.sync;
   int syncBars = 4;
   double loopVolume = 1.0;
+
+  /// Tras grabar una pista, la selección pasa sola a la siguiente vacía.
+  bool autoAdvance = true;
+
+  /// Volumen de cada pista (lo que marca el deslizador).
+  final List<double> trackVolumes = List.filled(kTrackCount, 1.0);
+
+  /// Tema (claro, oscuro o el del sistema) y color del chasis.
+  final ValueNotifier<Appearance> appearance = ValueNotifier(const Appearance());
 
   bool _wantRunning = false;
   bool _wantPlaying = false;
@@ -154,6 +194,10 @@ class EngineController extends ChangeNotifier {
     _engine.setLoopMode(loopMode);
     _engine.setSyncBars(syncBars);
     _engine.setLoopVolume(loopVolume);
+    _engine.setAutoAdvance(autoAdvance);
+    for (var i = 0; i < kTrackCount; i++) {
+      _engine.setTrackVolume(i, trackVolumes[i]);
+    }
   }
 
   static double _dbToGain(double db) => math.pow(10, db / 20).toDouble();
@@ -299,9 +343,62 @@ class EngineController extends ChangeNotifier {
     _holdTimer = null;
   }
 
+  Timer? _secondaryTimer;
+
+  /// Botón secundario (solo externo): toque = siguiente pista; mantener =
+  /// deshacer. Como no graba nada, puede esperar a que se suelte.
+  void secondaryDown() {
+    if (!status.running) return;
+    _secondaryTimer?.cancel();
+    _secondaryTimer = Timer(holdDelay, () {
+      _secondaryTimer = null;
+      _engine.loopUndo();
+      HapticFeedback.heavyImpact();
+    });
+  }
+
+  void secondaryUp() {
+    final timer = _secondaryTimer;
+    if (timer == null) return; // ya contó como «mantener»
+    timer.cancel();
+    _secondaryTimer = null;
+    _engine.selectNextTrack();
+    HapticFeedback.selectionClick();
+  }
+
   void undo() => _engine.loopUndo();
 
+  /// Borra todas las pistas.
   void clearLoop() => _engine.loopClear();
+
+  // ---------- Pistas ----------
+
+  void selectTrack(int track) {
+    _engine.selectTrack(track);
+    HapticFeedback.selectionClick();
+  }
+
+  void setTrackVolume(int track, double v) {
+    trackVolumes[track] = v;
+    _engine.setTrackVolume(track, v);
+    notifyListeners();
+  }
+
+  void toggleTrackMuted(int track) {
+    _engine.setTrackMuted(track, !status.tracks[track].muted);
+  }
+
+  void clearTrack(int track) => _engine.clearTrack(track);
+
+  void setAutoAdvance(bool on) {
+    autoAdvance = on;
+    _engine.setAutoAdvance(on);
+    _setPref(_autoAdvancePrefKey, on ? '1' : '0');
+    notifyListeners();
+  }
+
+  /// Para o arranca todo (lo mismo que el doble toque).
+  void toggleTransport() => togglePlay();
 
   void setLoopMode(LoopMode mode) {
     loopMode = mode;
@@ -490,56 +587,257 @@ class EngineController extends ChangeNotifier {
   double get compensationMs =>
       status.sampleRate > 0 ? 1000 * status.loopLatencyFrames / status.sampleRate : 0;
 
+  // ---------- Apariencia ----------
+
+  void setThemeMode(ThemeMode mode) {
+    appearance.value = appearance.value.copyWith(mode: mode);
+    _setPref(_themePrefKey, mode.name);
+  }
+
+  void setChassis(Chassis chassis) {
+    appearance.value = appearance.value.copyWith(chassis: chassis);
+    _setPref(_chassisPrefKey, chassis.name);
+  }
+
+  // ---------- Controles externos ----------
+  //
+  // Android entrega las teclas a MainActivity, que nos pasa solo las que nos
+  // interesan (y se las queda, para que los botones de volumen no cambien el
+  // volumen mientras hacen de pedal).
+
+  /// Subir volumen = botón principal; bajar volumen = botón secundario.
+  bool volumeKeys = false;
+
+  /// El botón central de los cascos (o de un mando multimedia) = principal.
+  bool headsetKey = true;
+
+  /// Teclas aprendidas (pedal Bluetooth, teclado…).
+  List<LearnedKey> learnedKeys = const [];
+
+  /// Si no es null, la próxima tecla que se pulse se asigna a esta acción.
+  PedalAction? learning;
+
+  /// La última tecla recibida, para comprobar que el pedal funciona.
+  String? lastKeyName;
+  PedalAction? lastKeyAction;
+
+  static const _keyVolumeUp = 24, _keyVolumeDown = 25;
+  static const _keyHeadsetHook = 79, _keyPlayPause = 85, _keyPlay = 126, _keyPause = 127;
+  static const _keyMediaNext = 87;
+
+  PedalAction? _actionFor(int code) {
+    for (final k in learnedKeys) {
+      if (k.code == code) return k.action;
+    }
+    if (volumeKeys) {
+      if (code == _keyVolumeUp) return PedalAction.main;
+      if (code == _keyVolumeDown) return PedalAction.secondary;
+    }
+    if (headsetKey) {
+      if (code == _keyHeadsetHook ||
+          code == _keyPlayPause ||
+          code == _keyPlay ||
+          code == _keyPause) {
+        return PedalAction.main;
+      }
+      if (code == _keyMediaNext) return PedalAction.secondary;
+    }
+    return null;
+  }
+
+  Future<void> _syncKeyCapture() async {
+    final codes = <int>{
+      for (final k in learnedKeys) k.code,
+      if (volumeKeys) ...[_keyVolumeUp, _keyVolumeDown],
+      if (headsetKey) ...[_keyHeadsetHook, _keyPlayPause, _keyPlay, _keyPause, _keyMediaNext],
+    };
+    try {
+      await _keys.invokeMethod<void>('setCapture', {
+        'codes': codes.toList(),
+        'learning': learning != null,
+      });
+    } on Object {
+      // sin Android (tests): no hay teclas que capturar
+    }
+  }
+
+  Future<Object?> _onKeyCall(MethodCall call) async {
+    if (call.method != 'key') return null;
+    final args = call.arguments as Map<Object?, Object?>;
+    handleKey(
+      (args['code'] as num).toInt(),
+      down: args['down'] == true,
+      repeat: (args['repeat'] as num?)?.toInt() ?? 0,
+      name: (args['name'] as String?) ?? '',
+    );
+    return null;
+  }
+
+  /// Una tecla externa se ha pulsado o soltado.
+  void handleKey(int code, {required bool down, int repeat = 0, String name = ''}) {
+    final toLearn = learning;
+    if (toLearn != null) {
+      if (!down || repeat > 0) return;
+      learnedKeys = [
+        for (final k in learnedKeys)
+          if (k.code != code) k,
+        LearnedKey(code: code, name: name.isEmpty ? 'tecla $code' : name, action: toLearn),
+      ];
+      learning = null;
+      _saveKeys();
+      _syncKeyCapture();
+      notifyListeners();
+      return;
+    }
+    final action = _actionFor(code);
+    if (action == null || repeat > 0) return;
+    if (down) {
+      lastKeyName = name.isEmpty ? 'tecla $code' : name;
+      lastKeyAction = action;
+    }
+    switch (action) {
+      case PedalAction.main:
+        down ? pedalDown() : pedalUp();
+      case PedalAction.secondary:
+        down ? secondaryDown() : secondaryUp();
+    }
+  }
+
+  void setVolumeKeys(bool on) {
+    volumeKeys = on;
+    _setPref(_volumeKeysPrefKey, on ? '1' : '0');
+    _syncKeyCapture();
+    notifyListeners();
+  }
+
+  void setHeadsetKey(bool on) {
+    headsetKey = on;
+    _setPref(_headsetKeyPrefKey, on ? '1' : '0');
+    _syncKeyCapture();
+    notifyListeners();
+  }
+
+  void startLearning(PedalAction action) {
+    learning = action;
+    _syncKeyCapture();
+    notifyListeners();
+  }
+
+  void cancelLearning() {
+    learning = null;
+    _syncKeyCapture();
+    notifyListeners();
+  }
+
+  void forgetKey(int code) {
+    learnedKeys = [
+      for (final k in learnedKeys)
+        if (k.code != code) k,
+    ];
+    _saveKeys();
+    _syncKeyCapture();
+    notifyListeners();
+  }
+
+  void _saveKeys() {
+    _setPref(
+      _learnedKeysPrefKey,
+      jsonEncode([
+        for (final k in learnedKeys) {'code': k.code, 'name': k.name, 'action': k.action.name},
+      ]),
+    );
+  }
+
   // ---------- Ajustes guardados ----------
 
   static const _latencyPrefKey = 'latencies';
   static const _presetPrefKey = 'inputPreset';
+  static const _autoAdvancePrefKey = 'autoAdvance';
+  static const _themePrefKey = 'themeMode';
+  static const _chassisPrefKey = 'chassis';
+  static const _volumeKeysPrefKey = 'volumeKeys';
+  static const _headsetKeyPrefKey = 'headsetKey';
+  static const _learnedKeysPrefKey = 'learnedKeys';
 
-  Future<void> _savePreset() async {
+  Future<String?> _getPref(String key) async {
     try {
-      await _channel.invokeMethod<void>('prefsSet', {
-        'key': _presetPrefKey,
-        'value': '${inputPreset.code}',
-      });
+      return await _channel.invokeMethod<String>('prefsGet', {'key': key});
+    } on Object {
+      return null; // sin ajustes guardados (o en un test sin Android)
+    }
+  }
+
+  Future<void> _setPref(String key, String value) async {
+    try {
+      await _channel.invokeMethod<void>('prefsSet', {'key': key, 'value': value});
     } on Object {
       // no se pudo guardar: vale solo para esta sesión
     }
   }
 
+  Future<void> _savePreset() => _setPref(_presetPrefKey, '${inputPreset.code}');
+
   Future<void> _loadPrefs() async {
+    // Modo del micrófono elegido por el usuario
+    final preset = await _getPref(_presetPrefKey);
+    for (final p in InputPreset.values) {
+      if (preset != null && '${p.code}' == preset) {
+        inputPreset = p;
+        _presetChosenByUser = true;
+      }
+    }
+
+    final advance = await _getPref(_autoAdvancePrefKey);
+    if (advance != null) autoAdvance = advance == '1';
+
+    // Apariencia
+    final theme = await _getPref(_themePrefKey);
+    final chassis = await _getPref(_chassisPrefKey);
+    appearance.value = Appearance(
+      mode: ThemeMode.values.firstWhere((m) => m.name == theme, orElse: () => ThemeMode.system),
+      chassis: Chassis.values.firstWhere((c) => c.name == chassis, orElse: () => Chassis.classic),
+    );
+
+    // Controles externos
+    final volume = await _getPref(_volumeKeysPrefKey);
+    if (volume != null) volumeKeys = volume == '1';
+    final headset = await _getPref(_headsetKeyPrefKey);
+    if (headset != null) headsetKey = headset == '1';
     try {
-      // Modo del micrófono elegido por el usuario
-      final preset = await _channel.invokeMethod<String>('prefsGet', {'key': _presetPrefKey});
-      for (final p in InputPreset.values) {
-        if (preset != null && '${p.code}' == preset) {
-          inputPreset = p;
-          _presetChosenByUser = true;
-        }
+      final raw = await _getPref(_learnedKeysPrefKey);
+      if (raw != null) {
+        learnedKeys = [
+          for (final e in jsonDecode(raw) as List)
+            LearnedKey(
+              code: ((e as Map<String, dynamic>)['code'] as num).toInt(),
+              name: (e['name'] as String?) ?? '',
+              action: PedalAction.values.firstWhere(
+                (a) => a.name == e['action'],
+                orElse: () => PedalAction.main,
+              ),
+            ),
+        ];
       }
     } on Object {
-      // sin ajustes guardados
+      learnedKeys = const [];
     }
+    await _syncKeyCapture();
+
+    // Latencias medidas
     try {
-      final raw = await _channel.invokeMethod<String>('prefsGet', {'key': _latencyPrefKey});
-      if (raw == null) return;
-      final m = jsonDecode(raw) as Map<String, dynamic>;
-      _savedLatencies = {for (final e in m.entries) e.key: (e.value as num).toInt()};
-      _routeKey = null; // volver a elegir con lo cargado
+      final raw = await _getPref(_latencyPrefKey);
+      if (raw != null) {
+        final m = jsonDecode(raw) as Map<String, dynamic>;
+        _savedLatencies = {for (final e in m.entries) e.key: (e.value as num).toInt()};
+        _routeKey = null; // volver a elegir con lo cargado
+      }
     } on Object {
-      // sin ajustes guardados (o en un test sin Android): no pasa nada
+      // ajustes ilegibles: se vuelve a medir
     }
+    notifyListeners();
   }
 
-  Future<void> _savePrefs() async {
-    try {
-      await _channel.invokeMethod<void>('prefsSet', {
-        'key': _latencyPrefKey,
-        'value': jsonEncode(_savedLatencies),
-      });
-    } on Object {
-      // no se pudo guardar: se usará solo en esta sesión
-    }
-  }
+  Future<void> _savePrefs() => _setPref(_latencyPrefKey, jsonEncode(_savedLatencies));
 
   // ---------- Informe ----------
 
@@ -561,7 +859,7 @@ class EngineController extends ChangeNotifier {
       LatencySource.none => 'sin medir',
     };
     return [
-      'Loopin · Etapa 2',
+      'Loopin · Etapa 3',
       'Móvil: $model · Android $android · baja latencia: ${yesNo(deviceInfo['lowLatency'])} · '
           'pro audio: ${yesNo(deviceInfo['proAudio'])}',
       'Ruta: $routeLabel',
@@ -584,22 +882,36 @@ class EngineController extends ChangeNotifier {
             '${(s.playSeconds / 60).toStringAsFixed(1)} min · cortes: $xrunsSincePlay',
       // Cortes desde que se abrió el audio (el buffer sube si los hay)
       if (s.xrunCount >= 0) 'Cortes desde que se abrió el audio: ${s.xrunCount}',
-      'Loop: ${switch (s.loopState) {
-        LoopState.empty => 'vacío',
-        LoopState.armed => 'cuenta de entrada',
-        LoopState.recording => 'grabando',
-        LoopState.playing => 'sonando',
-        LoopState.overdubbing => 'overdub',
-        LoopState.stopped => 'parado',
-      }}${s.loopState.hasLoop ? ' · ${s.loopBars.toStringAsFixed(0)} compases · ${s.loopLayers} capa(s) · ${loopMode.label}' : ''}',
+      'Looper: ${_stateName(s.loopState)} · ${loopMode.label}'
+          '${s.hasLoops ? ' · base de ${s.baseBars} compases' : ''}'
+          ' · avance automático: ${autoAdvance ? 'sí' : 'no'}',
+      for (var i = 0; i < s.tracks.length; i++)
+        if (s.tracks[i].state != LoopState.empty)
+          'Pista ${i + 1}: ${_stateName(s.tracks[i].state)}'
+              '${s.tracks[i].hasLoop && s.loopBarFrames > 0 ? ' · ${(s.tracks[i].length / s.loopBarFrames).round()} compases · ${s.tracks[i].layers} capa(s)' : ''}'
+              '${s.tracks[i].muted ? ' · en silencio' : ''}',
+      'Controles externos: volumen ${volumeKeys ? 'sí' : 'no'} · cascos ${headsetKey ? 'sí' : 'no'}'
+          ' · teclas aprendidas: ${learnedKeys.isEmpty ? 'ninguna' : learnedKeys.map((k) => k.label).join(', ')}',
     ].join('\n');
   }
+
+  static String _stateName(LoopState st) => switch (st) {
+    LoopState.empty => 'vacío',
+    LoopState.armed => 'cuenta de entrada',
+    LoopState.recording => 'grabando',
+    LoopState.playing => 'sonando',
+    LoopState.overdubbing => 'overdub',
+    LoopState.stopped => 'parado',
+  };
 
   @override
   void dispose() {
     _lifecycle.dispose();
+    _keys.setMethodCallHandler(null);
+    appearance.dispose();
     _poll?.cancel();
     _holdTimer?.cancel();
+    _secondaryTimer?.cancel();
     _engine.stop();
     super.dispose();
   }
