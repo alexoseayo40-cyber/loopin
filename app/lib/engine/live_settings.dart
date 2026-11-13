@@ -7,8 +7,7 @@ import 'prefs.dart';
 /// Compases que se pueden elegir para el entrenador de tempo.
 const List<int> kTrainerBarOptions = [1, 2, 4, 8];
 
-/// Lo que eligió el usuario en el avanzado. En simple no se ve nada de esto y
-/// se usan los valores de serie (ver live_control.dart), sin tocar estos.
+/// Directo y práctica: lo que eligió el usuario (vale en los dos modos).
 class LiveSettings {
   /// Silenciar, reverse y media velocidad esperan al siguiente 1.
   bool quantize = true;

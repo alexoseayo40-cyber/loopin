@@ -104,11 +104,10 @@ class _LooperScreenState extends State<LooperScreen> {
 // ---------------------------------------------------------------------------
 // Disposición
 
-/// Lo que no está en simple (la fila de compás, modo y clic de la pantalla de
-/// tempo, 44 o 40, y la de acompañamiento con su hueco, 52 o 46): medido en
-/// los tests.
-const _simpleSaves = 96.0;
-const _simpleSavesCompact = 86.0;
+/// Lo que no está en simple (la fila de acompañamiento con su hueco, 52 o 46):
+/// medido en los tests.
+const _simpleSaves = 52.0;
+const _simpleSavesCompact = 46.0;
 
 /// En vertical: todo en una columna, con el pulsador abajo, a mano.
 class _TallLayout extends StatelessWidget {
@@ -128,8 +127,7 @@ class _TallLayout extends StatelessWidget {
     final tight = box.maxHeight < 700;
     final gap = tight ? 4.0 : (compact ? 8.0 : 14.0);
     final rings = tight ? 48.0 : (compact ? 60.0 : 96.0);
-    // En simple la pantalla de tempo tiene una fila menos y no está la fila de
-    // acompañamiento: el pulsador crece
+    // En simple no está la fila de acompañamiento: el pulsador crece
     final simple = view.controller.simple;
     final simpleSaves = simple ? (compact ? _simpleSavesCompact : _simpleSaves) : 0.0;
     // Lo que ocupa todo menos el pulsador (medido, con la fila de la batería),

@@ -164,6 +164,8 @@ void loopin_set_trainer(int32_t bars, double step, double top) {
   post(Command::Type::kSetTrainer, step, bars);
 }
 
+void loopin_set_tone(double hz) { post(Command::Type::kSetTone, hz); }
+
 void loopin_tuner_enable(int32_t enabled) {
   engine().core().tunerTap().setEnabled(enabled != 0);
 }
@@ -335,6 +337,7 @@ void loopin_get_status(LoopinStatus* out) {
   out->trainer_bars = c.trainerBars;
   out->trainer_step = c.trainerStep;
   out->trainer_top = c.trainerTop;
+  out->tone_hz = c.toneHz;
 }
 
 }  // extern "C"

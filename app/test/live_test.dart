@@ -93,6 +93,7 @@ void main() {
   testWidgets('pantalla del afinador: enciende la toma, enseña la nota y la apaga al salir', (
     tester,
   ) async {
+    setScreen(tester, const Size(393, 1400));
     final engine = FakeEngine()
       ..next = fakeStatus(LoopState.empty, playing: false)
       ..tuner = const TunerReading(frequency: 81.95, clarity: 0.97, levelDb: -18);
@@ -111,26 +112,49 @@ void main() {
     expect(find.text('MI'), findsWidgets);
     expect(find.text('E2'), findsOneWidget);
     expect(find.text('BAJA · aprieta'), findsOneWidget);
-    // En simple no está el La de referencia
-    expect(find.text('La de referencia'), findsNothing);
+    // También en simple: el La de referencia y las notas para afinar de oído
+    expect(find.text('La de referencia'), findsOneWidget);
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('tone-40')), 100);
+    await tester.tap(find.byKey(const ValueKey('tone-40')));
+    await tester.pump();
+    expect(engine.calls.last, 'tone 82.4'); // Mi grave
+    expect(c.toneMidi, 40);
+    await tester.tap(find.byKey(const ValueKey('tone-69')));
+    await tester.pump();
+    expect(engine.calls.last, 'tone 440.0');
+    // Cambiar el La mueve la nota que suena
+    c.setTunerA4(442);
+    expect(engine.calls.last, 'tone 442.0');
+    c.setTunerA4(440);
+    // Otra vez la misma: se calla
+    await tester.tap(find.byKey(const ValueKey('tone-69')));
+    await tester.pump();
+    expect(engine.calls.last, 'tone 0.0');
+    expect(c.toneMidi, isNull);
+    await tester.tap(find.byKey(const ValueKey('tone-45')));
+    await tester.pump();
+    expect(engine.calls.last, 'tone 110.0');
+    await tester.scrollUntilVisible(find.text('E2'), -100);
     // Afinada
     engine.tuner = const TunerReading(frequency: 82.41, clarity: 0.97, levelDb: -18);
     for (var i = 0; i < 12; i++) {
       await tester.pump(const Duration(milliseconds: 40));
     }
     expect(find.text('AFINADA'), findsOneWidget);
-    // Al salir, la toma se apaga
+    // Al salir, la toma se apaga y la nota se calla
     await tester.pageBack();
     for (var i = 0; i < 10; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
     expect(find.byType(TunerScreen), findsNothing);
     expect(engine.calls.lastWhere((e) => e.startsWith('tuner')), 'tuner false');
+    expect(engine.calls.lastWhere((e) => e.startsWith('tone')), 'tone 0.0');
     expect(tester.takeException(), isNull);
     await _close(tester, c);
   });
 
-  testWidgets('afinador en avanzado: La de referencia, guardado', (tester) async {
+  testWidgets('afinador: La de referencia, guardado, en los dos modos', (tester) async {
+    setScreen(tester, const Size(393, 1400));
     final prefs = <String, String>{};
     final engine = FakeEngine()..next = fakeStatus(LoopState.empty, playing: false);
     final c = await _open(tester, engine, prefs);
@@ -142,11 +166,11 @@ void main() {
     await tester.pump();
     expect(find.text('La = 442 Hz'), findsOneWidget);
     expect(prefs['tunerA4'], '442');
-    // En simple se usa 440 (lo elegido se guarda para el avanzado)
+    // En simple, el mismo
     c.setPlayMode(PlayMode.simple);
-    expect(c.tunerA4, 440);
-    c.setPlayMode(PlayMode.advanced);
     expect(c.tunerA4, 442);
+    await tester.pump();
+    expect(find.text('La = 442 Hz'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     await _close(tester, c);
   });
@@ -186,7 +210,6 @@ void main() {
     c.setPlayMode(PlayMode.simple);
     await tester.pump();
     expect(engine.calls, containsAll(['reverse 0 false', 'reverse 1 false', 'half 1 false']));
-    expect(engine.calls, contains('quantize true'));
     expect(find.byKey(const ValueKey('reverse-1')), findsNothing);
     expect(tester.takeException(), isNull);
     await _close(tester, c);
@@ -202,7 +225,7 @@ void main() {
 
   // ---------------------------------------------------------------- parar
 
-  testWidgets('al parar: el modo va al motor, se guarda y en simple es al momento', (tester) async {
+  testWidgets('al parar: el modo va al motor, se guarda y vale en los dos modos', (tester) async {
     setScreen(tester, const Size(393, 1500));
     final prefs = <String, String>{};
     final engine = FakeEngine()..next = fakeStatus(LoopState.playing);
@@ -222,16 +245,15 @@ void main() {
     // ■ pide parar (el motor sabe cómo)
     c.togglePlay();
     expect(engine.calls.last, 'stop');
-    // En simple: al momento y al compás, sin tocar lo elegido
+    // En simple, igual (y se ve en Ajustes)
+    engine.calls.clear();
     c.setPlayMode(PlayMode.simple);
-    expect(engine.calls, containsAll(['stopMode now', 'quantize true']));
-    expect(c.stopModeSetting, StopMode.fade);
-    await tester.pump();
-    expect(find.text('Al parar'), findsNothing);
-    c.setPlayMode(PlayMode.advanced);
-    expect(engine.calls.last, startsWith('trainer'));
-    expect(engine.calls, contains('stopMode fade'));
     expect(c.stopMode, StopMode.fade);
+    expect(c.quantize, isFalse);
+    expect(engine.calls, isNot(contains('stopMode now')));
+    await tester.pump();
+    expect(find.text('Al parar'), findsOneWidget);
+    expect(find.text('Silenciar una pista espera al siguiente 1'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     await _close(tester, c);
   });
@@ -315,21 +337,21 @@ void main() {
     await _close(tester, c);
   });
 
-  testWidgets('entrenador en simple: no está y se apaga', (tester) async {
+  testWidgets('entrenador en simple: está y sigue encendido al cambiar de modo', (tester) async {
     setScreen(tester, const Size(393, 873));
     final engine = FakeEngine()..next = fakeStatus(LoopState.empty, playing: false);
     final c = await _open(tester, engine, {});
     c.setTrainerOn(true);
     expect(engine.calls.last, 'trainer 4 5 140');
+    engine.calls.clear();
     c.setPlayMode(PlayMode.simple);
-    expect(c.trainerOn, isFalse);
-    expect(engine.calls, contains('trainer 0 5 140'));
+    expect(c.trainerOn, isTrue);
+    expect(engine.calls, isNot(contains('trainer 0 5 140')));
     await tester.pumpWidget(_app(LooperScreen(controller: c)));
     await tester.pump(const Duration(milliseconds: 100));
-    expect(find.byKey(const ValueKey('trainer-button')), findsNothing);
-    // Al volver al avanzado sigue apagado (cada práctica se enciende a propósito)
-    c.setPlayMode(PlayMode.advanced);
-    expect(c.trainerOn, isFalse);
+    expect(find.byKey(const ValueKey('trainer-button')), findsOneWidget);
+    expect(find.text('ENTRENADOR +5 / 4 C · HASTA 140'), findsOneWidget);
+    expect(tester.takeException(), isNull);
     await _close(tester, c);
   });
 

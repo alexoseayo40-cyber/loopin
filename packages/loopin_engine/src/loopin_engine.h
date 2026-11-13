@@ -32,6 +32,7 @@ extern "C" {
 #define LOOPIN_CLICK_SILENT 0    // nunca: metrónomo solo visual
 #define LOOPIN_CLICK_COUNT_IN 1  // solo en la cuenta de entrada
 #define LOOPIN_CLICK_ALWAYS 2
+#define LOOPIN_CLICK_UNTIL_RECORDING 3  // con el metrónomo solo y en la cuenta; se calla al grabar
 
 // Modo del micrófono (valores de Android / Oboe InputPreset)
 #define LOOPIN_PRESET_GENERIC 1
@@ -247,6 +248,8 @@ typedef struct {
   int32_t trainer_bars;       // 0 = apagado
   double trainer_step;
   double trainer_top;
+  // Afinador: nota de referencia que suena (0 = ninguna)
+  double tone_hz;
 } LoopinStatus;
 
 // Afinador: lo último que ha entrado, analizado al pedirlo
@@ -409,6 +412,8 @@ FFI_PLUGIN_EXPORT void loopin_set_trainer(int32_t bars, double step, double top)
 // analiza lo último (unos 70 ms) en el hilo que lo llama (~0,5 ms) y devuelve
 // 1 si había audio suficiente.
 FFI_PLUGIN_EXPORT void loopin_tuner_enable(int32_t enabled);
+// Nota de referencia para afinar de oído (hz = 0: callar). Entra y sale en 10 ms.
+FFI_PLUGIN_EXPORT void loopin_set_tone(double hz);
 FFI_PLUGIN_EXPORT int32_t loopin_tuner_read(LoopinTuner* out);
 
 // Copia el estado actual en *out.

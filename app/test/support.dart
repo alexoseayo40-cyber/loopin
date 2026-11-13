@@ -129,6 +129,8 @@ class FakeEngine implements LoopinEngine {
       calls.add('trainer $bars ${step.round()} ${top.round()}');
   @override
   void setTunerEnabled(bool on) => calls.add('tuner $on');
+  @override
+  void setTone(double hz) => calls.add('tone ${hz.toStringAsFixed(1)}');
 
   /// Lo que devuelve el afinador.
   TunerReading? tuner;

@@ -55,8 +55,7 @@ void _setAllAdvanced(EngineController c) {
 
 /// En simple no queda nada que no se vea.
 void _expectSimpleValues(EngineController c) {
-  expect(c.loopMode, LoopMode.manual);
-  expect(c.startOnSound, isFalse);
+  expect(kSimpleLoopModes, contains(c.loopMode));
   expect(kSimpleMeters, contains(c.timeSignature.label));
   expect(kSimpleClickModes, contains(c.clickMode));
   expect(c.drumsOn, isFalse);
@@ -100,20 +99,22 @@ void main() {
     c.setPlayMode(PlayMode.simple);
     _expectSimpleValues(c);
     expect(c.timeSignature.label, '4/4');
-    expect(c.clickMode, ClickMode.always);
+    expect(c.loopMode, LoopMode.manual); // el libre no está en simple
+    expect(c.startOnSound, isTrue); // empezar al tocar sí está
+    expect(c.clickMode, ClickMode.untilRecording); // «solo la cuenta» no está
     expect(c.inputPreset, InputPreset.voiceRecognition);
     // Y el motor lo sabe (apagar la batería y la canción no para nada)
     expect(
       engine.calls,
       containsAll([
         'mode manual',
-        'onSound false',
         'meter 4 0',
-        'click always',
+        'click untilRecording',
         'drums false',
         'backing false',
       ]),
     );
+    expect(engine.calls, isNot(contains('onSound false')));
     expect(engine.calls, isNot(contains('pause')));
     expect(engine.calls, isNot(contains('stop')));
     expect(prefs['playMode'], 'simple');
@@ -159,7 +160,7 @@ void main() {
     c.setPlayMode(PlayMode.advanced);
     expect(c.timeSignature.label, '3/4');
     expect(c.clickMode, ClickMode.silent);
-    expect(c.loopMode, LoopMode.sync); // eso no se puede tocar en simple: vuelve
+    expect(c.loopMode, LoopMode.sync); // sincronizado también está en simple: se queda
     await _close(tester, c);
   });
 
@@ -201,7 +202,7 @@ void main() {
     await _close(tester, c);
   });
 
-  testWidgets('pantalla en simple: tempo con dos filas, clic de un toque, sin acompañamiento', (
+  testWidgets('pantalla en simple: modo y compases, clic de un toque, sin acompañamiento', (
     tester,
   ) async {
     setScreen(tester, const Size(393, 873));
@@ -210,10 +211,14 @@ void main() {
     await tester.pumpWidget(_app(LooperScreen(controller: c)));
     await tester.pump(const Duration(milliseconds: 100));
     expect(c.simple, isTrue);
-    expect(find.byType(ModeMenu), findsNothing);
+    // Manual de serie (sin selector de compases), empezar al tocar y entrenador
+    expect(c.loopMode, LoopMode.manual);
+    expect(find.byType(ModeMenu), findsOneWidget);
     expect(find.byType(BarsMenu), findsNothing);
-    expect(find.byType(OnSoundToggle), findsNothing);
+    expect(find.byType(OnSoundToggle), findsOneWidget);
+    expect(find.byKey(const ValueKey('trainer-button')), findsOneWidget);
     expect(find.byType(ClickMenu), findsNothing);
+    expect(find.byType(SimpleClickToggle), findsOneWidget);
     expect(find.byType(MeterMenu), findsOneWidget);
     expect(find.byType(AccompanimentRow), findsNothing);
     expect(find.text('TAP · TOCA AL RITMO'), findsOneWidget);
@@ -221,7 +226,19 @@ void main() {
     final simplePedal = tester.getSize(find.byType(Footswitch)).width;
     final simpleTempo = tester.getSize(find.byType(TempoDisplay)).height;
 
-    // El clic: un toque lo apaga y otro lo enciende
+    // El modo: sincronizado o manual (sin el libre), y sincronizado con sus compases
+    await tester.tap(find.byTooltip('Modo de grabación'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(PopupMenuItem<LoopMode>), findsNWidgets(2));
+    await tester.tap(find.text('Sincronizado').last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(c.loopMode, LoopMode.sync);
+    expect(find.byType(BarsMenu), findsOneWidget);
+
+    // El clic: hasta grabar (de serie) → apagado → siempre → hasta grabar
+    expect(c.clickMode, ClickMode.untilRecording);
     await tester.tap(find.byKey(const ValueKey('simple-click')));
     await tester.pump();
     expect(c.clickMode, ClickMode.silent);
@@ -229,6 +246,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('simple-click')));
     await tester.pump();
     expect(c.clickMode, ClickMode.always);
+    await tester.tap(find.byKey(const ValueKey('simple-click')));
+    await tester.pump();
+    expect(c.clickMode, ClickMode.untilRecording);
 
     // El compás: solo 3
     await tester.tap(find.byTooltip('Compás'));
@@ -249,14 +269,11 @@ void main() {
     expect(find.byType(SimpleClickToggle), findsNothing);
     expect(find.byType(AccompanimentRow), findsOneWidget);
     final advancedPedal = tester.getSize(find.byType(Footswitch)).width;
-    // Lo que falta en simple (una fila del tempo y la de acompañamiento con su
-    // hueco) es justo lo que crece el pulsador
-    final saved =
-        tester.getSize(find.byType(TempoDisplay)).height -
-        simpleTempo +
-        tester.getSize(find.byType(AccompanimentRow)).height +
-        6;
-    expect(saved, 96);
+    // Lo que falta en simple (la fila de acompañamiento con su hueco) es justo
+    // lo que crece el pulsador; la pantalla de tempo mide lo mismo
+    expect(tester.getSize(find.byType(TempoDisplay)).height, simpleTempo);
+    final saved = tester.getSize(find.byType(AccompanimentRow)).height + 6;
+    expect(saved, 52);
     expect(simplePedal - advancedPedal, closeTo(saved, 0.5));
     expect(tester.takeException(), isNull);
     c.stopAudio();
@@ -281,7 +298,7 @@ void main() {
         await tester.pumpWidget(const SizedBox());
         c.dispose();
       }
-      expect(widths[PlayMode.simple]! - widths[PlayMode.advanced]!, greaterThanOrEqualTo(60));
+      expect(widths[PlayMode.simple]! - widths[PlayMode.advanced]!, greaterThanOrEqualTo(40));
     });
   }
 
@@ -294,9 +311,12 @@ void main() {
     await tester.pumpWidget(_app(SettingsScreen(controller: c)));
     await c.startAudio();
     await tester.pump(const Duration(milliseconds: 100));
-    expect(find.text('Lo justo para grabar y tocar'), findsOneWidget);
+    expect(find.text('Lo justo para grabar, tocar y practicar'), findsOneWidget);
     expect(find.text('Al grabar con el altavoz'), findsNothing);
     expect(find.text('Avance automático'), findsOneWidget);
+    // Cómo parar y los cambios en el 1, también en simple
+    expect(find.text('Al parar'), findsOneWidget);
+    expect(find.text('Cambios de pista en el 1'), findsOneWidget);
 
     await tester.tap(find.text('Avanzado'));
     await tester.pump();

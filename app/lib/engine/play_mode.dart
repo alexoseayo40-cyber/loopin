@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // El simple es para quien empieza con los loopers y para tocar sin mirar
-// tanto: menos controles, sin batería ni canción, y la grabación siempre
-// igual (1 compás de cuenta y se cierra al pulsar). No solo esconde: al pasar a simple, lo que no se ve
+// tanto: menos controles y sin batería ni canción, pero con lo que hace más
+// cómodo tocar y practicar (sincronizado, empezar al tocar, entrenador, cómo
+// parar, afinador). Lo que es solo para avanzados (libre, 10 compases, REV y
+// ½, micro, latencia a mano…) no está. No solo esconde: al pasar a simple, lo que no se ve
 // vuelve a sus valores (para que no quede, por ejemplo, el modo libre puesto
 // sin que se vea). Lo que se cambió se apunta y se devuelve al volver al
 // avanzado, si mientras tanto no se ha tocado.
@@ -17,10 +19,21 @@ const List<String> kSimpleMeters = ['4/4', '3/4', '6/8'];
 /// El compás al que vuelve el simple si el de ahora no es suyo.
 const String kSimpleMeter = '4/4';
 
-/// Clic del modo simple: siempre o apagado (solo las luces).
-const List<ClickMode> kSimpleClickModes = [ClickMode.always, ClickMode.silent];
+/// Clic del modo simple, en el orden en que pasa con cada toque: siempre,
+/// hasta grabar y apagado (solo las luces).
+const List<ClickMode> kSimpleClickModes = [
+  ClickMode.always,
+  ClickMode.untilRecording,
+  ClickMode.silent,
+];
 
-/// Modo de grabación del simple: se cierra al pulsar, con 1 compás de cuenta.
+/// El clic al que pasa el simple si el de ahora no es suyo («solo la cuenta»).
+const ClickMode kSimpleClick = ClickMode.untilRecording;
+
+/// Modos de grabación del simple (sin el libre).
+const List<LoopMode> kSimpleLoopModes = [LoopMode.sync, LoopMode.manual];
+
+/// Al que pasa el simple si estaba en libre.
 const LoopMode kSimpleLoopMode = LoopMode.manual;
 
 /// Lo que el modo simple cambió al entrar: el valor que tenía en el avanzado,

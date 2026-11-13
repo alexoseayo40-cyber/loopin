@@ -591,6 +591,69 @@ void testTuner() {
   }
 }
 
+void testToneAndClickUntilRecording() {
+  std::printf("Nota de referencia (en su frecuencia, sin chasquidos) y clic «hasta grabar»\n");
+  {
+    Rig r(kSr, 2000, 61);
+    r.post(T::kSetTone, 440.0);
+    r.runFor(kSr / 2);
+    CHECK(std::fabs(r.core.status().toneHz - 440.0) < 1e-9);
+    // Entra poco a poco (10 ms) y el afinador la ve en su sitio
+    CHECK(std::fabs(r.hist[1]) < 0.01f);
+    Tuner tuner;
+    tuner.prepare(kSr);
+    const TunerResult res = tuner.analyze(r.hist.data() + r.outPos - tuner.frames());
+    CHECK(res.frequency > 0 && std::fabs(cents(res.frequency, 440.0)) < 0.5);
+    // El Mi grave también (por sus armónicos)
+    r.post(T::kSetTone, 82.41);
+    r.runFor(kSr / 2);
+    const TunerResult e2 = tuner.analyze(r.hist.data() + r.outPos - tuner.frames());
+    CHECK(e2.frequency > 0 && std::fabs(cents(e2.frequency, 82.41)) < 0.5);
+    // Sin saltos entre muestras (ni al cambiar de nota)
+    float jump = 0.0f;
+    for (int64_t n = 1; n < r.outPos; ++n)
+      jump = std::max(jump, std::fabs(r.hist[size_t(n)] - r.hist[size_t(n - 1)]));
+    CHECK(jump < 0.08f);
+    // Callar: baja en 10 ms y luego nada
+    r.post(T::kSetTone, 0.0);
+    const int64_t off = r.outPos;
+    r.runFor(kSr / 10);
+    CHECK(std::fabs(r.hist[size_t(off + 1)]) > 0.0f || std::fabs(r.hist[size_t(off + 2)]) > 0.0f);
+    for (int64_t n = off + kSr / 50; n < r.outPos; ++n) CHECK(r.hist[size_t(n)] == 0.0f);
+    CHECK(r.core.status().toneHz == 0.0);
+  }
+  {
+    // Hasta grabar: suena con el metrónomo solo y en la cuenta; grabando y
+    // con loops, calla; sin loops otra vez, vuelve
+    Rig r(kSr, 2000, 63);
+    r.post(T::kSetBpm, 120);
+    r.post(T::kSetClickMode, 3);
+    r.post(T::kSetSyncBars, 1);
+    r.post(T::kPlay);
+    r.runFor(2 * kBar);
+    auto loud = [&](int64_t from, int64_t to) {
+      float m = 0.0f;
+      for (int64_t n = from; n < to; ++n) m = std::max(m, std::fabs(r.hist[size_t(n)]));
+      return m;
+    };
+    CHECK(loud(0, 2 * kBar) > 0.1f);  // metrónomo solo: suena
+    const int64_t press = r.outPos;
+    r.post(T::kLoopPress);  // cuenta de 1 compás y 1 compás de grabación
+    r.runFor(kBar);
+    CHECK(loud(press, press + kBar) > 0.1f);  // la cuenta suena
+    r.runFor(3 * kBar);
+    CHECK(r.state() == St::kPlaying);
+    // Grabando y sonando el loop (en silencio: el músico no ha tocado): nada
+    CHECK(loud(press + kBar + 2000, r.outPos) == 0.0f);
+    r.post(T::kLoopClear);
+    r.runFor(kBar + 100);
+    const int64_t c0 = r.outPos;
+    r.runFor(kBar);
+    CHECK(loud(c0, r.outPos) > 0.1f);  // sin loops, vuelve a sonar
+    CHECK_EQ(r.core.status().clickMode, 3);
+  }
+}
+
 }  // namespace
 
 void runLiveTests() {
@@ -600,4 +663,5 @@ void runLiveTests() {
   testStopModes();
   testTrainer();
   testTuner();
+  testToneAndClickUntilRecording();
 }

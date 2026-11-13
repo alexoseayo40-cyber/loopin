@@ -2,7 +2,7 @@
 
 Looper de guitarra libre para Android: varias pistas que cuadran al compás, metrónomo y backing tracks.
 
-> **Estado:** Etapa 5. Modo simple (lo justo para grabar y tocar: pulsador más grande, 1 compás de cuenta y se cierra al pulsar) y avanzado (todo). Looper de 4 pistas con interfaz de pedal, metrónomo con 10 compases, batería con 10 estilos, tus propias canciones (WAV, MP3, FLAC) estiradas al tempo, modo libre, «empezar al tocar», controles externos y latencia compensada (medida sola, tocando al clic o a mano). Para el directo y la práctica: afinador, reverse y media velocidad por pista, silenciar y entrar en el 1, parar en el 1 o con fundido, y entrenador de tempo. Próximo: guardar sesiones y exportar.
+> **Estado:** Etapa 5. Modo simple (lo justo para grabar, tocar y practicar: pulsador más grande, sin batería ni canciones) y avanzado (todo). Looper de 4 pistas con interfaz de pedal, metrónomo con 10 compases, batería con 10 estilos, tus propias canciones (WAV, MP3, FLAC) estiradas al tempo, modo libre, «empezar al tocar», controles externos y latencia compensada (medida sola, tocando al clic o a mano). Para el directo y la práctica: afinador, reverse y media velocidad por pista, silenciar y entrar en el 1, parar en el 1 o con fundido, y entrenador de tempo. Próximo: guardar sesiones y exportar.
 
 ## Cómo se usa
 
@@ -18,7 +18,7 @@ Modos de grabación: **sincronizado** (1, 2, 4 u 8 compases), **manual** (se cie
 
 **Canciones:** la misma fila, en la posición «CANCIÓN». Importas un audio tuyo, marcas su tempo y dónde cae un 1 (escuchándola, con un clic encima para comprobarlo; el tempo exacto sale de marcar otro 1 más adelante) y suena con los loops, estirada al tempo del metrónomo sin cambiar el tono ([SoundTouch](https://codeberg.org/soundtouch/soundtouch), LGPL). Entra siempre en un 1 y al acabar vuelve a empezar.
 
-**Directo y práctica:** el **afinador** (el diapasón de arriba) usa la entrada que tengas. Cada pista puede ir al revés (**REV**) o a media velocidad (**½**); silenciarla, REV y ½ esperan al siguiente 1 para entrar a tiempo. **Al parar** (Ajustes) puede ser al momento, en el siguiente 1 o con un fundido de 4 s. El **entrenador de tempo** (la flecha junto al ▶) sube el tempo X BPM cada N compases hasta donde digas.
+**Directo y práctica:** el **afinador** (el diapasón de arriba) usa la entrada que tengas y también hace sonar cada cuerda y el La de referencia para afinar de oído. El clic **«hasta grabar»** (de serie) suena con el metrónomo y en la cuenta, y se calla al empezar a grabar. Cada pista puede ir al revés (**REV**) o a media velocidad (**½**); silenciarla, REV y ½ esperan al siguiente 1 para entrar a tiempo. **Al parar** (Ajustes) puede ser al momento, en el siguiente 1 o con un fundido de 4 s. El **entrenador de tempo** (la flecha junto al ▶) sube el tempo X BPM cada N compases hasta donde digas.
 
 Mide la latencia una vez por cada combinación de entrada y salida (Ajustes › Audio y latencia): se guarda y se aplica sola.
 

@@ -76,6 +76,8 @@ class _TunerScreenState extends State<TunerScreen> {
                     _SpeakerWarning(controller: c, palette: palette),
                   ],
                   const SizedBox(height: 12),
+                  _ReferenceNotes(controller: c, palette: palette),
+                  const SizedBox(height: 12),
                   Material(
                     color: palette.panel,
                     borderRadius: BorderRadius.circular(12),
@@ -86,7 +88,7 @@ class _TunerScreenState extends State<TunerScreen> {
                           title: tr.tuner,
                           help: tr.tunerHelp,
                         ),
-                        if (!c.simple) _A4Tile(controller: c),
+                        _A4Tile(controller: c),
                       ],
                     ),
                   ),
@@ -338,7 +340,93 @@ class _SpeakerWarning extends StatelessWidget {
   }
 }
 
-/// La de referencia (solo en avanzado): − 440 Hz +
+/// Oír una nota para afinar de oído: las 6 cuerdas y el La de referencia.
+/// Tocar una la hace sonar; otra vez, la calla.
+class _ReferenceNotes extends StatelessWidget {
+  const _ReferenceNotes({required this.controller, required this.palette});
+
+  final EngineController controller;
+  final LoopinPalette palette;
+
+  /// El La de referencia (La4)
+  static const _a4 = 69;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = controller;
+    final theme = Theme.of(context);
+    Widget note(int midi, String label, String key) {
+      final on = c.toneMidi == midi;
+      return Semantics(
+        button: true,
+        toggled: on,
+        label: tr.referenceNoteSemantics(label, c.noteHz(midi), on),
+        excludeSemantics: true,
+        child: InkWell(
+          key: ValueKey(key),
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => c.toggleTone(midi),
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              color: on ? LoopinPalette.display : null,
+              border: Border.all(color: on ? LoopinPalette.display : palette.edge, width: 1.5),
+            ),
+            child: Center(
+              widthFactor: 1,
+              heightFactor: 1,
+              child: Text(
+                label,
+                style: palette.label(size: 15, color: on ? LoopinPalette.well : palette.ink),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(color: palette.panel, borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.volume_up, size: 18, color: palette.dim),
+              const SizedBox(width: 8),
+              Expanded(child: Text(tr.referenceNotes, style: theme.textTheme.titleSmall)),
+              if (c.toneMidi != null)
+                TextButton(onPressed: c.stopTone, child: Text(tr.referenceStop)),
+            ],
+          ),
+          Text(
+            tr.referenceNotesLine,
+            style: theme.textTheme.bodySmall?.copyWith(color: palette.dim),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (var i = 0; i < kStandardStrings.length; i++)
+                note(
+                  kStandardStrings[i],
+                  tr.noteName(kStandardStrings[i] % 12),
+                  'tone-${kStandardStrings[i]}',
+                ),
+              note(_a4, tr.referenceA4(c.tunerA4), 'tone-$_a4'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// La de referencia: − 440 Hz +
 class _A4Tile extends StatelessWidget {
   const _A4Tile({required this.controller});
 

@@ -97,6 +97,10 @@ enum ClickMode {
 
   /// Siempre.
   always,
+
+  /// Con el metrónomo solo y en la cuenta de entrada; se calla al empezar a
+  /// grabar y mientras suenan loops.
+  untilRecording,
 }
 
 /// Número de pistas del looper.
@@ -312,6 +316,7 @@ class EngineStatus {
     this.trainerBars = 0,
     this.trainerStep = 5,
     this.trainerTop = 240,
+    this.toneHz = 0,
   });
 
   final bool running;
@@ -500,6 +505,9 @@ class EngineStatus {
   final double trainerTop;
   bool get trainerOn => trainerBars > 0;
 
+  /// Nota de referencia del afinador que suena (0 = ninguna).
+  final double toneHz;
+
   /// La canción cargada está estirada al tempo y compás de ahora.
   bool get backingFits =>
       backingId != 0 &&
@@ -644,6 +652,9 @@ class LoopinEngine {
   /// (bars = 0: apagado). Al parar vuelve el tempo de [setBpm].
   void setTrainer({required int bars, required double step, required double top}) =>
       _b.loopin_set_trainer(bars, step, top);
+
+  /// Nota de referencia para afinar de oído (0 = callar).
+  void setTone(double hz) => _b.loopin_set_tone(hz);
 
   /// Afinador: encendido, la entrada se copia para analizarla.
   void setTunerEnabled(bool on) => _b.loopin_tuner_enable(on ? 1 : 0);
@@ -844,6 +855,7 @@ class LoopinEngine {
       trainerBars: s.trainer_bars,
       trainerStep: s.trainer_step,
       trainerTop: s.trainer_top,
+      toneHz: s.tone_hz,
     );
   }
 }

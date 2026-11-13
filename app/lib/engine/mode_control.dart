@@ -25,13 +25,10 @@ extension PlayModeControl on EngineController {
   /// Lo que no se ve en simple vuelve a sus valores; el que tenía se apunta.
   void _enterSimple() {
     final f = _forced;
-    if (loopMode != kSimpleLoopMode) {
+    // Sincronizado y manual también están en simple; el libre no
+    if (!kSimpleLoopModes.contains(loopMode)) {
       f.remember(SimpleForced.loopMode, loopMode.name);
       setLoopMode(kSimpleLoopMode);
-    }
-    if (startOnSound) {
-      f.remember(SimpleForced.startOnSound, '1');
-      setStartOnSound(false);
     }
     // Con loops el compás es el suyo: se queda (y se ve en la pantalla)
     if (!kSimpleMeters.contains(timeSignature.label) && !tempoLocked) {
@@ -40,7 +37,7 @@ extension PlayModeControl on EngineController {
     }
     if (!kSimpleClickModes.contains(clickMode)) {
       f.remember(SimpleForced.clickMode, clickMode.name);
-      setClickMode(ClickMode.always);
+      setClickMode(kSimpleClick);
     }
     // Sin batería ni canción (no se ven): se apagan, sin parar nada
     if (drumsOn) {
@@ -56,11 +53,8 @@ extension PlayModeControl on EngineController {
       setRecordDuck(RecordDuck.silent);
     }
     _applyPreset(); // el micrófono, el recomendado
-    // Directo y práctica: sin efectos de pista ni entrenador; parar al
-    // momento y cambios al compás (lo elegido en el avanzado se guarda aparte)
+    // REV y ½ no están en simple: se quitan de todas las pistas
     _clearTrackFx();
-    _liveSettings.trainerOn = false;
-    _applyLive();
     _saveForced();
   }
 
@@ -79,13 +73,17 @@ extension PlayModeControl on EngineController {
 
     final loop = parse(LoopMode.values, SimpleForced.loopMode);
     if (loop != null && loopMode == kSimpleLoopMode) setLoopMode(loop);
+    // (de versiones de antes, cuando el simple lo apagaba)
     if (f[SimpleForced.startOnSound] == '1' && !startOnSound) setStartOnSound(true);
     final meter = kTimeSignatures.where((t) => t.label == f[SimpleForced.meter]);
     if (meter.isNotEmpty && timeSignature.label == kSimpleMeter && !tempoLocked) {
       setTimeSignature(meter.first);
     }
     final click = parse(ClickMode.values, SimpleForced.clickMode);
-    if (click != null && clickMode == ClickMode.always) setClickMode(click);
+    // Si en simple no se ha tocado (de antes, el simple lo ponía en «siempre»)
+    if (click != null && (clickMode == kSimpleClick || clickMode == ClickMode.always)) {
+      setClickMode(click);
+    }
     // La batería y la canción vuelven encendidas, pero no arrancan nada:
     // suenan al darle a ▶ o al grabar, como siempre
     if (f[SimpleForced.drumsOn] == '1' && !drumsOn) {
@@ -97,7 +95,6 @@ extension PlayModeControl on EngineController {
     final duck = parse(RecordDuck.values, SimpleForced.recordDuck);
     if (duck != null && recordDuck == RecordDuck.silent) setRecordDuck(duck);
     _applyPreset(); // el micrófono, el que eligió
-    _applyLive(); // cómo parar y los cambios al compás, los que eligió
   }
 
   void _saveForced() => _prefs.set(Prefs.simpleForced, _forced.encode());

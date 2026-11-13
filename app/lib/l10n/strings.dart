@@ -95,10 +95,12 @@ class Strings {
     ClickMode.silent => 'Solo visual',
     ClickMode.countIn => 'Solo la cuenta',
     ClickMode.always => 'Siempre',
+    ClickMode.untilRecording => 'Hasta grabar',
   };
 
   String clickModeLine(ClickMode m) => switch (m) {
     ClickMode.always => 'Suena todo el rato',
+    ClickMode.untilRecording => 'Con el metrónomo solo y en la cuenta; al grabar, se calla',
     ClickMode.countIn => 'Solo el compás antes de grabar la pista 1',
     ClickMode.silent => 'No suena nunca: solo las luces',
   };
@@ -106,10 +108,14 @@ class Strings {
   /// «Clic: siempre»
   String click(ClickMode m) => 'Clic: ${clickModeName(m).toLowerCase()}';
 
-  /// En el modo simple el clic suena siempre o está apagado (solo las luces).
-  String simpleClick(bool on) => on ? 'Clic: siempre' : 'Clic: apagado';
-  String simpleClickSnack(bool on) =>
-      on ? 'Clic encendido' : 'Clic apagado: el tempo se ve en las luces y en el pulsador';
+  /// En el modo simple, un toque pasa de un modo del clic al siguiente.
+  String simpleClick(ClickMode m) => m == ClickMode.silent ? 'Clic: apagado' : click(m);
+  String simpleClickSnack(ClickMode m) => switch (m) {
+    ClickMode.always => 'Clic: siempre',
+    ClickMode.untilRecording =>
+      'Clic hasta grabar: suena con el metrónomo y en la cuenta; al grabar se calla',
+    _ => 'Clic apagado: el tempo se ve en las luces y en el pulsador',
+  };
 
   /// Nombre de un dispositivo de audio de Android.
   String deviceName(AudioDevice d) {
@@ -316,6 +322,15 @@ class Strings {
   String get tunerSpeaker => 'Lo que suena por el altavoz también llega al afinador';
   String get tunerStopAll => 'Parar';
   String get tunerOpen => 'Afinador';
+  String get referenceNotes => 'Oír una nota';
+  String get referenceNotesLine =>
+      'Para afinar de oído: toca una para que suene, otra vez para callarla';
+  String get referenceStop => 'Callar';
+
+  /// El botón del La de referencia: «LA 440»
+  String referenceA4(double hz) => 'LA ${hz.round()}';
+  String referenceNoteSemantics(String note, double hz, bool on) =>
+      '${on ? 'Callar' : 'Oír'} $note, ${tunerHz(hz)}';
 
   // ---------------------------------------------------------------- looper: batería
 
@@ -561,15 +576,15 @@ class Strings {
     PlayMode.advanced => 'Avanzado',
   };
   String playModeLine(PlayMode m) => switch (m) {
-    PlayMode.simple => 'Lo justo para grabar y tocar',
+    PlayMode.simple => 'Lo justo para grabar, tocar y practicar',
     PlayMode.advanced => 'Todos los controles',
   };
   String get playModeHelp =>
-      'Simple: el pulsador más grande, el tempo con TAP, 3 compases (4/4, 3/4 y 6/8) y '
-      'el clic encendido o apagado. Cada pista se graba igual: 1 compás de cuenta y se '
-      'cierra al volver a pulsar. Avanzado: además, la batería y tus canciones, los '
-      'modos sincronizado y libre, empezar al tocar, todos los compases, el clic solo en '
-      'la cuenta, los modos del micrófono, qué suena al grabar con el altavoz y la '
+      'Simple: el pulsador más grande, 3 compases (4/4, 3/4 y 6/8), grabar sincronizado o '
+      'manual, empezar al tocar, el clic (siempre, hasta grabar o apagado), el '
+      'entrenador de tempo, el afinador y cómo parar. Avanzado: además, la batería y tus '
+      'canciones, el modo libre, todos los compases, el clic solo en la cuenta, REV y ½ '
+      'en las pistas, los modos del micrófono, qué suena al grabar con el altavoz y la '
       'latencia a mano. Al volver al avanzado recupera lo que tenías.';
   String get playModeBusy => 'Acaba de grabar para cambiarlo';
 
@@ -601,7 +616,7 @@ class Strings {
       'del compás y para justo en el siguiente 1, para acabar a tiempo. Fundido: todo baja '
       'poco a poco durante 4 segundos y luego para. Mientras espera o baja, pulsar otra vez '
       '(o tocar el pulsador) para ya. Si estás grabando una pista nueva, para siempre al '
-      'momento (como antes); un overdub se cierra al pedir parar.';
+      'momento; un overdub se cierra al pedir parar.';
   String stopModeName(StopMode m) => switch (m) {
     StopMode.now => 'Al momento',
     StopMode.bar => 'En el 1',
@@ -610,11 +625,12 @@ class Strings {
 
   String get quantizeTitle => 'Cambios de pista en el 1';
   String get quantizeLine => 'Silenciar, REV y ½ esperan al siguiente 1';
+  String get quantizeLineSimple => 'Silenciar una pista espera al siguiente 1';
   String get quantizeHelp =>
       'Encendido, cuando silencias una pista (o le pones o quitas el reverse o la media '
       'velocidad), el cambio espera al siguiente 1: así entra y sale a tiempo aunque '
       'pulses un poco antes. Mientras espera, el botón lleva un punto. Apagado, cambia en '
-      'cuanto pulsas. En el modo simple, siempre en el 1.';
+      'cuanto pulsas.';
 
   String get recordDuckTitle => 'Al grabar con el altavoz';
   String get recordDuckLine => 'Lo que ya suena, mientras grabas';

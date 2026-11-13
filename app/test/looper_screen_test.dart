@@ -376,11 +376,13 @@ void main() {
     expect(engine.calls, contains('meter 7 20'));
     expect(find.text('7/8 2+2+3'), findsOneWidget);
 
-    await pick('Clic: siempre', find.text('Clic: solo visual'));
+    await pick('Clic: hasta grabar', find.text('Clic: solo visual'));
     expect(c.clickMode, ClickMode.silent);
     expect(engine.calls, contains('click silent'));
 
-    // Sincronizado: compases en su propio selector
+    // Sincronizado (de serie, manual): compases en su propio selector
+    await pick('Modo de grabación', find.text('Sincronizado'));
+    expect(c.loopMode, LoopMode.sync);
     await pick('Compases que graba', find.text('2 compases'));
     expect(c.syncBars, 2);
     expect(find.text('2 C'), findsOneWidget);

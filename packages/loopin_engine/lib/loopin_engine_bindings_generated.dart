@@ -659,6 +659,15 @@ class LoopinEngineBindings {
   );
   late final _loopin_tuner_enable = _loopin_tuner_enablePtr.asFunction<void Function(int)>();
 
+  void loopin_set_tone(double hz) {
+    return _loopin_set_tone(hz);
+  }
+
+  late final _loopin_set_tonePtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Double)>>(
+    'loopin_set_tone',
+  );
+  late final _loopin_set_tone = _loopin_set_tonePtr.asFunction<void Function(double)>();
+
   int loopin_tuner_read(ffi.Pointer<LoopinTuner> out) {
     return _loopin_tuner_read(out);
   }
@@ -1076,6 +1085,10 @@ final class LoopinStatus extends ffi.Struct {
 
   @ffi.Double()
   external double trainer_top;
+
+  /// Afinador: nota de referencia que suena (0 = ninguna)
+  @ffi.Double()
+  external double tone_hz;
 }
 
 final class LoopinTuner extends ffi.Struct {
@@ -1110,6 +1123,8 @@ const int LOOPIN_CLICK_SILENT = 0;
 const int LOOPIN_CLICK_COUNT_IN = 1;
 
 const int LOOPIN_CLICK_ALWAYS = 2;
+
+const int LOOPIN_CLICK_UNTIL_RECORDING = 3;
 
 const int LOOPIN_PRESET_GENERIC = 1;
 

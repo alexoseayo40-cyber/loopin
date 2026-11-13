@@ -5,9 +5,7 @@
 // Parte de engine_controller.dart (comparte sus campos privados). Los ajustes
 // guardados están en live_settings.dart.
 //
-// Modos: en simple no hay reverse, media velocidad, entrenador ni ajustes de
-// parar; los cambios de pista siempre van al compás, parar es al momento y el
-// afinador usa La = 440. El afinador está en los dos.
+// Modos: todo está en los dos menos REV y ½ (solo en avanzado).
 part of 'engine_controller.dart';
 
 extension LiveControl on EngineController {
@@ -47,12 +45,8 @@ extension LiveControl on EngineController {
 
   // ---------- Cambios de pista al compás ----------
 
-  /// Silenciar, reverse y media velocidad esperan al siguiente 1 (en simple,
-  /// siempre).
-  bool get quantize => simple || _ls.quantize;
-
-  /// Lo elegido en el avanzado.
-  bool get quantizeSetting => _ls.quantize;
+  /// Silenciar, reverse y media velocidad esperan al siguiente 1.
+  bool get quantize => _ls.quantize;
 
   void setQuantize(bool on) {
     _ls.quantize = on;
@@ -63,11 +57,8 @@ extension LiveControl on EngineController {
 
   // ---------- Parar ----------
 
-  /// Cómo para el botón de parar y el doble toque (en simple, al momento).
-  StopMode get stopMode => simple ? StopMode.now : _ls.stopMode;
-
-  /// Lo elegido en el avanzado.
-  StopMode get stopModeSetting => _ls.stopMode;
+  /// Cómo para el botón de parar y el doble toque.
+  StopMode get stopMode => _ls.stopMode;
 
   void setStopMode(StopMode mode) {
     _ls.stopMode = mode;
@@ -81,9 +72,9 @@ extension LiveControl on EngineController {
 
   // ---------- Entrenador de tempo ----------
 
-  /// Solo en avanzado y sin loops (con loops el tempo es suyo).
-  bool get trainerAvailable => !simple && !tempoLocked;
-  bool get trainerOn => !simple && _ls.trainerOn;
+  /// Sin loops (con loops el tempo es suyo).
+  bool get trainerAvailable => !tempoLocked;
+  bool get trainerOn => _ls.trainerOn;
   double get trainerStep => _ls.trainerStep;
   int get trainerBars => _ls.trainerBars;
   double get trainerTop => _ls.trainerTop;
@@ -137,17 +128,52 @@ extension LiveControl on EngineController {
 
   // ---------- Afinador ----------
 
-  /// El La de referencia (en simple, 440).
-  double get tunerA4 => simple ? 440 : _ls.tunerA4;
+  /// El La de referencia.
+  double get tunerA4 => _ls.tunerA4;
 
   void setTunerA4(double hz) {
     _ls.tunerA4 = hz.clamp(LiveSettings.minA4, LiveSettings.maxA4).roundToDouble();
     _prefs.set(Prefs.tunerA4, _ls.tunerA4.toStringAsFixed(0));
+    // La nota que suena sigue al La nuevo
+    final midi = _toneMidi;
+    if (midi != null) _engine.setTone(noteHz(midi));
     notifyListeners();
   }
 
-  /// La pantalla del afinador está abierta: la entrada se copia para él.
-  void setTunerOpen(bool open) => _engine.setTunerEnabled(open);
+  /// La pantalla del afinador está abierta: la entrada se copia para él. Al
+  /// cerrarla se calla la nota de referencia.
+  void setTunerOpen(bool open) {
+    _engine.setTunerEnabled(open);
+    // Al cerrar (desde dispose de la pantalla) no se avisa: el árbol está bloqueado
+    if (!open && _toneMidi != null) {
+      _toneMidi = null;
+      _engine.setTone(0);
+    }
+  }
+
+  /// Frecuencia de una nota (número MIDI) con el La de referencia.
+  double noteHz(int midi) => tunerA4 * math.pow(2, (midi - 69) / 12).toDouble();
+
+  /// La nota de referencia que suena (número MIDI), o null.
+  int? get toneMidi => _toneMidi;
+
+  /// Hace sonar una nota para afinar de oído (otra vez la misma, la calla).
+  void toggleTone(int midi) {
+    if (_toneMidi == midi) {
+      stopTone();
+      return;
+    }
+    _toneMidi = midi;
+    _engine.setTone(noteHz(midi));
+    notifyListeners();
+  }
+
+  void stopTone() {
+    if (_toneMidi == null) return;
+    _toneMidi = null;
+    _engine.setTone(0);
+    notifyListeners();
+  }
 
   /// Lo que oye el afinador ahora (null si aún no ha llegado audio).
   TunerReading? readTuner() => status.running ? _engine.tunerRead() : null;

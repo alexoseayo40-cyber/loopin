@@ -20,6 +20,7 @@ void EngineCore::prepare(int32_t sampleRate) {
   looper_.prepare(sampleRate_, &transport_);
   drums_.prepare(sampleRate_);
   backing_.prepare(sampleRate_, bin_);
+  tone_.prepare(sampleRate_);
   stopAt_ = Looper::kNever;
   fade_ = Fade::kNone;
   fadeGain_ = 1.0f;
@@ -65,6 +66,9 @@ void EngineCore::apply(const Command& cmd) {
         trainerRaised_ = false;
       }
       break;
+    case Command::Type::kSetTone:
+      tone_.setFrequency(cmd.value);
+      break;
     case Command::Type::kSetTrainerTop:
       trainerTop_ = std::clamp(cmd.value, Transport::kMinBpm, Transport::kMaxBpm);
       break;
@@ -83,7 +87,7 @@ void EngineCore::apply(const Command& cmd) {
       clickMode_ = cmd.value != 0.0 ? ClickMode::kAlways : ClickMode::kCountIn;
       break;
     case Command::Type::kSetClickMode:
-      clickMode_ = static_cast<ClickMode>(std::clamp(static_cast<int32_t>(cmd.value), 0, 2));
+      clickMode_ = static_cast<ClickMode>(std::clamp(static_cast<int32_t>(cmd.value), 0, 3));
       break;
     case Command::Type::kSetMeter:
       if (!looper_.locksTempo())
@@ -319,7 +323,10 @@ void EngineCore::process(const float* in, int32_t inFrames, int32_t inChannels, 
       const bool countIn = looper_.forcesClick();
       clickGate_ = looper_.mode() != Looper::Mode::kFree &&
                    (clickMode_ == ClickMode::kAlways ||
-                    (clickMode_ == ClickMode::kCountIn && countIn));
+                    (clickMode_ == ClickMode::kCountIn && countIn) ||
+                    // Hasta grabar: con el metrónomo solo (sin loops) y en la cuenta
+                    (clickMode_ == ClickMode::kUntilRecording &&
+                     (countIn || looper_.state() == Looper::State::kEmpty)));
       // La batería toca este tiempo (o, en la cuenta, las baquetas en lugar
       // del clic): entonces el clic se calla, la batería ya marca el tempo
       const bool sticks = clickMode_ != ClickMode::kSilent;
@@ -368,6 +375,9 @@ void EngineCore::process(const float* in, int32_t inFrames, int32_t inChannels, 
       if (monitorEnabled_) s += mon * monitorVolume_;
       s += ((clickGate_ ? click * clickVolume_ : 0.0f) + loop + drums + song) * fadeGain_;
     }
+    // La nota de referencia del afinador (también mientras se mide: se oye
+    // poco y el usuario la ha pedido)
+    if (tone_.sounding() || tone_.frequency() > 0.0) s += tone_.next();
     outMono_[i] = s;
     // Fundido al parar: −60 dB y entonces se para (y se cortan las colas de
     // la batería). Tras parar, un momento en silencio por si algo aún suena.
@@ -488,6 +498,7 @@ void EngineCore::publish() {
   aTrainerBars_.store(trainerBars_, std::memory_order_relaxed);
   aTrainerStep_.store(trainerStep_, std::memory_order_relaxed);
   aTrainerTop_.store(trainerTop_, std::memory_order_relaxed);
+  aToneHz_.store(tone_.frequency(), std::memory_order_relaxed);
   aTapState_.store(static_cast<int32_t>(tap_.state()), std::memory_order_release);
 
   // El estado va el último: quien lo lea como «hecho» ve ya el resultado.
@@ -569,6 +580,7 @@ CoreStatus EngineCore::status() const {
   s.trainerBars = aTrainerBars_.load(std::memory_order_relaxed);
   s.trainerStep = aTrainerStep_.load(std::memory_order_relaxed);
   s.trainerTop = aTrainerTop_.load(std::memory_order_relaxed);
+  s.toneHz = aToneHz_.load(std::memory_order_relaxed);
   return s;
 }
 

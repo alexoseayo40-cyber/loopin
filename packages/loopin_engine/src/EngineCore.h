@@ -14,6 +14,7 @@
 #include "Metronome.h"
 #include "SpscQueue.h"
 #include "TapCalibrator.h"
+#include "Tone.h"
 #include "Transport.h"
 #include "Tuner.h"
 
@@ -77,6 +78,7 @@ struct Command {
     kSetFadeSeconds,
     kSetTrainer,       // value = BPM que sube, arg = cada cuántos compases (0 = apagado)
     kSetTrainerTop,    // value = hasta qué tempo
+    kSetTone,          // nota de referencia: value = Hz (0 = callar)
   };
   Type type = Type::kPlay;
   double value = 0.0;
@@ -88,6 +90,7 @@ enum class ClickMode : int32_t {
   kSilent = 0,   // nunca (metrónomo solo visual)
   kCountIn = 1,  // solo en la cuenta de entrada
   kAlways = 2,
+  kUntilRecording = 3,  // con el metrónomo solo y en la cuenta; se calla al grabar
 };
 
 // Cómo para el botón de parar (y el doble toque)
@@ -175,6 +178,7 @@ struct CoreStatus {
   int32_t trainerBars;      // 0 = entrenador apagado
   double trainerStep;
   double trainerTop;
+  double toneHz;            // nota de referencia que suena (0 = ninguna)
 };
 
 class EngineCore {
@@ -244,6 +248,7 @@ class EngineCore {
   Drums drums_;
   Backing backing_;
   TunerTap tunerTap_;
+  Tone tone_;
   ClipBin bin_;
   RetiredClips retired_;
   InputRing ring_;
@@ -349,6 +354,7 @@ class EngineCore {
   std::atomic<int32_t> aTrainerBars_{0};
   std::atomic<double> aTrainerStep_{5.0};
   std::atomic<double> aTrainerTop_{240.0};
+  std::atomic<double> aToneHz_{0.0};
 };
 
 }  // namespace loopin

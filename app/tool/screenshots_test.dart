@@ -404,12 +404,13 @@ void main() {
     (t) => shot(
       t,
       'afinador-afinada',
-      const Size(360, 640),
+      const Size(360, 1000),
       state: LoopState.empty,
       home: tunerHome,
       mode: PlayMode.simple,
       tuner: const TunerReading(frequency: 196.1, clarity: 0.97, levelDb: -25),
       after: (t, c) async {
+        c.toggleTone(55); // suena el Sol
         for (var i = 0; i < 6; i++) {
           await t.pump(const Duration(milliseconds: 40));
         }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:loopin_engine/loopin_engine.dart';
 
 import '../../engine/engine_controller.dart';
+import '../../engine/play_mode.dart';
 import '../../l10n/strings.dart';
 import '../theme.dart';
 import 'view.dart';
@@ -78,7 +79,8 @@ class ModeMenu extends StatelessWidget {
       initialValue: c.loopMode,
       onSelected: c.setLoopMode,
       itemBuilder: (_) => [
-        for (final m in LoopMode.values)
+        // En simple, sin el libre
+        for (final m in c.simple ? kSimpleLoopModes : LoopMode.values)
           PopupMenuItem(
             value: m,
             child: ListTile(
@@ -178,6 +180,7 @@ class ClickMenu extends StatelessWidget {
     ClickMode.always => Icons.volume_up,
     ClickMode.countIn => Icons.timer_outlined,
     ClickMode.silent => Icons.visibility_outlined,
+    ClickMode.untilRecording => Icons.fiber_smart_record_outlined,
   };
 
   @override
@@ -218,8 +221,8 @@ class ClickMenu extends StatelessWidget {
   }
 }
 
-/// El clic del modo simple: un toque lo enciende (siempre) o lo apaga (solo
-/// las luces).
+/// El clic del modo simple: cada toque pasa al siguiente modo (siempre →
+/// hasta grabar → apagado, solo las luces → siempre).
 class SimpleClickToggle extends StatelessWidget {
   const SimpleClickToggle({super.key, required this.view});
 
@@ -228,26 +231,29 @@ class SimpleClickToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = view.controller;
-    final on = c.clickMode != ClickMode.silent;
+    final mode = c.clickMode;
+    final on = mode != ClickMode.silent;
     const color = LoopinPalette.display;
+    final i = kSimpleClickModes.indexOf(mode);
+    final next = kSimpleClickModes[(i + 1) % kSimpleClickModes.length];
     return Tooltip(
-      message: tr.simpleClick(on),
+      message: tr.simpleClick(mode),
       child: Semantics(
         button: true,
         toggled: on,
-        label: tr.simpleClick(on),
+        label: tr.simpleClick(mode),
         excludeSemantics: true,
         child: InkWell(
           key: const ValueKey('simple-click'),
           borderRadius: BorderRadius.circular(6),
           onTap: () {
-            c.setClickMode(on ? ClickMode.silent : ClickMode.always);
+            c.setClickMode(next);
             ScaffoldMessenger.of(context)
               ..hideCurrentSnackBar()
               ..showSnackBar(
                 SnackBar(
                   duration: const Duration(seconds: 3),
-                  content: Text(tr.simpleClickSnack(!on)),
+                  content: Text(tr.simpleClickSnack(next)),
                 ),
               );
           },
@@ -259,7 +265,7 @@ class SimpleClickToggle extends StatelessWidget {
               color: on ? color.withValues(alpha: 0.2) : null,
               border: Border.all(color: color.withValues(alpha: on ? 1 : 0.45)),
             ),
-            child: Icon(on ? Icons.volume_up : Icons.volume_off, size: 20, color: color),
+            child: Icon(on ? ClickMenu.iconFor(mode) : Icons.volume_off, size: 20, color: color),
           ),
         ),
       ),

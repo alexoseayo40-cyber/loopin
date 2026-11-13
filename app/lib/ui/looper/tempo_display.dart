@@ -11,9 +11,9 @@ import 'tempo_menus.dart';
 import 'trainer_sheet.dart';
 import 'view.dart';
 
-/// Tres filas: el tempo (con − / + y TAP), arrancar/parar con las luces de
-/// los tiempos, y compás, modo, compases, «empezar al tocar» y clic. En el
-/// modo simple, dos: el compás y el clic van junto a las luces.
+/// Tres filas: el tempo (con − / + y TAP), arrancar/parar y el entrenador con
+/// las luces de los tiempos, y compás, modo, compases, «empezar al tocar» y
+/// clic (en simple, con menos opciones y el clic de un toque).
 class TempoDisplay extends StatelessWidget {
   const TempoDisplay({super.key, required this.view, required this.compact});
 
@@ -42,7 +42,8 @@ class TempoDisplay extends StatelessWidget {
             child: Row(
               children: [
                 _MetronomeButton(view: view),
-                if (!simple) ...[const SizedBox(width: 6), TrainerButton(view: view)],
+                const SizedBox(width: 6),
+                TrainerButton(view: view),
                 const SizedBox(width: 10),
                 Expanded(
                   child: BeatBuilder(
@@ -56,16 +57,10 @@ class TempoDisplay extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (simple) ...[
-                  const SizedBox(width: 10),
-                  SizedBox(width: 64, child: MeterMenu(view: view)),
-                  const SizedBox(width: 6),
-                  SimpleClickToggle(view: view),
-                ],
               ],
             ),
           ),
-          if (!simple) ...[
+          ...[
             SizedBox(height: compact ? 4 : 8),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -82,7 +77,8 @@ class TempoDisplay extends StatelessWidget {
                   const SizedBox(width: 6),
                   OnSoundToggle(view: view),
                   const SizedBox(width: 6),
-                  ClickMenu(view: view),
+                  // En simple, un toque pasa de un modo del clic al siguiente
+                  simple ? SimpleClickToggle(view: view) : ClickMenu(view: view),
                 ],
               ),
             ),

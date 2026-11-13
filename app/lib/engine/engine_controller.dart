@@ -107,11 +107,17 @@ class EngineController extends ChangeNotifier {
   /// (ver live_control.dart).
   final LiveSettings _liveSettings = LiveSettings();
 
+  /// Nota de referencia del afinador que suena (número MIDI), o null.
+  int? _toneMidi;
+
   // Lo que el usuario ha pedido (se reaplica si el audio se reinicia)
   double bpm = 92;
   TimeSignature timeSignature = kTimeSignatures.first;
   int get beatsPerBar => timeSignature.beats;
-  ClickMode clickMode = ClickMode.always;
+
+  /// De serie, hasta grabar: suena con el metrónomo y en la cuenta, y se calla
+  /// al grabar (con el altavoz no se cuela en los loops).
+  ClickMode clickMode = ClickMode.untilRecording;
   double clickVolume = 0.8;
 
   /// La primera pista espera a que suene la guitarra y empieza ahí.
@@ -134,7 +140,9 @@ class EngineController extends ChangeNotifier {
   double monitorVolume = 1.0;
 
   // Looper
-  LoopMode loopMode = LoopMode.sync;
+  /// De serie, manual (lo más fácil al empezar: 1 compás de cuenta y se
+  /// cierra al pulsar).
+  LoopMode loopMode = LoopMode.manual;
   int syncBars = 4;
   double loopVolume = 1.0;
 
@@ -1015,9 +1023,9 @@ class EngineController extends ChangeNotifier {
       orElse: () => kTimeSignatures.first,
     );
     final click = await _prefs.get(Prefs.clickMode);
-    clickMode = ClickMode.values.firstWhere((m) => m.name == click, orElse: () => ClickMode.always);
+    clickMode = ClickMode.values.firstWhere((m) => m.name == click, orElse: () => clickMode);
     final loop = await _prefs.get(Prefs.loopMode);
-    loopMode = LoopMode.values.firstWhere((m) => m.name == loop, orElse: () => LoopMode.sync);
+    loopMode = LoopMode.values.firstWhere((m) => m.name == loop, orElse: () => loopMode);
     final bars = int.tryParse(await _prefs.get(Prefs.syncBars) ?? '');
     if (bars != null && kSyncBarOptions.contains(bars)) syncBars = bars;
     startOnSound = await _prefs.getBool(Prefs.startOnSound) ?? false;
