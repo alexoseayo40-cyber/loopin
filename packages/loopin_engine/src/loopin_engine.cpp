@@ -84,6 +84,19 @@ void loopin_set_latency_compensation(int32_t frames) {
   post(Command::Type::kSetLatencyFrames, frames);
 }
 
+void loopin_set_drum_sample(int32_t sound, const float* data, int32_t frames,
+                            int32_t sample_rate) {
+  if (sound < 0 || sound >= LOOPIN_DRUM_SOUNDS) return;
+  engine().core().setDrumSample(static_cast<loopin::DrumSound>(sound), data, frames, sample_rate);
+}
+void loopin_set_drums_enabled(int32_t enabled) {
+  post(Command::Type::kSetDrumsEnabled, enabled ? 1.0 : 0.0);
+}
+void loopin_set_drum_style(int32_t style, int32_t beat_is_eighth) {
+  post(Command::Type::kSetDrumStyle, style, beat_is_eighth ? 1 : 0);
+}
+void loopin_set_drum_volume(float volume) { post(Command::Type::kSetDrumVolume, volume); }
+
 void loopin_get_status(LoopinStatus* out) {
   if (out == nullptr) return;
   *out = LoopinStatus{};
@@ -182,6 +195,10 @@ void loopin_get_status(LoopinStatus* out) {
   out->tap_hits = c.tapHits;
   out->tap_frames = c.tapFrames;
   out->tap_spread = c.tapSpread;
+  out->drums_enabled = c.drumsEnabled;
+  out->drum_style = c.drumStyle;
+  out->drums_playing = c.drumsPlaying;
+  out->drum_volume = c.drumVolume;
 }
 
 }  // extern "C"

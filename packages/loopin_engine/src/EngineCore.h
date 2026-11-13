@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "Drums.h"
 #include "LatencyMeter.h"
 #include "Looper.h"
 #include "Metronome.h"
@@ -52,6 +53,10 @@ struct Command {
     kCancelTapCalibration,
     kNudgeLatency,     // nueva compensación; mueve lo grabado lo que cambie
     kSetStartOnSound,
+    // Etapa 4a: batería
+    kSetDrumsEnabled,
+    kSetDrumStyle,     // value = estilo, arg = 1 si el tiempo es la corchea
+    kSetDrumVolume,
   };
   Type type = Type::kPlay;
   double value = 0.0;
@@ -113,6 +118,11 @@ struct CoreStatus {
   int32_t tapHits;
   int32_t tapFrames;
   int32_t tapSpread;
+  // Batería
+  int32_t drumsEnabled;
+  int32_t drumStyle;
+  int32_t drumsPlaying;     // está sonando (ya ha entrado en un 1)
+  float drumVolume;
 };
 
 class EngineCore {
@@ -124,6 +134,12 @@ class EngineCore {
 
   // Fuera del hilo de audio (antes de arrancar el stream). Reserva memoria.
   void prepare(int32_t sampleRate);
+
+  // Fuera del hilo de audio y con el audio cerrado: muestra de un sonido de la
+  // batería. Se aplica en el siguiente prepare().
+  void setDrumSample(DrumSound sound, const float* data, int32_t frames, int32_t rate) {
+    drums_.setSample(sound, data, frames, rate);
+  }
 
   // Hilo de la interfaz: encola una orden. Devuelve false si la cola está llena.
   bool post(const Command& cmd) { return queue_.push(cmd); }
@@ -137,6 +153,8 @@ class EngineCore {
   int32_t sampleRate() const { return sampleRate_; }
   // Solo para tests (mismo hilo que process)
   const Looper& looper() const { return looper_; }
+  const Drums& drums() const { return drums_; }
+  Drums& drumsForTest() { return drums_; }
   int64_t outputPosition() const { return outPos_; }
 
  private:
@@ -150,6 +168,7 @@ class EngineCore {
   LatencyMeter latency_;
   TapCalibrator tap_;
   Looper looper_;
+  Drums drums_;
   InputRing ring_;
   int64_t outPos_ = 0;    // índice absoluto de la próxima muestra de salida
   int64_t monRead_ = 0;   // próxima muestra de entrada que sonará en el monitor
@@ -158,6 +177,7 @@ class EngineCore {
 
   ClickMode clickMode_ = ClickMode::kAlways;
   bool clickGate_ = false;  // el clic que está sonando se oye
+  bool wasPlaying_ = false; // el transporte corría en la muestra anterior
   float clickVolume_ = 0.8f;
   bool monitorEnabled_ = false;
   float monitorVolume_ = 1.0f;
@@ -211,6 +231,10 @@ class EngineCore {
   std::atomic<int32_t> aTapHits_{0};
   std::atomic<int32_t> aTapFrames_{0};
   std::atomic<int32_t> aTapSpread_{0};
+  std::atomic<int32_t> aDrumsEnabled_{0};
+  std::atomic<int32_t> aDrumStyle_{0};
+  std::atomic<int32_t> aDrumsPlaying_{0};
+  std::atomic<float> aDrumVolume_{0.7f};
 };
 
 }  // namespace loopin

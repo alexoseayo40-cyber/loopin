@@ -14,6 +14,8 @@ set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/../packages/loopin_engine/src)
 add_executable(loopin_engine_tests
   tests.cpp
   looper_tests.cpp
+  drum_tests.cpp
+  ${SRC}/Drums.cpp
   ${SRC}/EngineCore.cpp
   ${SRC}/LatencyMeter.cpp
   ${SRC}/Looper.cpp
@@ -31,3 +33,9 @@ if(MSVC)
 else()
   target_compile_options(loopin_engine_tests PRIVATE -Wall -Wextra -O2)
 endif()
+
+# Demo de la batería (no es un test): drum_demo app/assets/drums <salida>
+add_executable(drum_demo drum_demo.cpp ${SRC}/Drums.cpp ${SRC}/EngineCore.cpp ${SRC}/Transport.cpp
+  ${SRC}/Metronome.cpp ${SRC}/LatencyMeter.cpp ${SRC}/TapCalibrator.cpp ${SRC}/Looper.cpp
+  ${SRC}/LooperRecord.cpp ${SRC}/LooperBuffers.cpp)
+target_include_directories(drum_demo PRIVATE ${SRC})

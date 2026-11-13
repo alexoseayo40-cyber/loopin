@@ -366,6 +366,8 @@ int main() {
   testLoadMeter();
   std::printf("\n=== Looper ===\n");
   runLooperTests();
+  std::printf("\n=== Batería ===\n");
+  runDrumTests();
   if (gFailures == 0) {
     std::printf("\nTodo OK\n");
     return 0;

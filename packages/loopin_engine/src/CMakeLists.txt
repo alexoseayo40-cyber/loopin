@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Núcleo independiente de Oboe (también lo compilan los tests del PC)
 set(LOOPIN_CORE_SOURCES
+  ${CMAKE_CURRENT_SOURCE_DIR}/Drums.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/EngineCore.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/LatencyMeter.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/Looper.cpp

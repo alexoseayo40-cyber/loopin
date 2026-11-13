@@ -55,6 +55,32 @@ extern "C" {
 #define LOOPIN_MODE_SYNC 0    // cuenta de entrada y N compases
 #define LOOPIN_MODE_MANUAL 1  // se cierra al pulsar
 
+// Batería: sonidos del kit (loopin_set_drum_sample)
+#define LOOPIN_DRUM_KICK 0
+#define LOOPIN_DRUM_SNARE 1
+#define LOOPIN_DRUM_SNARE_SOFT 2
+#define LOOPIN_DRUM_CROSS_STICK 3
+#define LOOPIN_DRUM_HAT 4
+#define LOOPIN_DRUM_HAT_SOFT 5
+#define LOOPIN_DRUM_HAT_OPEN 6
+#define LOOPIN_DRUM_RIDE 7
+#define LOOPIN_DRUM_CRASH 8
+#define LOOPIN_DRUM_STICKS 9
+#define LOOPIN_DRUM_SOUNDS 10
+
+// Batería: estilos (loopin_set_drum_style). Básico vale para cualquier compás;
+// los demás son de un compás concreto (si no coincide, suena el básico).
+#define LOOPIN_STYLE_BASIC 0
+#define LOOPIN_STYLE_ROCK 1        // 4/4
+#define LOOPIN_STYLE_POP 2         // 4/4
+#define LOOPIN_STYLE_SHUFFLE 3     // 4/4 (tresillos)
+#define LOOPIN_STYLE_FUNK 4        // 4/4
+#define LOOPIN_STYLE_BALLAD 5      // 4/4
+#define LOOPIN_STYLE_REGGAE 6      // 4/4
+#define LOOPIN_STYLE_WALTZ 7       // 3/4
+#define LOOPIN_STYLE_SIX_EIGHT 8   // 6/8
+#define LOOPIN_STYLE_SLOW_BLUES 9  // 12/8
+
 // API de audio que Oboe ha elegido
 #define LOOPIN_API_UNKNOWN 0
 #define LOOPIN_API_OPENSLES 1
@@ -149,6 +175,11 @@ typedef struct {
   float cpu_load_avg;         // media del último segundo
   float cpu_load_peak;        // pico del último segundo
   float cpu_load_max;         // mayor pico desde que se abrió el audio
+  // Batería
+  int32_t drums_enabled;
+  int32_t drum_style;         // LOOPIN_STYLE_* pedido
+  int32_t drums_playing;      // 1 = ya ha entrado (en un primer tiempo) y suena
+  float drum_volume;
 } LoopinStatus;
 
 // Abre los streams de entrada y salida y empieza a procesar audio.
@@ -231,6 +262,21 @@ FFI_PLUGIN_EXPORT void loopin_set_latency_compensation(int32_t frames);
 FFI_PLUGIN_EXPORT void loopin_nudge_latency(int32_t frames);
 // La primera pista espera a que suene la guitarra y empieza en ese ataque.
 FFI_PLUGIN_EXPORT void loopin_set_start_on_sound(int32_t enabled);
+
+// Batería. Las muestras se copian y se aplican la próxima vez que se abra el
+// audio (loopin_start): hay que darlas antes. Mono, en float, a sample_rate
+// (se pasan solas a la frecuencia del móvil).
+FFI_PLUGIN_EXPORT void loopin_set_drum_sample(int32_t sound, const float* data, int32_t frames,
+                                              int32_t sample_rate);
+// Encendida, suena mientras corre el transporte; entra siempre en un primer
+// tiempo. En la cuenta de entrada suenan las baquetas en vez del clic y,
+// mientras toca, el clic se calla.
+FFI_PLUGIN_EXPORT void loopin_set_drums_enabled(int32_t enabled);
+// beat_is_eighth: 1 si el tiempo es la corchea (compases de 8); el básico
+// añade la corchea del charles solo cuando el tiempo es la negra.
+// Sonando, el cambio espera al siguiente compás.
+FFI_PLUGIN_EXPORT void loopin_set_drum_style(int32_t style, int32_t beat_is_eighth);
+FFI_PLUGIN_EXPORT void loopin_set_drum_volume(float volume);
 
 // Copia el estado actual en *out.
 FFI_PLUGIN_EXPORT void loopin_get_status(LoopinStatus* out);

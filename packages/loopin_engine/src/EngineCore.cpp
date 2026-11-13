@@ -18,8 +18,10 @@ void EngineCore::prepare(int32_t sampleRate) {
   // grabar un poco tarde (≤ 1 s) y bloques grandes.
   ring_.prepare(sampleRate_ * 6);
   looper_.prepare(sampleRate_, &transport_);
+  drums_.prepare(sampleRate_);
   outPos_ = 0;
   monRead_ = 0;
+  wasPlaying_ = false;
   monChunk_ = 0;
   monChunkAge_ = 0;
   inMono_.assign(kMaxBlockFrames, 0.0f);
@@ -69,6 +71,15 @@ void EngineCore::apply(const Command& cmd) {
     }
     case Command::Type::kSetStartOnSound:
       looper_.setStartOnSound(cmd.value != 0.0);
+      break;
+    case Command::Type::kSetDrumsEnabled:
+      drums_.setEnabled(cmd.value != 0.0);
+      break;
+    case Command::Type::kSetDrumStyle:
+      drums_.setStyle(static_cast<DrumStyle>(static_cast<int32_t>(cmd.value)), cmd.arg != 0);
+      break;
+    case Command::Type::kSetDrumVolume:
+      drums_.setVolume(static_cast<float>(cmd.value));
       break;
     case Command::Type::kSetClickVolume:
       clickVolume_ = std::clamp(static_cast<float>(cmd.value), 0.0f, 1.0f);
@@ -183,18 +194,40 @@ void EngineCore::process(const float* in, int32_t inFrames, int32_t inChannels, 
       metronome_.trigger(Metronome::accentFor(transport_.beat(), transport_.accentMask()));
       // Se decide al empezar cada clic (un clic nunca se corta a medias). En
       // libre no hay metrónomo; en la cuenta de entrada suena salvo en «nunca»
+      const bool countIn = looper_.forcesClick();
       clickGate_ = looper_.mode() != Looper::Mode::kFree &&
                    (clickMode_ == ClickMode::kAlways ||
-                    (clickMode_ == ClickMode::kCountIn && looper_.forcesClick()));
+                    (clickMode_ == ClickMode::kCountIn && countIn));
+      // La batería toca este tiempo (o, en la cuenta, las baquetas en lugar
+      // del clic): entonces el clic se calla, la batería ya marca el tempo
+      const bool sticks = clickMode_ != ClickMode::kSilent;
+      if (drums_.beat(transport_.bar(), transport_.beat(), transport_.beatsPerBar(),
+                      transport_.accentMask(), transport_.samplesPerBeat(), countIn, sticks,
+                      transport_.framePosition() == 1)) {
+        clickGate_ = false;
+      }
+    } else if (!transport_.playing()) {
+      drums_.halt();
+    } else if (!wasPlaying_ && transport_.beat() == 0 && drums_.enabled() &&
+               transport_.framesSinceBeat() >= 1 &&
+               transport_.framesSinceBeat() <= sampleRate_ / 50) {
+      // El transporte acaba de arrancar «desde atrás», un pelín pasado un 1
+      // (al cerrar el primer loop en libre se recorta a muestras enteras por
+      // tiempo): la batería entra ya en vez de esperar un compás entero
+      drums_.beat(transport_.bar(), 0, transport_.beatsPerBar(), transport_.accentMask(),
+                  transport_.samplesPerBeat(), false, false, false,
+                  transport_.framesSinceBeat() - 1);
     }
+    wasPlaying_ = transport_.playing();
     const float click = metronome_.next();
+    const float drums = drums_.next();
     float mon = 0.0f;
     if (monRead_ < ring_.end()) mon = ring_.at(monRead_++);
     float s = 0.0f;
     if (!measuring) {
       if (clickGate_) s += click * clickVolume_;
       if (monitorEnabled_) s += mon * monitorVolume_;
-      s += loop;
+      s += loop + drums;
     }
     outMono_[i] = s;
   }
@@ -263,6 +296,10 @@ void EngineCore::publish() {
   aTapHits_.store(tap_.hits(), std::memory_order_relaxed);
   aTapFrames_.store(tap_.resultFrames(), std::memory_order_relaxed);
   aTapSpread_.store(tap_.spreadFrames(), std::memory_order_relaxed);
+  aDrumsEnabled_.store(drums_.enabled() ? 1 : 0, std::memory_order_relaxed);
+  aDrumStyle_.store(static_cast<int32_t>(drums_.style()), std::memory_order_relaxed);
+  aDrumsPlaying_.store(drums_.playing() ? 1 : 0, std::memory_order_relaxed);
+  aDrumVolume_.store(drums_.volume(), std::memory_order_relaxed);
   aTapState_.store(static_cast<int32_t>(tap_.state()), std::memory_order_release);
 
   // El estado va el último: quien lo lea como «hecho» ve ya el resultado.
@@ -316,6 +353,10 @@ CoreStatus EngineCore::status() const {
   s.clickMode = aClickMode_.load(std::memory_order_relaxed);
   s.loopWaiting = aLoopWaiting_.load(std::memory_order_relaxed);
   s.startOnSound = aStartOnSound_.load(std::memory_order_relaxed);
+  s.drumsEnabled = aDrumsEnabled_.load(std::memory_order_relaxed);
+  s.drumStyle = aDrumStyle_.load(std::memory_order_relaxed);
+  s.drumsPlaying = aDrumsPlaying_.load(std::memory_order_relaxed);
+  s.drumVolume = aDrumVolume_.load(std::memory_order_relaxed);
   return s;
 }
 
