@@ -32,6 +32,8 @@ class Prefs {
   static const backingOn = 'backingOn';
   static const backingVolume = 'backingVolume';
   static const accompaniment = 'accompaniment';
+  static const playMode = 'playMode';
+  static const simpleForced = 'simpleForced';
 
   Future<String?> get(String key) async {
     try {

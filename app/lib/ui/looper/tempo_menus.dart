@@ -1,5 +1,5 @@
 // Loopin — fila de abajo de la pantalla de tempo: compás, modo, compases,
-// «empezar al tocar» y clic
+// «empezar al tocar» y clic (en el modo simple, solo compás y clic)
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:flutter/material.dart';
 import 'package:loopin_engine/loopin_engine.dart';
@@ -39,7 +39,7 @@ class DisplayChip extends StatelessWidget {
   }
 }
 
-/// Compás (4/4, 7/8…).
+/// Compás (4/4, 7/8…; en simple, solo 4/4, 3/4 y 6/8).
 class MeterMenu extends StatelessWidget {
   const MeterMenu({super.key, required this.view});
 
@@ -55,7 +55,7 @@ class MeterMenu extends StatelessWidget {
       initialValue: c.timeSignature,
       onSelected: c.setTimeSignature,
       itemBuilder: (_) => [
-        for (final t in kTimeSignatures) PopupMenuItem(value: t, child: Text(tr.meterItem(t))),
+        for (final t in c.timeSignatures) PopupMenuItem(value: t, child: Text(tr.meterItem(t))),
       ],
       child: DisplayChip(label: tr.meterChip(c.timeSignature), enabled: enabled),
     );
@@ -212,6 +212,55 @@ class ClickMenu extends StatelessWidget {
           free ? Icons.visibility_outlined : iconFor(c.clickMode),
           size: 20,
           color: LoopinPalette.display,
+        ),
+      ),
+    );
+  }
+}
+
+/// El clic del modo simple: un toque lo enciende (siempre) o lo apaga (solo
+/// las luces).
+class SimpleClickToggle extends StatelessWidget {
+  const SimpleClickToggle({super.key, required this.view});
+
+  final LooperView view;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = view.controller;
+    final on = c.clickMode != ClickMode.silent;
+    const color = LoopinPalette.display;
+    return Tooltip(
+      message: tr.simpleClick(on),
+      child: Semantics(
+        button: true,
+        toggled: on,
+        label: tr.simpleClick(on),
+        excludeSemantics: true,
+        child: InkWell(
+          key: const ValueKey('simple-click'),
+          borderRadius: BorderRadius.circular(6),
+          onTap: () {
+            c.setClickMode(on ? ClickMode.silent : ClickMode.always);
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(
+                SnackBar(
+                  duration: const Duration(seconds: 3),
+                  content: Text(tr.simpleClickSnack(!on)),
+                ),
+              );
+          },
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 36),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              color: on ? color.withValues(alpha: 0.2) : null,
+              border: Border.all(color: color.withValues(alpha: on ? 1 : 0.45)),
+            ),
+            child: Icon(on ? Icons.volume_up : Icons.volume_off, size: 20, color: color),
+          ),
         ),
       ),
     );

@@ -33,28 +33,31 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(mockPlatform);
 
-  for (final size in _sizes) {
-    for (final st in LoopState.values) {
-      testWidgets('looper ${st.name} en ${size.width.toInt()}x${size.height.toInt()}', (
-        tester,
-      ) async {
-        setScreen(tester, size);
-        final engine = FakeEngine()..next = fakeStatus(st, playing: st != LoopState.stopped);
-        final c = EngineController(engine: engine);
-        await tester.pumpWidget(_app(LooperScreen(controller: c)));
-        await tester.pump(const Duration(milliseconds: 100)); // arranca el audio y sondea
-        expect(c.status.loopState, st);
-        expect(tester.takeException(), isNull);
-        expect(find.text('DESHACER'), findsOneWidget);
-        expect(find.byType(Footswitch), findsOneWidget);
-        // En vertical todo cabe sin desplazar: el pulsador se ve entero
-        if (size.height > size.width) {
-          final rect = tester.getRect(find.byType(Footswitch));
-          expect(rect.top >= 0 && rect.bottom <= size.height, isTrue);
-        }
-        c.stopAudio();
-        c.dispose();
-      });
+  for (final mode in PlayMode.values) {
+    for (final size in _sizes) {
+      for (final st in LoopState.values) {
+        testWidgets(
+          'looper ${mode.name} ${st.name} en ${size.width.toInt()}x${size.height.toInt()}',
+          (tester) async {
+            setScreen(tester, size);
+            final engine = FakeEngine()..next = fakeStatus(st, playing: st != LoopState.stopped);
+            final c = EngineController(engine: engine)..setPlayMode(mode);
+            await tester.pumpWidget(_app(LooperScreen(controller: c)));
+            await tester.pump(const Duration(milliseconds: 100)); // arranca el audio y sondea
+            expect(c.status.loopState, st);
+            expect(tester.takeException(), isNull);
+            expect(find.text('DESHACER'), findsOneWidget);
+            expect(find.byType(Footswitch), findsOneWidget);
+            // En vertical todo cabe sin desplazar: el pulsador se ve entero
+            if (size.height > size.width) {
+              final rect = tester.getRect(find.byType(Footswitch));
+              expect(rect.top >= 0 && rect.bottom <= size.height, isTrue);
+            }
+            c.stopAudio();
+            c.dispose();
+          },
+        );
+      }
     }
   }
 
@@ -354,7 +357,8 @@ void main() {
   testWidgets('compases, clic y modo libre / empezar al tocar', (tester) async {
     setScreen(tester, const Size(393, 873));
     final engine = FakeEngine()..next = fakeStatus(LoopState.empty, playing: false);
-    final c = EngineController(engine: engine);
+    final c = EngineController(engine: engine)
+      ..setPlayMode(PlayMode.advanced); // lo que se prueba es del avanzado
     await tester.pumpWidget(_app(LooperScreen(controller: c)));
     await tester.pump(const Duration(milliseconds: 100));
 
@@ -433,7 +437,8 @@ void main() {
   testWidgets('latencia a mano: mueve lo grabado y se guarda', (tester) async {
     setScreen(tester, const Size(393, 873));
     final engine = FakeEngine()..next = fakeStatus(LoopState.playing);
-    final c = EngineController(engine: engine);
+    final c = EngineController(engine: engine)
+      ..setPlayMode(PlayMode.advanced); // lo que se prueba es del avanzado
     await tester.pumpWidget(_app(AudioSettingsScreen(controller: c)));
     await c.startAudio();
     await tester.pump(const Duration(milliseconds: 100));

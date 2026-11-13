@@ -65,8 +65,8 @@ class DrumControls extends StatelessWidget {
   }
 }
 
-/// El estilo: abre un menú con todos. Los de otro compás cambian el compás
-/// (con un loop grabado no se puede y salen desactivados).
+/// El estilo: abre un menú con todos (en simple, menos). Los de otro compás
+/// cambian el compás (con un loop grabado no se puede y salen desactivados).
 class _StyleMenu extends StatelessWidget {
   const _StyleMenu({required this.view, required this.style, required this.maxWidth});
 
@@ -82,7 +82,7 @@ class _StyleMenu extends StatelessWidget {
       initialValue: style,
       onSelected: c.setDrumStyle,
       itemBuilder: (_) => [
-        for (final s in DrumStyle.values)
+        for (final s in c.drumStyles)
           PopupMenuItem(
             value: s,
             enabled: c.drumStyleAvailable(s),

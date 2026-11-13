@@ -61,6 +61,7 @@ extension EngineReport on EngineController {
         tr.clickModeName(clickMode).toLowerCase(),
         tr.yesNo(startOnSound),
       ),
+      r.playMode(tr.playModeName(playMode).toLowerCase()),
       r.looper(
         tr.loopStateName(s.loopState),
         tr.loopModeName(loopMode),

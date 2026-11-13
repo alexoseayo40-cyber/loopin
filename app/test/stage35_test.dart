@@ -100,7 +100,8 @@ void main() {
   ) async {
     setScreen(tester, const Size(393, 2400)); // todo a la vista, sin desplazar
     final engine = FakeEngine()..next = fakeStatus(LoopState.playing);
-    final c = EngineController(engine: engine);
+    final c = EngineController(engine: engine)
+      ..setPlayMode(PlayMode.advanced); // lo que se prueba es del avanzado
     await tester.pumpWidget(
       MaterialApp(
         theme: buildLoopinTheme(Chassis.classic, Brightness.dark),

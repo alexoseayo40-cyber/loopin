@@ -65,7 +65,8 @@ void main() {
 
   testWidgets('ajuste en Ajustes › Looper', (tester) async {
     setScreen(tester, const Size(393, 1400));
-    final c = EngineController(engine: FakeEngine()..next = fakeStatus(LoopState.playing));
+    final c = EngineController(engine: FakeEngine()..next = fakeStatus(LoopState.playing))
+      ..setPlayMode(PlayMode.advanced); // lo que se prueba es del avanzado
     await tester.pumpWidget(
       MaterialApp(
         theme: buildLoopinTheme(Chassis.classic, Brightness.dark),

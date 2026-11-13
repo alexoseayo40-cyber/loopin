@@ -2,7 +2,7 @@
 
 Looper de guitarra libre para Android: varias pistas que cuadran al compás, metrónomo y backing tracks.
 
-> **Estado:** Etapa 4b. Looper de 4 pistas con interfaz de pedal, metrónomo con 10 compases, batería con 10 estilos, tus propias canciones (WAV, MP3, FLAC) estiradas al tempo, modo libre, «empezar al tocar», controles externos y latencia compensada (medida sola, tocando al clic o a mano). Próximo: directo y práctica (afinador, reverse…).
+> **Estado:** Etapa 4.5. Modo simple (lo justo para grabar y tocar: pulsador más grande, 1 compás de cuenta y se cierra al pulsar) y avanzado (todo). Looper de 4 pistas con interfaz de pedal, metrónomo con 10 compases, batería con 10 estilos, tus propias canciones (WAV, MP3, FLAC) estiradas al tempo, modo libre, «empezar al tocar», controles externos y latencia compensada (medida sola, tocando al clic o a mano). Próximo: directo y práctica (afinador, reverse…).
 
 ## Cómo se usa
 

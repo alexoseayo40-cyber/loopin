@@ -14,6 +14,7 @@ import '../engine/song_backing.dart' show BackingPhase;
 import '../engine/songs.dart' show ImportError;
 import '../engine/meter.dart';
 import '../engine/pedal_keys.dart';
+import '../engine/play_mode.dart';
 import '../ui/theme.dart';
 
 /// Los textos que se están usando.
@@ -104,6 +105,11 @@ class Strings {
 
   /// «Clic: siempre»
   String click(ClickMode m) => 'Clic: ${clickModeName(m).toLowerCase()}';
+
+  /// En el modo simple el clic suena siempre o está apagado (solo las luces).
+  String simpleClick(bool on) => on ? 'Clic: siempre' : 'Clic: apagado';
+  String simpleClickSnack(bool on) =>
+      on ? 'Clic encendido' : 'Clic apagado: el tempo se ve en las luces y en el pulsador';
 
   /// Nombre de un dispositivo de audio de Android.
   String deviceName(AudioDevice d) {
@@ -451,6 +457,24 @@ class Strings {
 
   // ---------------------------------------------------------------- ajustes
 
+  String get playModeTitle => 'Modo';
+  String playModeName(PlayMode m) => switch (m) {
+    PlayMode.simple => 'Simple',
+    PlayMode.advanced => 'Avanzado',
+  };
+  String playModeLine(PlayMode m) => switch (m) {
+    PlayMode.simple => 'Lo justo para grabar y tocar',
+    PlayMode.advanced => 'Todos los controles',
+  };
+  String get playModeHelp =>
+      'Simple: el pulsador más grande, el tempo con TAP, 3 compases (4/4, 3/4 y 6/8), '
+      'el clic encendido o apagado, la batería y tu canción. Cada pista se graba igual: '
+      '1 compás de cuenta y se cierra al volver a pulsar. Avanzado: además, los modos '
+      'sincronizado y libre, empezar al tocar, todos los compases y estilos, el clic '
+      'solo en la cuenta, los modos del micrófono, qué suena al grabar con el altavoz y '
+      'la latencia a mano. Al volver al avanzado recupera lo que tenías.';
+  String get playModeBusy => 'Acaba de grabar para cambiarlo';
+
   String get appearance => 'Apariencia';
   String get themeSystem => 'Sistema';
   String get themeLight => 'Claro';
@@ -529,6 +553,9 @@ class Strings {
       'Última tecla: $key → ${action == null ? '—' : pedalActionName(action).toLowerCase()}';
 
   String get audio => 'Audio';
+  String get moreInAdvanced =>
+      'Modos del micrófono, latencia a mano y detalles técnicos: en el modo avanzado '
+      '(Ajustes › Modo).';
   String get audioAndLatency => 'Audio y latencia';
   String get audioAndLatencyLine => 'Entrada, micrófono y latencia';
 
@@ -655,7 +682,7 @@ class Strings {
 
   // ---------------------------------------------------------------- informe («Copiar resultados»)
 
-  String get reportTitle => 'Loopin · Etapa 4b';
+  String get reportTitle => 'Loopin · Etapa 4.5';
   ReportStrings get report => const ReportStrings();
   String loopStateName(LoopState st) => switch (st) {
     LoopState.empty => 'vacío',
@@ -706,6 +733,7 @@ class ReportStrings {
       'en la lista: $count';
   String recordDuck(String setting, bool speaker) =>
       'Al grabar con el altavoz: $setting${speaker ? ' (ruta con altavoz: se aplica)' : ' (ahora no se aplica)'}';
+  String playMode(String mode) => 'Modo de la app: $mode';
   String looper(String state, String mode, int? baseBars, String autoAdvance) =>
       'Looper: $state · $mode'
       '${baseBars != null ? ' · base de ${tr.bars(baseBars)}' : ''}'

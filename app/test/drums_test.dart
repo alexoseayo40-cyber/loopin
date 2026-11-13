@@ -95,7 +95,8 @@ void main() {
     tester,
   ) async {
     final engine = FakeEngine()..next = fakeStatus(LoopState.empty, playing: false);
-    final c = EngineController(engine: engine);
+    final c = EngineController(engine: engine)
+      ..setPlayMode(PlayMode.advanced); // lo que se prueba es del avanzado
     await c.startAudio();
     await tester.pump(const Duration(milliseconds: 100));
     engine.calls.clear();
@@ -138,7 +139,8 @@ void main() {
     ) async {
       setScreen(tester, size);
       final engine = FakeEngine()..next = _withDrums(fakeStatus(LoopState.playing));
-      final c = EngineController(engine: engine);
+      final c = EngineController(engine: engine)
+        ..setPlayMode(PlayMode.advanced); // lo que se prueba es del avanzado
       await tester.pumpWidget(_app(LooperScreen(controller: c)));
       await tester.pump(const Duration(milliseconds: 100));
       expect(tester.takeException(), isNull);

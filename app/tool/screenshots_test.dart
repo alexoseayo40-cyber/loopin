@@ -110,13 +110,15 @@ void main() {
     bool audio = false,
     DrumStyle? drums,
     bool song = false,
+    PlayMode mode = PlayMode.advanced,
     Widget Function(EngineController c)? home,
   }) async {
     setScreen(tester, size, pixelRatio: 2);
     final engine = FakeEngine()
       ..next = fakeStatus(state, playing: state != LoopState.stopped, drums: drums != null);
     if (song || home != null) engine.next = _songStatus(engine.next, playing: song);
-    final c = EngineController(engine: engine, songs: SongLibrary.memory(_songs));
+    final c = EngineController(engine: engine, songs: SongLibrary.memory(_songs))
+      ..setPlayMode(mode);
     final base = buildLoopinTheme(chassis, brightness);
     await tester.pumpWidget(
       MaterialApp(
@@ -147,6 +149,65 @@ void main() {
   }
 
   const phone = Size(393, 873);
+  // Modo simple
+  testWidgets(
+    'simple',
+    (t) => shot(t, 'simple-sonando', phone, state: LoopState.playing, mode: PlayMode.simple),
+  );
+  testWidgets(
+    'simple vacío',
+    (t) => shot(
+      t,
+      'simple-vacio',
+      phone,
+      state: LoopState.empty,
+      brightness: Brightness.light,
+      mode: PlayMode.simple,
+    ),
+  );
+  testWidgets(
+    'simple pequeño',
+    (t) => shot(
+      t,
+      'simple-pequeno',
+      const Size(360, 640),
+      state: LoopState.playing,
+      drums: DrumStyle.rock,
+      mode: PlayMode.simple,
+    ),
+  );
+  testWidgets(
+    'simple apaisado',
+    (t) => shot(
+      t,
+      'simple-apaisado',
+      const Size(873, 393),
+      state: LoopState.playing,
+      mode: PlayMode.simple,
+    ),
+  );
+  testWidgets(
+    'ajustes simple',
+    (t) => shot(
+      t,
+      'ajustes-simple',
+      const Size(393, 1000),
+      settings: true,
+      state: LoopState.playing,
+      mode: PlayMode.simple,
+    ),
+  );
+  testWidgets(
+    'audio simple',
+    (t) => shot(
+      t,
+      'audio-simple',
+      const Size(393, 1100),
+      audio: true,
+      state: LoopState.playing,
+      mode: PlayMode.simple,
+    ),
+  );
   testWidgets(
     'canción',
     (t) => shot(t, 'movil-cancion', phone, state: LoopState.playing, song: true),

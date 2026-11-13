@@ -45,7 +45,14 @@ class AudioSettingsScreen extends StatelessWidget {
                   _PowerCard(controller: controller),
                   _InputCard(controller: controller, s: s),
                   _LatencyCard(controller: controller, s: s),
-                  _DetailsCard(controller: controller, s: s),
+                  // En simple: sin modos del micro, latencia a mano ni detalles
+                  if (!controller.simple)
+                    _DetailsCard(controller: controller, s: s)
+                  else
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+                      child: Text(tr.moreInAdvanced, style: Theme.of(context).textTheme.bodySmall),
+                    ),
                 ],
               ),
             ),
@@ -150,17 +157,19 @@ class _InputCard extends StatelessWidget {
             },
           ),
         ),
-        const SizedBox(height: 8),
-        SectionTitle(tr.micMode, help: tr.micModeHelp, style: theme.textTheme.titleSmall),
-        _MicModes(controller: c),
-        if (s.running && s.presetFallback && s.inputPreset != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 4, right: 8),
-            child: Text(
-              tr.presetFallback(s.inputPreset!),
-              style: small?.copyWith(color: theme.colorScheme.error),
+        if (!c.simple) ...[
+          const SizedBox(height: 8),
+          SectionTitle(tr.micMode, help: tr.micModeHelp, style: theme.textTheme.titleSmall),
+          _MicModes(controller: c),
+          if (s.running && s.presetFallback && s.inputPreset != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, right: 8),
+              child: Text(
+                tr.presetFallback(s.inputPreset!),
+                style: small?.copyWith(color: theme.colorScheme.error),
+              ),
             ),
-          ),
+        ],
         const SizedBox(height: 8),
         Padding(
           padding: const EdgeInsets.only(right: 8),
@@ -368,42 +377,50 @@ class _LatencyCard extends StatelessWidget {
           ),
         ),
         HelpLine(tr.measureTappingLine, help: tr.measureTappingHelp),
-        const SizedBox(height: 8),
-        // 3. A mano
-        Text(tr.byHand, style: theme.textTheme.titleSmall),
-        Row(
-          children: [
-            IconButton(
-              tooltip: tr.minus1ms,
-              onPressed: canMeasure ? () => c.setLatencyManually(current - 1) : null,
-              icon: const Icon(Icons.remove),
-            ),
-            Expanded(
-              child: Slider(
-                max: 500,
-                divisions: 500,
-                value: current,
-                label: tr.msValue(current.round()),
-                onChanged: canMeasure ? (v) => c.setLatencyManually(v.roundToDouble()) : null,
-                semanticFormatterCallback: (v) => tr.msSemantics(v.round()),
-              ),
-            ),
-            IconButton(
-              tooltip: tr.plus1ms,
-              onPressed: canMeasure ? () => c.setLatencyManually(current + 1) : null,
-              icon: const Icon(Icons.add),
-            ),
-            SizedBox(width: 60, child: Text(tr.msValue(current.round()), textAlign: TextAlign.end)),
-          ],
-        ),
-        HelpLine(tr.byHandLine, help: tr.byHandHelp),
-        if (measured)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(onPressed: c.forgetLatency, child: Text(tr.forgetLatency)),
-          ),
+        // 3. A mano (solo en el avanzado)
+        if (!c.simple) ..._byHand(context, current, canMeasure, measured),
       ],
     );
+  }
+
+  List<Widget> _byHand(BuildContext context, double current, bool canMeasure, bool measured) {
+    final c = controller;
+    final theme = Theme.of(context);
+    return [
+      const SizedBox(height: 8),
+      Text(tr.byHand, style: theme.textTheme.titleSmall),
+      Row(
+        children: [
+          IconButton(
+            tooltip: tr.minus1ms,
+            onPressed: canMeasure ? () => c.setLatencyManually(current - 1) : null,
+            icon: const Icon(Icons.remove),
+          ),
+          Expanded(
+            child: Slider(
+              max: 500,
+              divisions: 500,
+              value: current,
+              label: tr.msValue(current.round()),
+              onChanged: canMeasure ? (v) => c.setLatencyManually(v.roundToDouble()) : null,
+              semanticFormatterCallback: (v) => tr.msSemantics(v.round()),
+            ),
+          ),
+          IconButton(
+            tooltip: tr.plus1ms,
+            onPressed: canMeasure ? () => c.setLatencyManually(current + 1) : null,
+            icon: const Icon(Icons.add),
+          ),
+          SizedBox(width: 60, child: Text(tr.msValue(current.round()), textAlign: TextAlign.end)),
+        ],
+      ),
+      HelpLine(tr.byHandLine, help: tr.byHandHelp),
+      if (measured)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(onPressed: c.forgetLatency, child: Text(tr.forgetLatency)),
+        ),
+    ];
   }
 }
 

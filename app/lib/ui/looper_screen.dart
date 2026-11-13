@@ -97,6 +97,11 @@ class _LooperScreenState extends State<LooperScreen> {
 // ---------------------------------------------------------------------------
 // Disposición
 
+/// Lo que ocupa la fila de compás, modo y clic de la pantalla de tempo (en
+/// simple no está): medido en los tests.
+const _simpleSaves = 44.0;
+const _simpleSavesCompact = 40.0;
+
 /// En vertical: todo en una columna, con el pulsador abajo, a mano.
 class _TallLayout extends StatelessWidget {
   const _TallLayout({required this.view, required this.box, required this.mixer});
@@ -115,13 +120,17 @@ class _TallLayout extends StatelessWidget {
     final tight = box.maxHeight < 700;
     final gap = tight ? 4.0 : (compact ? 8.0 : 14.0);
     final rings = tight ? 48.0 : (compact ? 60.0 : 96.0);
+    // En simple la pantalla de tempo tiene una fila menos: el pulsador crece
+    final simple = view.controller.simple;
+    final simpleSaves = simple ? (compact ? _simpleSavesCompact : _simpleSaves) : 0.0;
     // Lo que ocupa todo menos el pulsador (medido, con la fila de la batería),
     // para darle el resto
-    final fixed = (tight ? 543.0 : (compact ? 568.0 : 694.0)) + (mixer ? 3 * 52.0 : 0);
+    final fixed =
+        (tight ? 543.0 : (compact ? 568.0 : 694.0)) + (mixer ? 3 * 52.0 : 0) - simpleSaves;
     final pedal = (math.min(
-      width * 0.62,
+      width * (simple ? 0.7 : 0.62),
       box.maxHeight - fixed,
-    )).clamp(tight ? 100.0 : 132.0, mixer ? 420.0 : 340.0);
+    )).clamp(tight ? 100.0 : 132.0, (mixer ? 420.0 : 340.0) + (simple ? 40 : 0));
     return Center(
       child: SizedBox(
         width: width,
@@ -174,10 +183,11 @@ class _WideLayout extends StatelessWidget {
     final compact = box.maxHeight < 480;
     final gap = compact ? 6.0 : 14.0;
     final rightWidth = (box.maxWidth - 32 - 20) * 4 / 9;
+    final simple = view.controller.simple;
     final pedal = (math.min(
-      rightWidth * 0.78,
+      rightWidth * (simple ? 0.86 : 0.78),
       box.maxHeight - (compact ? 190.0 : 250.0),
-    )).clamp(110.0, 360.0);
+    )).clamp(110.0, simple ? 400.0 : 360.0);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
       child: Row(

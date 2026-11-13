@@ -1,4 +1,4 @@
-// Loopin — ajustes: apariencia, looper y controles externos
+// Loopin — ajustes: modo, apariencia, looper y controles externos
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:flutter/material.dart';
 
@@ -33,6 +33,8 @@ class SettingsScreen extends StatelessWidget {
                 child: ListView(
                   padding: const EdgeInsets.only(bottom: 24),
                   children: [
+                    _Header(tr.playModeTitle, help: tr.playModeHelp),
+                    _PlayModeSection(controller: c),
                     _Header(tr.appearance),
                     _AppearanceSection(controller: c),
                     _Header(tr.looper),
@@ -43,7 +45,7 @@ class SettingsScreen extends StatelessWidget {
                       value: c.autoAdvance,
                       onChanged: c.setAutoAdvance,
                     ),
-                    _RecordDuckSection(controller: c),
+                    if (!c.simple) _RecordDuckSection(controller: c),
                     _Header(tr.externalControls, help: tr.externalControlsHelp),
                     _ControlsSection(controller: c),
                     _Header(tr.audio),
@@ -81,6 +83,53 @@ class _Header extends StatelessWidget {
       help: help,
       padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
       style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.primary),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+
+/// Simple o avanzado: una línea con los dos y debajo qué tiene el elegido.
+class _PlayModeSection extends StatelessWidget {
+  const _PlayModeSection({required this.controller});
+
+  final EngineController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = controller;
+    final theme = Theme.of(context);
+    final can = c.canChangePlayMode;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SegmentedButton<PlayMode>(
+            key: const ValueKey('play-mode'),
+            segments: [
+              ButtonSegment(
+                value: PlayMode.simple,
+                label: Text(tr.playModeName(PlayMode.simple)),
+                icon: const Icon(Icons.radio_button_checked),
+              ),
+              ButtonSegment(
+                value: PlayMode.advanced,
+                label: Text(tr.playModeName(PlayMode.advanced)),
+                icon: const Icon(Icons.tune),
+              ),
+            ],
+            showSelectedIcon: false,
+            selected: {c.playMode},
+            onSelectionChanged: can ? (v) => c.setPlayMode(v.first) : null,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            can ? tr.playModeLine(c.playMode) : tr.playModeBusy,
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
+      ),
     );
   }
 }

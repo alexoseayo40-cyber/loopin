@@ -204,7 +204,8 @@ const _channel = MethodChannel('loopin/permissions');
 const _keys = MethodChannel('loopin/keys');
 
 /// Lo que respondería Android (permiso del micro, dispositivos, ajustes).
-void mockPlatform() {
+/// Con [prefs], los ajustes se guardan ahí (si no, no se guarda nada).
+void mockPlatform([Map<String, String>? prefs]) {
   // Sin esto la llamada no vuelve nunca dentro de un test
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
     _keys,
@@ -228,6 +229,12 @@ void mockPlatform() {
               {'id': 30, 'type': 4, 'name': 'cascos', 'address': ''},
             ],
           };
+        case 'prefsGet':
+          return prefs?[(call.arguments as Map)['key']];
+        case 'prefsSet':
+          final args = call.arguments as Map;
+          prefs?[args['key'] as String] = args['value'] as String;
+          return null;
         default:
           return null;
       }

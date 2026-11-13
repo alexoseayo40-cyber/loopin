@@ -11,7 +11,8 @@ import 'tempo_menus.dart';
 import 'view.dart';
 
 /// Tres filas: el tempo (con − / + y TAP), arrancar/parar con las luces de
-/// los tiempos, y compás, modo, compases, «empezar al tocar» y clic.
+/// los tiempos, y compás, modo, compases, «empezar al tocar» y clic. En el
+/// modo simple, dos: el compás y el clic van junto a las luces.
 class TempoDisplay extends StatelessWidget {
   const TempoDisplay({super.key, required this.view, required this.compact});
 
@@ -22,6 +23,7 @@ class TempoDisplay extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = view.controller;
     final s = view.s;
+    final simple = c.simple;
     return Container(
       padding: EdgeInsets.fromLTRB(4, compact ? 4 : 8, 4, compact ? 6 : 10),
       decoration: BoxDecoration(
@@ -52,29 +54,37 @@ class TempoDisplay extends StatelessWidget {
                     ),
                   ),
                 ),
-              ],
-            ),
-          ),
-          SizedBox(height: compact ? 4 : 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: Row(
-              children: [
-                Expanded(flex: 4, child: MeterMenu(view: view)),
-                const SizedBox(width: 6),
-                Expanded(flex: 4, child: ModeMenu(view: view)),
-                // Los compases solo cuentan en sincronizado
-                if (c.loopMode == LoopMode.sync) ...[
+                if (simple) ...[
+                  const SizedBox(width: 10),
+                  SizedBox(width: 64, child: MeterMenu(view: view)),
                   const SizedBox(width: 6),
-                  Expanded(flex: 3, child: BarsMenu(view: view)),
+                  SimpleClickToggle(view: view),
                 ],
-                const SizedBox(width: 6),
-                OnSoundToggle(view: view),
-                const SizedBox(width: 6),
-                ClickMenu(view: view),
               ],
             ),
           ),
+          if (!simple) ...[
+            SizedBox(height: compact ? 4 : 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Row(
+                children: [
+                  Expanded(flex: 4, child: MeterMenu(view: view)),
+                  const SizedBox(width: 6),
+                  Expanded(flex: 4, child: ModeMenu(view: view)),
+                  // Los compases solo cuentan en sincronizado
+                  if (c.loopMode == LoopMode.sync) ...[
+                    const SizedBox(width: 6),
+                    Expanded(flex: 3, child: BarsMenu(view: view)),
+                  ],
+                  const SizedBox(width: 6),
+                  OnSoundToggle(view: view),
+                  const SizedBox(width: 6),
+                  ClickMenu(view: view),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -13,6 +13,8 @@
 //   songs.dart              canciones importadas (lista y archivos)
 //   song_backing.dart       la canción que suena con los loops
 //   song_editor.dart        preparar una canción (tempo y dónde cae el 1)
+//   play_mode.dart          modo simple y avanzado (qué tiene cada uno)
+//   mode_control.dart       pasar de un modo a otro (parte de este archivo)
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -27,6 +29,7 @@ import 'latency_routes.dart';
 import 'meter.dart';
 import 'pedal_keys.dart';
 import 'drums.dart';
+import 'play_mode.dart';
 import 'prefs.dart';
 import 'song_backing.dart';
 import 'songs.dart';
@@ -35,9 +38,12 @@ import 'status_change.dart';
 export 'latency_routes.dart' show LatencySource;
 export 'meter.dart';
 export 'pedal_keys.dart' show LearnedKey, PedalAction;
+export 'play_mode.dart' show PlayMode;
 export 'report.dart';
 export 'song_backing.dart' show BackingPhase;
 export 'songs.dart' show Song, ImportError, ImportException;
+
+part 'mode_control.dart';
 
 /// Qué hacen las pistas que ya suenan mientras se graba otra (o un overdub),
 /// con el altavoz y el micrófono del móvil.
@@ -82,6 +88,14 @@ class EngineController extends ChangeNotifier {
   Listenable get live => _live;
   final _Pulse _live = _Pulse();
 
+  /// Modo simple (menos controles, para empezar y para tocar sin mirar) o
+  /// avanzado (todo). De serie, el simple. Ver mode_control.dart.
+  PlayMode playMode = PlayMode.simple;
+  bool get simple => playMode == PlayMode.simple;
+
+  /// Lo que el simple cambió al entrar, para devolverlo al volver al avanzado.
+  SimpleForced _forced = SimpleForced();
+
   // Lo que el usuario ha pedido (se reaplica si el audio se reinicia)
   double bpm = 92;
   TimeSignature timeSignature = kTimeSignatures.first;
@@ -91,8 +105,14 @@ class EngineController extends ChangeNotifier {
 
   /// La primera pista espera a que suene la guitarra y empieza ahí.
   bool startOnSound = false;
+
+  /// El modo del micrófono en uso (en simple, siempre el recomendado).
   InputPreset inputPreset = InputPreset.unprocessed;
-  bool _presetChosenByUser = false;
+
+  /// El que eligió el usuario en el avanzado (null = el recomendado).
+  InputPreset? _userPreset;
+
+  InputPreset get _presetForMode => simple ? recommendedPreset : (_userPreset ?? recommendedPreset);
 
   /// Entrada elegida (id de Android). -1 = aún sin elegir; 0 = la de Android.
   int inputDeviceId = -1;
@@ -173,16 +193,16 @@ class EngineController extends ChangeNotifier {
       try {
         final info = await _channel.invokeMapMethod<String, Object?>('audioInfo');
         if (info != null) deviceInfo = info;
-        // Si el móvil dice que no tiene micro «sin procesar», Android lo trata
-        // como el modo normal (que puede llevar control automático de
-        // ganancia). «Reconocimiento de voz» está obligado por Android a ir
-        // sin control de ganancia ni reducción de ruido: es mejor opción.
-        if (!_presetChosenByUser) inputPreset = recommendedPreset;
       } on PlatformException {
         // no pasa nada: solo es informativo
       }
     }
     await _prefsLoaded;
+    // Si el móvil dice que no tiene micro «sin procesar», Android lo trata
+    // como el modo normal (que puede llevar control automático de ganancia).
+    // «Reconocimiento de voz» está obligado por Android a ir sin control de
+    // ganancia ni reducción de ruido: es mejor opción (ver recommendedPreset).
+    inputPreset = _presetForMode;
     if (!_drumsLoaded) {
       // Las muestras van antes de abrir el audio (el motor las pasa ahí a la
       // frecuencia del móvil)
@@ -354,6 +374,14 @@ class EngineController extends ChangeNotifier {
     }
   }
 
+  /// Compases que se pueden elegir (en simple, 4/4, 3/4 y 6/8).
+  List<TimeSignature> get timeSignatures => simple
+      ? [
+          for (final t in kTimeSignatures)
+            if (kSimpleMeters.contains(t.label)) t,
+        ]
+      : kTimeSignatures;
+
   void setTimeSignature(TimeSignature ts) {
     if (tempoLocked) return;
     timeSignature = ts;
@@ -503,9 +531,13 @@ class EngineController extends ChangeNotifier {
   /// de otro compás).
   DrumStyle get drumStyleNow => effectiveDrumStyle(drumStyle, timeSignature);
 
-  /// Se puede elegir este estilo: vale con el compás o el compás se puede
-  /// cambiar (no hay loops).
-  bool drumStyleAvailable(DrumStyle s) => drumStyleFits(s, timeSignature) || !tempoLocked;
+  /// Estilos que se ofrecen (en simple, menos).
+  List<DrumStyle> get drumStyles => simple ? kSimpleDrumStyles : DrumStyle.values;
+
+  /// Se puede elegir este estilo: es del modo, y vale con el compás o el
+  /// compás se puede cambiar (no hay loops).
+  bool drumStyleAvailable(DrumStyle s) =>
+      drumStyles.contains(s) && (drumStyleFits(s, timeSignature) || !tempoLocked);
 
   /// La batería suena por el altavoz y el micro la graba.
   bool get drumsBleed => drumsOn && speakerRoute;
@@ -779,14 +811,22 @@ class EngineController extends ChangeNotifier {
   /// Cambiar el modo del micrófono obliga a reabrir el audio (el loop se
   /// conserva: queda parado).
   void setInputPreset(InputPreset preset) {
-    inputPreset = preset;
-    _presetChosenByUser = true;
+    if (simple) return; // en simple va siempre el recomendado
+    _userPreset = preset;
     _prefs.set(Prefs.inputPreset, '${preset.code}');
+    _applyPreset();
+    notifyListeners();
+  }
+
+  /// Pone el modo del micrófono que toca (reabre el audio si cambia).
+  void _applyPreset() {
+    final preset = _presetForMode;
+    if (preset == inputPreset) return;
+    inputPreset = preset;
     if (_wantRunning) {
       _engine.stop();
       _openStream();
     }
-    notifyListeners();
   }
 
   void setInputGainDb(double db) {
@@ -935,13 +975,22 @@ class EngineController extends ChangeNotifier {
 
   Future<void> _loadPrefs() async {
     // Modo del micrófono elegido por el usuario
+    // Modo simple o avanzado. Quien ya usaba la app antes de que existiera
+    // el simple (tiene ajustes guardados) sigue en el avanzado.
+    final mode = await _prefs.get(Prefs.playMode);
+    final known = PlayMode.values.where((m) => m.name == mode);
+    if (known.isNotEmpty) {
+      playMode = known.first;
+    } else if (await _prefs.get(Prefs.loopMode) != null) {
+      playMode = PlayMode.advanced;
+    }
+    _forced = SimpleForced.decode(await _prefs.get(Prefs.simpleForced));
+
     final preset = await _prefs.get(Prefs.inputPreset);
     for (final p in InputPreset.values) {
-      if (preset != null && '${p.code}' == preset) {
-        inputPreset = p;
-        _presetChosenByUser = true;
-      }
+      if (preset != null && '${p.code}' == preset) _userPreset = p;
     }
+    inputPreset = _presetForMode;
 
     autoAdvance = await _prefs.getBool(Prefs.autoAdvance) ?? autoAdvance;
     final duck = await _prefs.get(Prefs.recordDuck);
@@ -957,8 +1006,8 @@ class EngineController extends ChangeNotifier {
     );
     final click = await _prefs.get(Prefs.clickMode);
     clickMode = ClickMode.values.firstWhere((m) => m.name == click, orElse: () => ClickMode.always);
-    final mode = await _prefs.get(Prefs.loopMode);
-    loopMode = LoopMode.values.firstWhere((m) => m.name == mode, orElse: () => LoopMode.sync);
+    final loop = await _prefs.get(Prefs.loopMode);
+    loopMode = LoopMode.values.firstWhere((m) => m.name == loop, orElse: () => LoopMode.sync);
     final bars = int.tryParse(await _prefs.get(Prefs.syncBars) ?? '');
     if (bars != null && kSyncBarOptions.contains(bars)) syncBars = bars;
     startOnSound = await _prefs.getBool(Prefs.startOnSound) ?? false;
@@ -981,6 +1030,8 @@ class EngineController extends ChangeNotifier {
     await _keys.load();
     await _routes.load();
     await _backing.load();
+    // En simple, lo que no se ve tiene sus valores
+    if (simple) _enterSimple();
     notifyListeners();
   }
 
