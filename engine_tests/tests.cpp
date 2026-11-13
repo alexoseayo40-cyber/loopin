@@ -372,6 +372,8 @@ int main() {
   runSongTests();
   std::printf("\n=== Directo y práctica ===\n");
   runLiveTests();
+  std::printf("\n=== Sesiones y exportar ===\n");
+  runSessionTests();
   if (gFailures == 0) {
     std::printf("\nTodo OK\n");
     return 0;

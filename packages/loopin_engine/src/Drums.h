@@ -70,6 +70,12 @@ class Drums {
   void setSample(DrumSound sound, const float* data, int32_t frames, int32_t srcRate);
   // Pasa las muestras a la frecuencia del móvil y reserva todo lo necesario.
   void prepare(int32_t sampleRate);
+  // Copia las muestras de otra batería (fuera del hilo de audio de las dos:
+  // las de origen solo cambian con el audio cerrado). Se aplican en prepare().
+  void copySamples(const Drums& from) {
+    raw_ = from.raw_;
+    rawRate_ = from.rawRate_;
+  }
 
   // --- Hilo de audio ---
   void setEnabled(bool on);
@@ -96,6 +102,7 @@ class Drums {
   bool enabled() const { return enabled_; }
   // El estilo pedido (si está sonando, puede que aún espere al compás)
   DrumStyle style() const { return pendingStyle_; }
+  bool beatIsEighth() const { return eighths_; }
   // El estilo que suena con el compás de ahora (el básico si no coincide)
   DrumStyle effectiveStyle() const { return effective_; }
   bool playing() const { return started_ && enabled_; }

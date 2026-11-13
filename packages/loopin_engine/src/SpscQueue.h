@@ -33,6 +33,16 @@ class SpscQueue {
     return true;
   }
 
+  // Productor: el consumidor ya ha sacado todo lo que se ha metido (lo que
+  // hizo antes de sacarlo es visible desde aquí).
+  bool drained() const {
+    return tail_.load(std::memory_order_acquire) == head_.load(std::memory_order_relaxed);
+  }
+  // Consumidor: queda algo por sacar.
+  bool pending() const {
+    return head_.load(std::memory_order_acquire) != tail_.load(std::memory_order_relaxed);
+  }
+
  private:
   std::array<T, Capacity> items_{};
   alignas(64) std::atomic<size_t> head_{0};

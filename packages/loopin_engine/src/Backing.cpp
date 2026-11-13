@@ -23,6 +23,7 @@ void Backing::prepare(int32_t sampleRate, ClipBin& bin) {
   sampleRate_ = sampleRate > 0 ? sampleRate : 48000;
   song_.dropUnless(sampleRate_, bin);
   preview_.dropUnless(sampleRate_, bin);
+  published_.store(song_.current(), std::memory_order_release);
   bin.add(fading_);
   fading_ = nullptr;
   started_ = playing_ = previewPlaying_ = false;
@@ -56,6 +57,8 @@ void Backing::takeClips(RetiredClips& retired) {
     if (now == nullptr || old == nullptr || now->id != old->id) started_ = false;
     playing_ = false;
     env_ = 0.0f;
+    // Antes de que la interfaz pueda recoger el viejo (va por la cola)
+    published_.store(now, std::memory_order_release);
   }
   old = preview_.take(&changed);
   if (changed) {

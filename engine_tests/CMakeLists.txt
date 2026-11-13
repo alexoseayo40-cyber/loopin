@@ -19,12 +19,15 @@ add_executable(loopin_engine_tests
   drum_tests.cpp
   song_tests.cpp
   live_tests.cpp
+  session_tests.cpp
   ${SRC}/Backing.cpp
   ${SRC}/Drums.cpp
   ${SRC}/EngineCore.cpp
+  ${SRC}/Export.cpp
   ${SRC}/LatencyMeter.cpp
   ${SRC}/Looper.cpp
   ${SRC}/LooperBuffers.cpp
+  ${SRC}/LooperSession.cpp
   ${SRC}/LooperRecord.cpp
   ${SRC}/Metronome.cpp
   ${SRC}/SongJobs.cpp
@@ -47,5 +50,5 @@ endif()
 # Demo de la batería (no es un test): drum_demo app/assets/drums <salida>
 add_executable(drum_demo drum_demo.cpp ${SRC}/Drums.cpp ${SRC}/EngineCore.cpp ${SRC}/Transport.cpp
   ${SRC}/Metronome.cpp ${SRC}/LatencyMeter.cpp ${SRC}/TapCalibrator.cpp ${SRC}/Looper.cpp
-  ${SRC}/LooperRecord.cpp ${SRC}/LooperBuffers.cpp ${SRC}/Backing.cpp ${SRC}/Tuner.cpp)
+  ${SRC}/LooperRecord.cpp ${SRC}/LooperBuffers.cpp ${SRC}/LooperSession.cpp ${SRC}/Backing.cpp ${SRC}/Tuner.cpp)
 target_include_directories(drum_demo PRIVATE ${SRC})

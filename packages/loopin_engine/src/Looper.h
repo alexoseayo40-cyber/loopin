@@ -224,6 +224,36 @@ class Looper {
   // Paso de lectura aplicado (+2, +1, −2 o −1 medias muestras por muestra)
   int32_t trackStep(int32_t track) const { return tr(track).dq; }
 
+  // --- Sesiones (Etapa 6) ---
+  // Nada se escribe en las pistas ni se va a escribir sin una orden nueva: no
+  // se graba ni se espera para grabar, no queda entrada por capturar y no hay
+  // trabajo de fondo (sumar capas, borrar). Entonces otro hilo puede leerlas.
+  bool settled() const;
+  // Dónde empieza la pista respecto al ciclo base: su origen menos el del
+  // ciclo, en [0, longitud). Se conserva al parar y arrancar.
+  int64_t trackOffset(int32_t track) const;
+  // Lo que suena de la pista (con sus capas) en out[0, longitud), si out no
+  // es nullptr y cabe en max. Devuelve la longitud (0 = vacía). hash: una
+  // huella del contenido, para saber si ha cambiado (puede ser nullptr).
+  // Solo con settled() (desde otro hilo) o en el hilo de audio.
+  int64_t readTrack(int32_t track, float* out, int64_t max, uint64_t* hash) const;
+  // Para cargar una sesión desde otro hilo: el buffer de una pista vacía
+  // (con settled() y sin loops: nadie lo toca). Caben capacityFrames().
+  float* trackBuffer(int32_t track) { return tr(track).data.data(); }
+  // Lo que hace falta para que suenen unas pistas ya escritas en sus buffers
+  struct Restore {
+    int64_t barFrames = 0;
+    int64_t baseLen = 0;
+    int64_t len[kTracks] = {};     // 0 = vacía; si no, 1, 2 o 4 veces la base
+    int64_t offset[kTracks] = {};  // ver trackOffset()
+    int32_t layers[kTracks] = {};  // capas que se ven (sin deshacer)
+    int32_t selected = 0;
+  };
+  // Hilo de audio, sin loops y con settled(): las pistas quedan con esas
+  // longitudes, paradas, sin efectos y sin nada que deshacer. Devuelve false
+  // (y no cambia nada) si no se puede.
+  bool restore(const Restore& r, int64_t now);
+
   // De la pista seleccionada (lo que mira el botón principal)
   int64_t length() const { return trackLength(selected_); }
   int64_t position() const { return trackPosition(selected_); }

@@ -35,3 +35,4 @@ void runLooperTests();
 void runDrumTests();
 void runSongTests();
 void runLiveTests();
+void runSessionTests();

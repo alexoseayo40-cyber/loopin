@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 
 #include "Clip.h"
@@ -65,6 +66,10 @@ class Backing {
   float volume() const { return volume_; }
   bool playing() const { return playing_; }
   const Clip* song() const { return song_.current(); }
+  // Hilo de la interfaz: la canción que suena (o nullptr). Sigue viva al
+  // menos hasta que ese hilo recoja los clips retirados (ClipBin::collect),
+  // así que se puede copiar ahí mismo.
+  const Clip* publishedSong() const { return published_.load(std::memory_order_acquire); }
   const Clip* preview() const { return preview_.current(); }
   int64_t position() const { return pos_; }
   bool previewPlaying() const { return previewPlaying_; }
@@ -80,6 +85,7 @@ class Backing {
 
   ClipSlot song_;
   ClipSlot preview_;
+  std::atomic<const Clip*> published_{nullptr};
   int32_t sampleRate_ = 48000;
 
   bool enabled_ = false;

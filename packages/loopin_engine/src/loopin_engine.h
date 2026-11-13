@@ -108,6 +108,17 @@ extern "C" {
 #define LOOPIN_PENDING_REVERSE 2
 #define LOOPIN_PENDING_HALF 4
 
+// Sesiones: errores de loopin_session_load
+#define LOOPIN_SESSION_NOT_READY -1  // grabando, borrando… o ya hay loops
+#define LOOPIN_SESSION_BAD -2        // los datos no cuadran
+#define LOOPIN_SESSION_TOO_LONG -3   // no cabe en las pistas
+
+// Exportar: errores (export_error)
+#define LOOPIN_EXPORT_ERR_WRITE 1
+#define LOOPIN_EXPORT_ERR_MEMORY 2
+#define LOOPIN_EXPORT_ERR_NOTHING 3
+#define LOOPIN_EXPORT_ERR_LOAD 4
+
 // API de audio que Oboe ha elegido
 #define LOOPIN_API_UNKNOWN 0
 #define LOOPIN_API_OPENSLES 1
@@ -250,7 +261,42 @@ typedef struct {
   double trainer_top;
   // Afinador: nota de referencia que suena (0 = ninguna)
   double tone_hz;
+
+  // Etapa 6: sesiones
+  int32_t loop_settled;       // 1 = las pistas están quietas (se pueden leer)
+  int64_t loop_revision;      // cambia con cada orden que puede tocar las pistas
+  int64_t track_offset[LOOPIN_TRACKS];  // dónde empieza cada pista en el ciclo
+  // Exportar
+  int32_t export_state;       // LOOPIN_JOB_*
+  int32_t export_progress;    // 0..1000
+  int32_t export_error;       // LOOPIN_EXPORT_ERR_*
+  int64_t export_frames;      // duración de lo exportado (muestras)
 } LoopinStatus;
+
+// Una sesión guardada (para loopin_session_load)
+typedef struct {
+  double bpm;
+  int32_t beats_per_bar;
+  int32_t accent_mask;
+  int32_t sample_rate;        // a la que se grabaron los datos
+  int32_t selected;           // pista elegida
+  int64_t bar_frames;         // muestras por compás (a esa frecuencia)
+  int64_t base_length;
+  int64_t track_length[LOOPIN_TRACKS];  // 0 = vacía
+  int64_t track_offset[LOOPIN_TRACKS];
+  int32_t track_layers[LOOPIN_TRACKS];
+} LoopinSession;
+
+// Qué exportar (loopin_export_start). Rutas en UTF-8; NULL = ese no.
+typedef struct {
+  int32_t loops;              // vueltas del ciclo entero (la pista más larga)
+  int32_t with_drums;         // la batería (con su estilo y volumen de ahora)
+  int32_t with_song;          // la canción (si está estirada al tempo de ahora)
+  const char* mix_path;       // lo que suena
+  const char* track_path[LOOPIN_TRACKS];  // cada pista sola
+  const char* drums_path;
+  const char* song_path;
+} LoopinExport;
 
 // Afinador: lo último que ha entrado, analizado al pedirlo
 typedef struct {
@@ -415,6 +461,25 @@ FFI_PLUGIN_EXPORT void loopin_tuner_enable(int32_t enabled);
 // Nota de referencia para afinar de oído (hz = 0: callar). Entra y sale en 10 ms.
 FFI_PLUGIN_EXPORT void loopin_set_tone(double hz);
 FFI_PLUGIN_EXPORT int32_t loopin_tuner_read(LoopinTuner* out);
+
+// --- Etapa 6: sesiones y exportar ---
+
+// Copia lo que suena de una pista (con sus capas) en out si cabe en
+// max_frames (out puede ser NULL). Devuelve su longitud (0 = vacía) o -1 si
+// las pistas no están quietas (se graba, se borra o hay órdenes sin aplicar).
+// hash (puede ser NULL): huella del contenido, para saber si ha cambiado.
+FFI_PLUGIN_EXPORT int64_t loopin_track_read(int32_t track, float* out, int64_t max_frames,
+                                            uint64_t* hash);
+// Carga una sesión (sin loops; hay que borrarlas antes y esperar a que las
+// pistas estén quietas). data[i]: track_length[i] muestras (NULL si vacía).
+// Se pasan a la frecuencia del motor; quedan paradas, con el tempo y el
+// compás de la sesión. Devuelve 0 o LOOPIN_SESSION_*.
+FFI_PLUGIN_EXPORT int32_t loopin_session_load(const LoopinSession* s, const float* const* data);
+// Exporta en segundo plano lo que suena ahora (las pistas tienen que estar
+// quietas). Devuelve 0, -1 si no están quietas, -2 si no hay pistas o -3 si
+// ya hay una exportación en marcha. Estado en export_*.
+FFI_PLUGIN_EXPORT int32_t loopin_export_start(const LoopinExport* e);
+FFI_PLUGIN_EXPORT void loopin_export_cancel(void);
 
 // Copia el estado actual en *out.
 FFI_PLUGIN_EXPORT void loopin_get_status(LoopinStatus* out);

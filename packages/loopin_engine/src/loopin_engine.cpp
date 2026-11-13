@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "AudioEngine.h"
+#include "Export.h"
 #include "SongJobs.h"
 #include "Tuner.h"
 
@@ -17,6 +18,11 @@ namespace {
 
 AudioEngine& engine() {
   static AudioEngine* instance = new AudioEngine();  // vive toda la app
+  return *instance;
+}
+
+loopin::Exporter& exporter() {
+  static loopin::Exporter* instance = new loopin::Exporter();
   return *instance;
 }
 
@@ -195,6 +201,96 @@ int32_t loopin_tuner_read(LoopinTuner* out) {
   return 1;
 }
 
+int64_t loopin_track_read(int32_t track, float* out, int64_t max_frames, uint64_t* hash) {
+  return engine().core().readTrack(track, out, max_frames, hash);
+}
+
+int32_t loopin_session_load(const LoopinSession* s, const float* const* data) {
+  if (s == nullptr || data == nullptr) return LOOPIN_SESSION_BAD;
+  // Con el audio cerrado, reabrirlo borraría lo escrito
+  if (!engine().running()) return LOOPIN_SESSION_NOT_READY;
+  loopin::SessionSpec spec;
+  spec.bpm = s->bpm;
+  spec.beatsPerBar = s->beats_per_bar;
+  spec.accentMask = static_cast<uint32_t>(s->accent_mask);
+  spec.sampleRate = s->sample_rate;
+  spec.barFrames = s->bar_frames;
+  spec.baseLen = s->base_length;
+  spec.selected = s->selected;
+  for (int i = 0; i < LOOPIN_TRACKS; ++i) {
+    spec.len[i] = s->track_length[i];
+    spec.offset[i] = s->track_offset[i];
+    spec.layers[i] = s->track_layers[i];
+  }
+  return engine().core().loadSession(spec, data);
+}
+
+int32_t loopin_export_start(const LoopinExport* e) {
+  if (e == nullptr) return -2;
+  loopin::Exporter& ex = exporter();
+  if (ex.state() == loopin::Exporter::kRunning) return -3;
+  loopin::EngineCore& core = engine().core();
+  if (!core.sessionReady()) return -1;
+  const loopin::CoreStatus c = core.status();
+  loopin::ExportSpec spec;
+  loopin::SessionSpec& s = spec.session;
+  s.sampleRate = core.sampleRate();
+  s.bpm = c.bpm;
+  s.beatsPerBar = c.beatsPerBar;
+  s.accentMask = static_cast<uint32_t>(c.accentMask);
+  s.barFrames = c.loopBarFrames;
+  s.baseLen = c.loopBaseLength;
+  s.selected = c.loopSelected;
+  bool any = false;
+  for (int i = 0; i < LOOPIN_TRACKS; ++i) {
+    const int64_t len = core.readTrack(i, nullptr, 0, nullptr);
+    if (len < 0) return -1;
+    if (len == 0) continue;
+    spec.data[i].resize(static_cast<size_t>(len));
+    if (core.readTrack(i, spec.data[i].data(), len, nullptr) != len) return -1;
+    s.len[i] = len;
+    s.offset[i] = c.trackOffset[i];
+    s.layers[i] = c.trackLayers[i];
+    spec.volume[i] = c.trackVolume[i];
+    spec.muted[i] = c.trackMuted[i] != 0;
+    spec.reverse[i] = c.trackReverse[i] != 0;
+    spec.half[i] = c.trackHalf[i] != 0;
+    if (e->track_path[i] != nullptr) spec.trackPath[i] = e->track_path[i];
+    any = true;
+  }
+  if (!any || s.baseLen <= 0 || s.barFrames <= 0) return -2;
+  spec.loops = e->loops;
+  if (e->mix_path != nullptr) spec.mixPath = e->mix_path;
+  if (e->with_drums != 0) {
+    spec.drums = true;
+    spec.drumStyle = static_cast<loopin::DrumStyle>(c.drumStyle);
+    spec.beatIsEighth = core.drumsBeatIsEighth();
+    spec.drumVolume = c.drumVolume;
+    if (e->drums_path != nullptr) spec.drumsPath = e->drums_path;
+  }
+  // La canción, si suena estirada al tempo y compás de ahora. Se copia aquí:
+  // los clips solo se borran en este hilo, así que sigue viva.
+  const loopin::Clip* song = core.backing().publishedSong();
+  if (e->with_song != 0 && song != nullptr && song->samplesPerBeat == c.samplesPerBeat &&
+      song->beatsPerBar == c.beatsPerBar && song->rate == s.sampleRate) {
+    auto copy = std::make_unique<loopin::Clip>();
+    copy->pcm = song->pcm;
+    copy->rate = song->rate;
+    copy->id = song->id;
+    copy->samplesPerBeat = song->samplesPerBeat;
+    copy->beatsPerBar = song->beatsPerBar;
+    copy->barFrames = song->barFrames;
+    copy->bars = song->bars;
+    spec.song = std::move(copy);
+    spec.songVolume = c.backingVolume;
+    if (e->song_path != nullptr) spec.songPath = e->song_path;
+  }
+  ex.start(std::move(spec), core);
+  return 0;
+}
+
+void loopin_export_cancel(void) { exporter().cancel(); }
+
 void loopin_get_status(LoopinStatus* out) {
   if (out == nullptr) return;
   // Los clips que ya no suenan se borran aquí, en el hilo de la interfaz
@@ -338,6 +434,14 @@ void loopin_get_status(LoopinStatus* out) {
   out->trainer_step = c.trainerStep;
   out->trainer_top = c.trainerTop;
   out->tone_hz = c.toneHz;
+  out->loop_settled = c.loopSettled;
+  out->loop_revision = c.loopRevision;
+  for (int i = 0; i < LOOPIN_TRACKS; ++i) out->track_offset[i] = c.trackOffset[i];
+  const loopin::Exporter& ex = exporter();
+  out->export_state = ex.state();
+  out->export_progress = ex.progress();
+  out->export_error = ex.error();
+  out->export_frames = ex.frames();
 }
 
 }  // extern "C"

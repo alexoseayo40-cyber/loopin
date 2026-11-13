@@ -113,7 +113,10 @@ void Looper::setVolume(float volume) { volume_ = std::clamp(volume, 0.0f, 2.0f);
 
 void Looper::setTrackVolume(int32_t track, float volume) {
   if (track < 0 || track >= kTracks) return;
-  tr(track).volume = std::clamp(volume, 0.0f, 2.0f);
+  Track& t = tr(track);
+  t.volume = std::clamp(volume, 0.0f, 2.0f);
+  // Parado no suena nada: no hace falta ir poco a poco
+  if (state_ == State::kStopped || state_ == State::kEmpty) t.gain = t.muted ? 0.0f : t.volume;
 }
 
 // ---------------------------------------------------------------- silencio y efectos
@@ -140,6 +143,7 @@ void Looper::setTrackMuted(int32_t track, bool muted, int64_t now) {
     if (at <= now) {
       t.muted = muted;
       t.muteAt = kNever;
+      if (state_ == State::kStopped || state_ == State::kEmpty) t.gain = muted ? 0.0f : t.volume;
     } else {
       t.muteAt = at;
     }

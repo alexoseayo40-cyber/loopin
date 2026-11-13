@@ -79,6 +79,8 @@ struct Command {
     kSetTrainer,       // value = BPM que sube, arg = cada cuántos compases (0 = apagado)
     kSetTrainerTop,    // value = hasta qué tempo
     kSetTone,          // nota de referencia: value = Hz (0 = callar)
+    // Etapa 6: sesiones
+    kRestore,          // las pistas ya escritas suenan (ver loadSession)
   };
   Type type = Type::kPlay;
   double value = 0.0;
@@ -179,6 +181,25 @@ struct CoreStatus {
   double trainerStep;
   double trainerTop;
   double toneHz;            // nota de referencia que suena (0 = ninguna)
+  // Etapa 6: sesiones
+  int32_t loopSettled;      // las pistas se pueden leer (ver Looper::settled)
+  int64_t loopRevision;     // cambia con cada orden que puede tocar las pistas
+  int64_t trackOffset[Looper::kTracks];
+};
+
+// Una sesión guardada: lo que hace falta para que sus pistas vuelvan a sonar.
+// Los datos pueden ser de otra frecuencia: se pasan a la del motor.
+struct SessionSpec {
+  double bpm = 100.0;
+  int32_t beatsPerBar = 4;
+  uint32_t accentMask = 0;
+  int32_t sampleRate = 48000;  // a la que se grabaron los datos
+  int64_t barFrames = 0;       // a esa frecuencia
+  int64_t baseLen = 0;
+  int64_t len[Looper::kTracks] = {};
+  int64_t offset[Looper::kTracks] = {};
+  int32_t layers[Looper::kTracks] = {};
+  int32_t selected = 0;
 };
 
 class EngineCore {
@@ -190,8 +211,44 @@ class EngineCore {
 
   ~EngineCore() { collectClips(); }
 
-  // Fuera del hilo de audio (antes de arrancar el stream). Reserva memoria.
-  void prepare(int32_t sampleRate);
+  // Fuera del hilo de audio (antes de arrancar el stream). Reserva memoria
+  // (loopSeconds por pista: menos en un núcleo que solo exporta).
+  void prepare(int32_t sampleRate, int32_t loopSeconds = Looper::kMaxSeconds);
+
+  // --- Sesiones (Etapa 6), desde el hilo de la interfaz ---
+  static constexpr int32_t kSessionOk = 0;
+  static constexpr int32_t kSessionNotReady = -1;  // grabando, borrando… o con loops
+  static constexpr int32_t kSessionBad = -2;       // los datos no cuadran
+  static constexpr int32_t kSessionTooLong = -3;   // no cabe en las pistas
+  // Ya se han aplicado todas las órdenes enviadas y las pistas están quietas
+  // (Looper::settled): se pueden leer sin que el audio las toque.
+  bool sessionReady() const {
+    return queue_.drained() && aSettled_.load(std::memory_order_acquire);
+  }
+  // Copia lo que suena de una pista (ver Looper::readTrack). −1 si no está
+  // quieta (sessionReady).
+  int64_t readTrack(int32_t track, float* out, int64_t max, uint64_t* hash) const {
+    if (!sessionReady()) return -1;
+    return looper_.readTrack(track, out, max, hash);
+  }
+  // Carga unas pistas (sin loops y con sessionReady): escribe los datos en
+  // los buffers (pasándolos a la frecuencia del motor) y pide que suenen. Se
+  // quedan paradas, con el tempo y el compás de la sesión. data[i] tiene
+  // s.len[i] muestras (nullptr si la pista está vacía).
+  int32_t loadSession(const SessionSpec& s, const float* const* data);
+
+  // Para un núcleo que exporta (sin audio): la salida sin recortar a ±1, y
+  // el kit de la batería de otro núcleo.
+  void setClampOutput(bool on) { clampOutput_ = on; }
+  void copyDrumKit(const EngineCore& from) { drums_.copySamples(from.drums_); }
+  // Corta lo que aún suena (colas de la batería, la canción) con todo parado
+  void silenceTails() {
+    drums_.silence();
+    backing_.halt();
+  }
+  // El tiempo de la batería es la corchea (para exportarla igual). Solo
+  // cambia con una orden: se lee desde el hilo de la interfaz sin cola.
+  bool drumsBeatIsEighth() const { return drumsEighth_.load(std::memory_order_relaxed); }
 
   // Fuera del hilo de audio y con el audio cerrado: muestra de un sonido de la
   // batería. Se aplica en el siguiente prepare().
@@ -232,6 +289,8 @@ class EngineCore {
   void requestStop(int64_t now, bool force);
   void stopNow(int64_t n);
   bool stopping() const { return stopAt_ != Looper::kNever || fade_ == Fade::kFading; }
+  // La orden puede cambiar lo que hay en las pistas
+  static bool touchesTracks(Command::Type t);
   // Entrenador: al empezar el último tiempo de cada N compases, sube el tempo
   // (se aplica en el 1 siguiente)
   void trainerBeat();
@@ -239,7 +298,12 @@ class EngineCore {
   enum class Fade { kNone, kFading, kTail };
 
   int32_t sampleRate_ = 48000;
+  bool clampOutput_ = true;
   SpscQueue<Command, 128> queue_;
+  // Sesión que se está cargando (la escribe la interfaz antes de kRestore)
+  SessionSpec restore_;
+  Looper::Restore restoreLoops_;
+  int64_t revision_ = 0;
   Transport transport_;
   Metronome metronome_;
   LatencyMeter latency_;
@@ -355,6 +419,11 @@ class EngineCore {
   std::atomic<double> aTrainerStep_{5.0};
   std::atomic<double> aTrainerTop_{240.0};
   std::atomic<double> aToneHz_{0.0};
+  std::atomic<int64_t> aRevision_{0};
+  std::atomic<bool> drumsEighth_{false};
+  std::atomic<int64_t> aTrackOffset_[Looper::kTracks] = {};
+  // Va el último (release): quien lo lea como «quieto» ve ya todo lo demás
+  std::atomic<bool> aSettled_{true};
 };
 
 }  // namespace loopin

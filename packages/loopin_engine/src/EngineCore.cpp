@@ -7,7 +7,7 @@
 
 namespace loopin {
 
-void EngineCore::prepare(int32_t sampleRate) {
+void EngineCore::prepare(int32_t sampleRate, int32_t loopSeconds) {
   sampleRate_ = sampleRate > 0 ? sampleRate : 48000;
   transport_.stop();
   transport_.setSampleRate(sampleRate_);
@@ -17,7 +17,9 @@ void EngineCore::prepare(int32_t sampleRate) {
   // 6 s de entrada: cubre la latencia (≤ 0,5 s), el margen para empezar a
   // grabar un poco tarde (≤ 1 s) y bloques grandes.
   ring_.prepare(sampleRate_ * 6);
-  looper_.prepare(sampleRate_, &transport_);
+  looper_.prepare(sampleRate_, &transport_, loopSeconds);
+  // Si cambia la frecuencia, las pistas se pierden: que la interfaz lo sepa
+  ++revision_;
   drums_.prepare(sampleRate_);
   backing_.prepare(sampleRate_, bin_);
   tone_.prepare(sampleRate_);
@@ -36,9 +38,40 @@ void EngineCore::prepare(int32_t sampleRate) {
   publish();
 }
 
+bool EngineCore::touchesTracks(Command::Type t) {
+  switch (t) {
+    case Command::Type::kLoopPress:
+    case Command::Type::kLoopHold:
+    case Command::Type::kLoopDoubleTap:
+    case Command::Type::kLoopUndo:
+    case Command::Type::kLoopClear:
+    case Command::Type::kClearTrack:
+    case Command::Type::kNudgeLatency:
+    case Command::Type::kRestore:
+      return true;
+    default:
+      return false;
+  }
+}
+
 void EngineCore::apply(const Command& cmd) {
   const int64_t now = outPos_;
+  if (touchesTracks(cmd.type)) ++revision_;
   switch (cmd.type) {
+    case Command::Type::kRestore:
+      // Las pistas ya están en sus buffers (loadSession): se para todo, se
+      // pone el tempo y el compás de la sesión y suenan desde ahí
+      stopAt_ = Looper::kNever;
+      fade_ = Fade::kNone;
+      fadeGain_ = 1.0f;
+      looper_.stopAll(now);
+      trainerRaised_ = false;
+      userBpm_ = std::clamp(restore_.bpm, Transport::kMinBpm, Transport::kMaxBpm);
+      transport_.setBpm(restore_.bpm);
+      transport_.setMeter(restore_.beatsPerBar, restore_.accentMask);
+      if (transport_.samplesPerBar() == restoreLoops_.barFrames)
+        looper_.restore(restoreLoops_, now);
+      break;
     case Command::Type::kPlay:
       stopAt_ = Looper::kNever;
       fade_ = Fade::kNone;
@@ -114,6 +147,7 @@ void EngineCore::apply(const Command& cmd) {
       break;
     case Command::Type::kSetDrumStyle:
       drums_.setStyle(static_cast<DrumStyle>(static_cast<int32_t>(cmd.value)), cmd.arg != 0);
+      drumsEighth_.store(cmd.arg != 0, std::memory_order_relaxed);
       break;
     case Command::Type::kSetDrumVolume:
       drums_.setVolume(static_cast<float>(cmd.value));
@@ -267,6 +301,9 @@ void EngineCore::process(const float* in, int32_t inFrames, int32_t inChannels, 
   // Los clips nuevos del audio importado van antes que las órdenes (una orden
   // de la vista previa puede ser para el clip que acaba de llegar)
   backing_.takeClips(retired_);
+  // Hay órdenes: las pistas dejan de estar «quietas» antes de sacar la
+  // primera (así, quien vea la cola vacía ya ve también esto)
+  if (queue_.pending()) aSettled_.store(false, std::memory_order_release);
   Command cmd;
   while (queue_.pop(cmd)) apply(cmd);
 
@@ -412,7 +449,7 @@ void EngineCore::process(const float* in, int32_t inFrames, int32_t inChannels, 
   looper_.background(kBackgroundBudget);
 
   for (int32_t i = 0; i < n; ++i) {
-    const float s = std::clamp(outMono_[i], -1.0f, 1.0f);
+    const float s = clampOutput_ ? std::clamp(outMono_[i], -1.0f, 1.0f) : outMono_[i];
     for (int32_t c = 0; c < outChannels; ++c) out[i * outChannels + c] = s;
   }
   // Por si el dispositivo pide más de lo que procesamos (no debería pasar)
@@ -501,8 +538,13 @@ void EngineCore::publish() {
   aToneHz_.store(tone_.frequency(), std::memory_order_relaxed);
   aTapState_.store(static_cast<int32_t>(tap_.state()), std::memory_order_release);
 
+  aRevision_.store(revision_, std::memory_order_relaxed);
+  for (int32_t i = 0; i < Looper::kTracks; ++i)
+    aTrackOffset_[i].store(looper_.trackOffset(i), std::memory_order_relaxed);
+
   // El estado va el último: quien lo lea como «hecho» ve ya el resultado.
   aLatencyState_.store(static_cast<int32_t>(latency_.state()), std::memory_order_release);
+  aSettled_.store(looper_.settled(), std::memory_order_release);
 }
 
 CoreStatus EngineCore::status() const {
@@ -581,7 +623,69 @@ CoreStatus EngineCore::status() const {
   s.trainerStep = aTrainerStep_.load(std::memory_order_relaxed);
   s.trainerTop = aTrainerTop_.load(std::memory_order_relaxed);
   s.toneHz = aToneHz_.load(std::memory_order_relaxed);
+  s.loopSettled = aSettled_.load(std::memory_order_acquire) ? 1 : 0;
+  s.loopRevision = aRevision_.load(std::memory_order_relaxed);
+  for (int32_t i = 0; i < Looper::kTracks; ++i)
+    s.trackOffset[i] = aTrackOffset_[i].load(std::memory_order_relaxed);
   return s;
+}
+
+// ---------------------------------------------------------------- sesiones
+
+int32_t EngineCore::loadSession(const SessionSpec& s, const float* const* data) {
+  if (!sessionReady() || aLoopState_.load(std::memory_order_relaxed) != 0) return kSessionNotReady;
+  if (s.sampleRate <= 0 || s.barFrames <= 0 || s.baseLen <= 0 || s.baseLen % s.barFrames != 0 ||
+      s.beatsPerBar < 1 || s.beatsPerBar > 16 || !(s.bpm > 0))
+    return kSessionBad;
+  // El compás a la frecuencia del motor (como lo calculará el transporte)
+  const int64_t bar =
+      int64_t(Transport::computeSamplesPerBeat(sampleRate_, s.bpm)) * s.beatsPerBar;
+  const int64_t baseBars = s.baseLen / s.barFrames;
+  Looper::Restore r;
+  r.barFrames = bar;
+  r.baseLen = baseBars * bar;
+  r.selected = s.selected;
+  bool any = false;
+  for (int32_t i = 0; i < Looper::kTracks; ++i) {
+    const int64_t len = s.len[i];
+    if (len <= 0 || data == nullptr || data[i] == nullptr) continue;
+    if (len % s.baseLen != 0) return kSessionBad;
+    const int64_t n = (len / s.baseLen) * r.baseLen;
+    if (n > looper_.capacityFrames()) return kSessionTooLong;
+    r.len[i] = n;
+    r.layers[i] = s.layers[i];
+    // Sin cambiar de frecuencia, tal cual; si no, se estira a la longitud
+    // nueva (interpolación lineal, dando la vuelta al final: es un loop)
+    const int64_t off = ((s.offset[i] % len) + len) % len;
+    r.offset[i] = n == len ? off : std::llround(double(off) * double(n) / double(len)) % n;
+    any = true;
+  }
+  if (!any) return kSessionBad;
+  for (int32_t i = 0; i < Looper::kTracks; ++i) {
+    const int64_t n = r.len[i];
+    if (n == 0) continue;
+    const int64_t len = s.len[i];
+    const float* src = data[i];
+    float* dst = looper_.trackBuffer(i);
+    if (n == len) {
+      std::copy(src, src + len, dst);
+      continue;
+    }
+    const double ratio = double(len) / double(n);
+    for (int64_t k = 0; k < n; ++k) {
+      const double x = double(k) * ratio;
+      const int64_t a = std::min<int64_t>(static_cast<int64_t>(x), len - 1);
+      const double f = x - double(a);
+      const float s0 = src[a];
+      const float s1 = src[a + 1 < len ? a + 1 : 0];
+      dst[k] = static_cast<float>(s0 + (s1 - s0) * f);
+    }
+  }
+  restore_ = s;
+  restoreLoops_ = r;
+  Command c;
+  c.type = Command::Type::kRestore;
+  return post(c) ? kSessionOk : kSessionNotReady;
 }
 
 }  // namespace loopin
