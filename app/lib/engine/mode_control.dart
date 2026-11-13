@@ -42,9 +42,14 @@ extension PlayModeControl on EngineController {
       f.remember(SimpleForced.clickMode, clickMode.name);
       setClickMode(ClickMode.always);
     }
-    if (!kSimpleDrumStyles.contains(drumStyle)) {
-      f.remember(SimpleForced.drumStyle, drumStyle.name);
-      setDrumStyle(DrumStyle.basic);
+    // Sin batería ni canción (no se ven): se apagan, sin parar nada
+    if (drumsOn) {
+      f.remember(SimpleForced.drumsOn, '1');
+      setDrumsOn(false);
+    }
+    if (backingOn) {
+      f.remember(SimpleForced.backingOn, '1');
+      setBackingOn(false);
     }
     if (recordDuck != RecordDuck.silent) {
       f.remember(SimpleForced.recordDuck, recordDuck.name);
@@ -76,14 +81,14 @@ extension PlayModeControl on EngineController {
     }
     final click = parse(ClickMode.values, SimpleForced.clickMode);
     if (click != null && clickMode == ClickMode.always) setClickMode(click);
-    // El estilo vuelve sin cambiar el compás: si no es el suyo, suena el
-    // básico hasta que se ponga (como siempre)
-    final style = parse(DrumStyle.values, SimpleForced.drumStyle);
-    if (style != null && drumStyle == DrumStyle.basic) {
-      drumStyle = style;
-      _applyDrumStyle();
-      _prefs.set(Prefs.drumStyle, style.name);
+    // La batería y la canción vuelven encendidas, pero no arrancan nada:
+    // suenan al darle a ▶ o al grabar, como siempre
+    if (f[SimpleForced.drumsOn] == '1' && !drumsOn) {
+      drumsOn = true;
+      _engine.setDrumsEnabled(true);
+      _prefs.setBool(Prefs.drumsOn, true);
     }
+    if (f[SimpleForced.backingOn] == '1' && !backingOn) _backing.setOn(true);
     final duck = parse(RecordDuck.values, SimpleForced.recordDuck);
     if (duck != null && recordDuck == RecordDuck.silent) setRecordDuck(duck);
     _applyPreset(); // el micrófono, el que eligió

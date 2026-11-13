@@ -531,13 +531,9 @@ class EngineController extends ChangeNotifier {
   /// de otro compás).
   DrumStyle get drumStyleNow => effectiveDrumStyle(drumStyle, timeSignature);
 
-  /// Estilos que se ofrecen (en simple, menos).
-  List<DrumStyle> get drumStyles => simple ? kSimpleDrumStyles : DrumStyle.values;
-
-  /// Se puede elegir este estilo: es del modo, y vale con el compás o el
-  /// compás se puede cambiar (no hay loops).
-  bool drumStyleAvailable(DrumStyle s) =>
-      drumStyles.contains(s) && (drumStyleFits(s, timeSignature) || !tempoLocked);
+  /// Se puede elegir este estilo: vale con el compás o el compás se puede
+  /// cambiar (no hay loops).
+  bool drumStyleAvailable(DrumStyle s) => drumStyleFits(s, timeSignature) || !tempoLocked;
 
   /// La batería suena por el altavoz y el micro la graba.
   bool get drumsBleed => drumsOn && speakerRoute;

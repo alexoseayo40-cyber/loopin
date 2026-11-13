@@ -94,6 +94,7 @@ Future<void> _settle(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 500));
 }
 
+// La batería y las canciones son del avanzado (en simple no se ven)
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(mockPlatform);
@@ -143,7 +144,7 @@ void main() {
     final c = EngineController(
       engine: engine,
       songs: SongLibrary.memory([_ready.copyWith(meter: '3/4'), _raw]),
-    );
+    )..setPlayMode(PlayMode.advanced);
     await c.startAudio();
     await tester.pump(const Duration(milliseconds: 100));
     expect(c.backingPhase, BackingPhase.noSong);
@@ -171,7 +172,8 @@ void main() {
 
   testWidgets('se prepara al tempo de ahora y otra vez si el tempo cambia', (tester) async {
     final engine = FakeEngine()..next = _st();
-    final c = EngineController(engine: engine, songs: SongLibrary.memory([_ready]));
+    final c = EngineController(engine: engine, songs: SongLibrary.memory([_ready]))
+      ..setPlayMode(PlayMode.advanced);
     await c.startAudio();
     await tester.pump(const Duration(milliseconds: 100));
     c.selectSong(_ready); // con el transporte sonando: aquí no cambia nada más
@@ -213,7 +215,8 @@ void main() {
   ) async {
     setScreen(tester, const Size(393, 873));
     final engine = FakeEngine()..next = _st(playing: false, spb: 29599);
-    final c = EngineController(engine: engine, songs: SongLibrary.memory([_ready]));
+    final c = EngineController(engine: engine, songs: SongLibrary.memory([_ready]))
+      ..setPlayMode(PlayMode.advanced);
     await c.startAudio();
     await tester.pump(const Duration(milliseconds: 100));
     c.selectSong(_ready);
@@ -274,7 +277,8 @@ void main() {
 
   testWidgets('encender la canción con todo parado arranca', (tester) async {
     final engine = FakeEngine()..next = _st(playing: false);
-    final c = EngineController(engine: engine, songs: SongLibrary.memory([_ready]));
+    final c = EngineController(engine: engine, songs: SongLibrary.memory([_ready]))
+      ..setPlayMode(PlayMode.advanced);
     await c.startAudio();
     await tester.pump(const Duration(milliseconds: 100));
     // Al abrir el audio se le dice al motor cómo está
@@ -308,7 +312,7 @@ void main() {
           songs: SongLibrary.memory([
             _ready.copyWith(name: 'Un nombre larguísimo que no cabe en la fila de abajo'),
           ]),
-        );
+        )..setPlayMode(PlayMode.advanced);
         await tester.pumpWidget(_app(LooperScreen(controller: c)));
         await tester.pump(const Duration(milliseconds: 100));
         expect(find.byType(AccompanimentRow), findsOneWidget);
@@ -350,7 +354,8 @@ void main() {
   ) async {
     setScreen(tester, const Size(393, 873));
     final engine = FakeEngine()..next = _st(playing: false);
-    final c = EngineController(engine: engine, songs: SongLibrary.memory([_ready, _raw]));
+    final c = EngineController(engine: engine, songs: SongLibrary.memory([_ready, _raw]))
+      ..setPlayMode(PlayMode.advanced);
     await tester.pumpWidget(_app(LooperScreen(controller: c)));
     await tester.pump(const Duration(milliseconds: 100));
     c.setShowSong(true);
@@ -380,7 +385,8 @@ void main() {
 
   testWidgets('lista vacía: invita a importar', (tester) async {
     final engine = FakeEngine()..next = _st();
-    final c = EngineController(engine: engine, songs: SongLibrary.memory([]));
+    final c = EngineController(engine: engine, songs: SongLibrary.memory([]))
+      ..setPlayMode(PlayMode.advanced);
     await tester.pumpWidget(_app(SongsScreen(controller: c)));
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text(tr.songsEmpty), findsOneWidget);
@@ -390,7 +396,8 @@ void main() {
 
   testWidgets('preparar: sugiere, marca el 1, tempo exacto con dos unos y guardar', (tester) async {
     final engine = FakeEngine()..next = _st(playing: false);
-    final c = EngineController(engine: engine, songs: SongLibrary.memory([_raw]));
+    final c = EngineController(engine: engine, songs: SongLibrary.memory([_raw]))
+      ..setPlayMode(PlayMode.advanced);
     await c.startAudio();
     await tester.pump(const Duration(milliseconds: 100));
     final e = SongEditor(controller: c, song: _raw)..start();
@@ -460,7 +467,8 @@ void main() {
       setScreen(tester, size);
       final engine = FakeEngine()
         ..next = _st(playing: false, openId: 4, open: JobState.done, previewId: 4);
-      final c = EngineController(engine: engine, songs: SongLibrary.memory([_raw]));
+      final c = EngineController(engine: engine, songs: SongLibrary.memory([_raw]))
+        ..setPlayMode(PlayMode.advanced);
       await c.startAudio();
       await tester.pumpWidget(_app(SongScreen(controller: c, song: _raw)));
       await tester.pump(const Duration(milliseconds: 100));
@@ -495,7 +503,8 @@ void main() {
 
   testWidgets('el informe dice cómo está la canción', (tester) async {
     final engine = FakeEngine()..next = _st();
-    final c = EngineController(engine: engine, songs: SongLibrary.memory([_ready]));
+    final c = EngineController(engine: engine, songs: SongLibrary.memory([_ready]))
+      ..setPlayMode(PlayMode.advanced);
     await c.startAudio();
     await tester.pump(const Duration(milliseconds: 100));
     c.selectSong(_ready);

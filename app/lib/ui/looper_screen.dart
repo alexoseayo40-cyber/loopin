@@ -97,10 +97,11 @@ class _LooperScreenState extends State<LooperScreen> {
 // ---------------------------------------------------------------------------
 // Disposición
 
-/// Lo que ocupa la fila de compás, modo y clic de la pantalla de tempo (en
-/// simple no está): medido en los tests.
-const _simpleSaves = 44.0;
-const _simpleSavesCompact = 40.0;
+/// Lo que no está en simple (la fila de compás, modo y clic de la pantalla de
+/// tempo, 44 o 40, y la de acompañamiento con su hueco, 52 o 46): medido en
+/// los tests.
+const _simpleSaves = 96.0;
+const _simpleSavesCompact = 86.0;
 
 /// En vertical: todo en una columna, con el pulsador abajo, a mano.
 class _TallLayout extends StatelessWidget {
@@ -120,7 +121,8 @@ class _TallLayout extends StatelessWidget {
     final tight = box.maxHeight < 700;
     final gap = tight ? 4.0 : (compact ? 8.0 : 14.0);
     final rings = tight ? 48.0 : (compact ? 60.0 : 96.0);
-    // En simple la pantalla de tempo tiene una fila menos: el pulsador crece
+    // En simple la pantalla de tempo tiene una fila menos y no está la fila de
+    // acompañamiento: el pulsador crece
     final simple = view.controller.simple;
     final simpleSaves = simple ? (compact ? _simpleSavesCompact : _simpleSaves) : 0.0;
     // Lo que ocupa todo menos el pulsador (medido, con la fila de la batería),
@@ -130,7 +132,7 @@ class _TallLayout extends StatelessWidget {
     final pedal = (math.min(
       width * (simple ? 0.7 : 0.62),
       box.maxHeight - fixed,
-    )).clamp(tight ? 100.0 : 132.0, (mixer ? 420.0 : 340.0) + (simple ? 40 : 0));
+    )).clamp(tight ? 100.0 : 132.0, (mixer ? 420.0 : 340.0) + (simple ? 60 : 0));
     return Center(
       child: SizedBox(
         width: width,
@@ -152,8 +154,11 @@ class _TallLayout extends StatelessWidget {
                     TrackRings(view: view, maxSize: rings),
                     SizedBox(height: gap),
                     TrackControls(view: view, mixer: mixer),
-                    const SizedBox(height: 6),
-                    AccompanimentRow(view: view, dense: compact),
+                    // En simple no hay batería ni canción
+                    if (!simple) ...[
+                      const SizedBox(height: 6),
+                      AccompanimentRow(view: view, dense: compact),
+                    ],
                   ],
                 ),
                 Padding(
@@ -205,8 +210,10 @@ class _WideLayout extends StatelessWidget {
                   TrackRings(view: view, maxSize: compact ? 64 : 96),
                   SizedBox(height: gap),
                   TrackControls(view: view, mixer: mixer),
-                  const SizedBox(height: 6),
-                  AccompanimentRow(view: view, dense: compact),
+                  if (!view.controller.simple) ...[
+                    const SizedBox(height: 6),
+                    AccompanimentRow(view: view, dense: compact),
+                  ],
                 ],
               ),
             ),

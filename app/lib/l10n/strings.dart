@@ -467,12 +467,12 @@ class Strings {
     PlayMode.advanced => 'Todos los controles',
   };
   String get playModeHelp =>
-      'Simple: el pulsador más grande, el tempo con TAP, 3 compases (4/4, 3/4 y 6/8), '
-      'el clic encendido o apagado, la batería y tu canción. Cada pista se graba igual: '
-      '1 compás de cuenta y se cierra al volver a pulsar. Avanzado: además, los modos '
-      'sincronizado y libre, empezar al tocar, todos los compases y estilos, el clic '
-      'solo en la cuenta, los modos del micrófono, qué suena al grabar con el altavoz y '
-      'la latencia a mano. Al volver al avanzado recupera lo que tenías.';
+      'Simple: el pulsador más grande, el tempo con TAP, 3 compases (4/4, 3/4 y 6/8) y '
+      'el clic encendido o apagado. Cada pista se graba igual: 1 compás de cuenta y se '
+      'cierra al volver a pulsar. Avanzado: además, la batería y tus canciones, los '
+      'modos sincronizado y libre, empezar al tocar, todos los compases, el clic solo en '
+      'la cuenta, los modos del micrófono, qué suena al grabar con el altavoz y la '
+      'latencia a mano. Al volver al avanzado recupera lo que tenías.';
   String get playModeBusy => 'Acaba de grabar para cambiarlo';
 
   String get appearance => 'Apariencia';

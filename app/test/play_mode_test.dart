@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:loopin/engine/drums.dart';
 import 'package:loopin/engine/engine_controller.dart';
 import 'package:loopin/engine/play_mode.dart';
 import 'package:loopin/ui/audio_settings_screen.dart';
+import 'package:loopin/ui/looper/accompaniment_row.dart';
 import 'package:loopin/ui/looper/tempo_display.dart';
 import 'package:loopin/ui/looper/tempo_menus.dart';
 import 'package:loopin/ui/looper_screen.dart';
@@ -49,6 +49,8 @@ void _setAllAdvanced(EngineController c) {
   c.setClickMode(ClickMode.countIn);
   c.setRecordDuck(RecordDuck.low);
   c.setInputPreset(InputPreset.generic);
+  c.setDrumsOn(true);
+  c.setBackingOn(true);
 }
 
 /// En simple no queda nada que no se vea.
@@ -57,7 +59,8 @@ void _expectSimpleValues(EngineController c) {
   expect(c.startOnSound, isFalse);
   expect(kSimpleMeters, contains(c.timeSignature.label));
   expect(kSimpleClickModes, contains(c.clickMode));
-  expect(kSimpleDrumStyles, contains(c.drumStyle));
+  expect(c.drumsOn, isFalse);
+  expect(c.backingOn, isFalse);
   expect(c.recordDuck, RecordDuck.silent);
   expect(c.inputPreset, c.recommendedPreset);
 }
@@ -98,13 +101,20 @@ void main() {
     _expectSimpleValues(c);
     expect(c.timeSignature.label, '4/4');
     expect(c.clickMode, ClickMode.always);
-    expect(c.drumStyle, DrumStyle.basic);
     expect(c.inputPreset, InputPreset.voiceRecognition);
-    // Y el motor lo sabe
+    // Y el motor lo sabe (apagar la batería y la canción no para nada)
     expect(
       engine.calls,
-      containsAll(['mode manual', 'onSound false', 'meter 4 0', 'click always', 'drumStyle basic']),
+      containsAll([
+        'mode manual',
+        'onSound false',
+        'meter 4 0',
+        'click always',
+        'drums false',
+        'backing false',
+      ]),
     );
+    expect(engine.calls, isNot(contains('pause')));
     expect(prefs['playMode'], 'simple');
     expect(prefs['simpleForced'], contains('meter=7/8'));
     // Lo que eligió en el avanzado sigue guardado para cuando vuelva
@@ -116,6 +126,7 @@ void main() {
     c = await _open(tester, engine, prefs);
     expect(c.playMode, PlayMode.simple);
     _expectSimpleValues(c);
+    engine.calls.clear();
     c.setPlayMode(PlayMode.advanced);
     expect(c.loopMode, LoopMode.free);
     expect(c.startOnSound, isTrue);
@@ -124,6 +135,11 @@ void main() {
     expect(c.drumStyle, DrumStyle.funk);
     expect(c.recordDuck, RecordDuck.low);
     expect(c.inputPreset, InputPreset.generic);
+    // La batería y la canción vuelven encendidas, sin arrancar nada
+    expect(c.drumsOn, isTrue);
+    expect(c.backingOn, isTrue);
+    expect(engine.calls, containsAll(['drums true', 'backing true']));
+    expect(engine.calls, isNot(contains('play')));
     expect(prefs['simpleForced'], '');
     await _close(tester, c);
   });
@@ -133,19 +149,15 @@ void main() {
     final c = await _open(tester, engine, {'playMode': 'advanced'});
     c.setTimeSignature(_ts('7/8'));
     c.setClickMode(ClickMode.countIn);
-    c.setDrumStyle(DrumStyle.reggae); // de 4/4: cambia el compás
     c.setLoopMode(LoopMode.sync);
     c.setPlayMode(PlayMode.simple);
     expect(c.timeSignature.label, '4/4');
-    // En simple elige otro compás, apaga el clic y pone el vals
-    c.setTimeSignature(_ts('6/8'));
+    // En simple elige otro compás y apaga el clic
+    c.setTimeSignature(_ts('3/4'));
     c.setClickMode(ClickMode.silent);
-    c.setDrumStyle(DrumStyle.waltz); // cambia a 3/4
-    expect(c.timeSignature.label, '3/4');
     c.setPlayMode(PlayMode.advanced);
     expect(c.timeSignature.label, '3/4');
     expect(c.clickMode, ClickMode.silent);
-    expect(c.drumStyle, DrumStyle.waltz);
     expect(c.loopMode, LoopMode.sync); // eso no se puede tocar en simple: vuelve
     await _close(tester, c);
   });
@@ -183,16 +195,12 @@ void main() {
     final c = await _open(tester, engine, {});
     c.setInputPreset(InputPreset.generic);
     expect(c.inputPreset, c.recommendedPreset);
-    expect(c.drumStyleAvailable(DrumStyle.funk), isFalse);
-    c.setDrumStyle(DrumStyle.funk);
-    expect(c.drumStyle, DrumStyle.basic);
     expect(c.timeSignatures.map((t) => t.label), kSimpleMeters);
-    expect(c.drumStyles, kSimpleDrumStyles);
     expect(c.report(), contains('Modo de la app: simple'));
     await _close(tester, c);
   });
 
-  testWidgets('pantalla en simple: tempo con dos filas, clic de un toque y pulsador más grande', (
+  testWidgets('pantalla en simple: tempo con dos filas, clic de un toque, sin acompañamiento', (
     tester,
   ) async {
     setScreen(tester, const Size(393, 873));
@@ -206,6 +214,7 @@ void main() {
     expect(find.byType(OnSoundToggle), findsNothing);
     expect(find.byType(ClickMenu), findsNothing);
     expect(find.byType(MeterMenu), findsOneWidget);
+    expect(find.byType(AccompanimentRow), findsNothing);
     expect(find.text('TAP · TOCA AL RITMO'), findsOneWidget);
     expect(find.textContaining('1 compás de cuenta'), findsOneWidget); // lo que pasa al pulsar
     final simplePedal = tester.getSize(find.byType(Footswitch)).width;
@@ -230,16 +239,6 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(c.timeSignature.label, '6/8');
 
-    // La batería: los estilos del simple
-    await tester.tap(find.byTooltip('Estilo de la batería'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.byType(PopupMenuItem<DrumStyle>), findsNWidgets(kSimpleDrumStyles.length));
-    expect(find.text('Funk · 4/4'), findsNothing);
-    expect(find.text('Rock · 4/4'), findsOneWidget);
-    await tester.tapAt(const Offset(5, 5)); // cierra el menú
-    await tester.pump(const Duration(milliseconds: 400));
-
     // En avanzado vuelve todo y el pulsador es más pequeño
     c.setPlayMode(PlayMode.advanced);
     await tester.pump();
@@ -247,10 +246,16 @@ void main() {
     expect(find.byType(OnSoundToggle), findsOneWidget);
     expect(find.byType(ClickMenu), findsOneWidget);
     expect(find.byType(SimpleClickToggle), findsNothing);
+    expect(find.byType(AccompanimentRow), findsOneWidget);
     final advancedPedal = tester.getSize(find.byType(Footswitch)).width;
-    // La fila que falta en simple es justo lo que crece el pulsador
-    final saved = tester.getSize(find.byType(TempoDisplay)).height - simpleTempo;
-    expect(saved, 44);
+    // Lo que falta en simple (una fila del tempo y la de acompañamiento con su
+    // hueco) es justo lo que crece el pulsador
+    final saved =
+        tester.getSize(find.byType(TempoDisplay)).height -
+        simpleTempo +
+        tester.getSize(find.byType(AccompanimentRow)).height +
+        6;
+    expect(saved, 96);
     expect(simplePedal - advancedPedal, closeTo(saved, 0.5));
     expect(tester.takeException(), isNull);
     c.stopAudio();
@@ -275,7 +280,7 @@ void main() {
         await tester.pumpWidget(const SizedBox());
         c.dispose();
       }
-      expect(widths[PlayMode.simple]! - widths[PlayMode.advanced]!, greaterThanOrEqualTo(36));
+      expect(widths[PlayMode.simple]! - widths[PlayMode.advanced]!, greaterThanOrEqualTo(60));
     });
   }
 
@@ -345,10 +350,5 @@ void main() {
     expect(back[SimpleForced.loopMode], 'free');
     expect(SimpleForced.decode(null).isEmpty, isTrue);
     expect(SimpleForced.decode('').isEmpty, isTrue);
-    // Los estilos del simple son de sus compases
-    for (final s in kSimpleDrumStyles) {
-      final m = drumStyleMeter(s);
-      expect(m == null || kSimpleMeters.contains(m), isTrue, reason: s.name);
-    }
   });
 }

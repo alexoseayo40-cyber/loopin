@@ -172,7 +172,6 @@ void main() {
       'simple-pequeno',
       const Size(360, 640),
       state: LoopState.playing,
-      drums: DrumStyle.rock,
       mode: PlayMode.simple,
     ),
   );

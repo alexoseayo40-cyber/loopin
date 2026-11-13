@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // El simple es para quien empieza con los loopers y para tocar sin mirar
-// tanto: menos controles y la grabación siempre igual (1 compás de cuenta y
-// se cierra al pulsar). No solo esconde: al pasar a simple, lo que no se ve
+// tanto: menos controles, sin batería ni canción, y la grabación siempre
+// igual (1 compás de cuenta y se cierra al pulsar). No solo esconde: al pasar a simple, lo que no se ve
 // vuelve a sus valores (para que no quede, por ejemplo, el modo libre puesto
 // sin que se vea). Lo que se cambió se apunta y se devuelve al volver al
 // avanzado, si mientras tanto no se ha tocado.
@@ -16,18 +16,6 @@ const List<String> kSimpleMeters = ['4/4', '3/4', '6/8'];
 
 /// El compás al que vuelve el simple si el de ahora no es suyo.
 const String kSimpleMeter = '4/4';
-
-/// Estilos de batería del modo simple (los de sus compases, menos funk y
-/// reggae).
-const List<DrumStyle> kSimpleDrumStyles = [
-  DrumStyle.basic,
-  DrumStyle.rock,
-  DrumStyle.pop,
-  DrumStyle.shuffle,
-  DrumStyle.ballad,
-  DrumStyle.waltz,
-  DrumStyle.sixEight,
-];
 
 /// Clic del modo simple: siempre o apagado (solo las luces).
 const List<ClickMode> kSimpleClickModes = [ClickMode.always, ClickMode.silent];
@@ -46,7 +34,8 @@ class SimpleForced {
   static const startOnSound = 'startOnSound';
   static const meter = 'meter';
   static const clickMode = 'clickMode';
-  static const drumStyle = 'drumStyle';
+  static const drumsOn = 'drumsOn';
+  static const backingOn = 'backingOn';
   static const recordDuck = 'recordDuck';
 
   bool get isEmpty => values.isEmpty;

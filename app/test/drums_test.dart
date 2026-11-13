@@ -43,6 +43,7 @@ Future<void> _settle(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 500));
 }
 
+// La batería y las canciones son del avanzado (en simple no se ven)
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(mockPlatform);
@@ -64,7 +65,7 @@ void main() {
 
   testWidgets('el kit se carga en el motor antes de abrir el audio', (tester) async {
     final engine = FakeEngine()..next = fakeStatus(LoopState.empty, playing: false);
-    final c = EngineController(engine: engine);
+    final c = EngineController(engine: engine)..setPlayMode(PlayMode.advanced);
     await c.startAudio();
     expect(engine.drumSamples.length, DrumSound.values.length);
     expect(c.drumSoundsLoaded, DrumSound.values.length);
@@ -76,7 +77,7 @@ void main() {
 
   testWidgets('encender con todo parado arranca; apagar no para', (tester) async {
     final engine = FakeEngine()..next = fakeStatus(LoopState.empty, playing: false);
-    final c = EngineController(engine: engine);
+    final c = EngineController(engine: engine)..setPlayMode(PlayMode.advanced);
     await c.startAudio();
     await tester.pump(const Duration(milliseconds: 100));
     engine.calls.clear();
@@ -172,7 +173,7 @@ void main() {
   testWidgets('con el altavoz avisa de que el micro graba la batería', (tester) async {
     setScreen(tester, const Size(393, 873));
     final engine = FakeEngine()..next = fakeStatus(LoopState.playing);
-    final c = EngineController(engine: engine);
+    final c = EngineController(engine: engine)..setPlayMode(PlayMode.advanced);
     await tester.pumpWidget(_app(LooperScreen(controller: c)));
     await tester.pump(const Duration(milliseconds: 100));
     expect(c.speakerRoute, isTrue);
