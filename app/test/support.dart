@@ -71,6 +71,44 @@ class FakeEngine implements LoopinEngine {
   @override
   void setDrumSample(DrumSound sound, Float32List data, int sampleRate) =>
       drumSamples[sound] = data.length;
+  // Audio importado
+  @override
+  void backingPrepare({
+    required String path,
+    required double songBpm,
+    required double markSeconds,
+    required int samplesPerBeat,
+    required int beatsPerBar,
+    required int id,
+  }) => calls.add('prepare $id $songBpm $markSeconds $samplesPerBeat $beatsPerBar');
+  @override
+  void backingUnload() => calls.add('unload');
+  @override
+  void setBackingEnabled(bool on) => calls.add('backing $on');
+  @override
+  void setBackingVolume(double v) => calls.add('backingVolume $v');
+  @override
+  void songOpen(String path, int id) => calls.add('open $id');
+  @override
+  void songClose() => calls.add('close');
+
+  /// Lo que devuelve songFindAttack (null = lo mismo que le piden).
+  int? attack;
+  @override
+  int songFindAttack(int center, int radius) => attack ?? center;
+  @override
+  Float32List songPeaks(int start, int end, int bins) =>
+      Float32List.fromList(List.generate(bins, (i) => (i % 10) / 10));
+  @override
+  void previewPlay(int frame) => calls.add('previewPlay $frame');
+  @override
+  void previewStop() => calls.add('previewStop');
+  @override
+  void setPreviewClick(bool on) => calls.add('previewClick $on');
+  @override
+  void setPreviewGrid(double mark, double beat, int beatsPerBar, int accentMask) =>
+      calls.add('grid ${mark.round()} ${beat.toStringAsFixed(1)} $beatsPerBar');
+
   @override
   void startTapCalibration() => calls.add('tapStart');
   @override

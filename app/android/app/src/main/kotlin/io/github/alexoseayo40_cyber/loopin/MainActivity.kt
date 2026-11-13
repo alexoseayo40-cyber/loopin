@@ -3,19 +3,24 @@
 package io.github.alexoseayo40_cyber.loopin
 
 import android.Manifest
+import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.view.KeyEvent
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
 
 class MainActivity : FlutterActivity() {
     private var pendingMicResult: MethodChannel.Result? = null
+    private var pendingPickResult: MethodChannel.Result? = null
 
     // Controles externos: teclas que hacen de pedal (botones de volumen, botón
     // de los cascos, pedal Bluetooth…). Dart dice cuáles quiere.
@@ -51,6 +56,9 @@ class MainActivity : FlutterActivity() {
                     "requestMicrophone" -> requestMicrophone(result)
                     "audioInfo" -> result.success(audioInfo())
                     "audioDevices" -> result.success(audioDevices())
+                    // Audio importado: carpeta de las canciones y elegir una
+                    "songsDir" -> result.success(songsDir().absolutePath)
+                    "pickAudio" -> pickAudio(result)
                     // Ajustes pequeños (texto) que se guardan entre sesiones
                     "prefsGet" -> result.success(
                         prefs().getString(call.argument<String>("key"), null)
@@ -67,6 +75,92 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun prefs() = getSharedPreferences("loopin", MODE_PRIVATE)
+
+    // Las canciones importadas se copian aquí (dentro de la app: no hace falta
+    // ningún permiso y siguen aunque se borre el original)
+    private fun songsDir(): File = File(filesDir, "songs").also { it.mkdirs() }
+
+    // Abre el selector de archivos de Android (solo audio). Devuelve el nombre
+    // del archivo copiado en songsDir, el nombre para mostrar y el tamaño; null
+    // si se cancela.
+    private fun pickAudio(result: MethodChannel.Result) {
+        pendingPickResult?.success(null)
+        pendingPickResult = result
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "audio/*"
+            putExtra(
+                Intent.EXTRA_MIME_TYPES,
+                arrayOf(
+                    "audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/wave",
+                    "audio/vnd.wave", "audio/flac", "audio/x-flac",
+                ),
+            )
+        }
+        try {
+            startActivityForResult(intent, PICK_AUDIO)
+        } catch (e: Exception) {
+            pendingPickResult = null
+            result.error("noPicker", e.message, null)
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != PICK_AUDIO) return
+        val result = pendingPickResult ?: return
+        pendingPickResult = null
+        val uri = data?.data
+        if (resultCode != Activity.RESULT_OK || uri == null) {
+            result.success(null)
+            return
+        }
+        // Nombre y tamaño que da Android
+        var name = "audio"
+        var size = -1L
+        contentResolver.query(uri, null, null, null, null)?.use { c ->
+            if (c.moveToFirst()) {
+                val n = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                val s = c.getColumnIndex(OpenableColumns.SIZE)
+                if (n >= 0) name = c.getString(n) ?: name
+                if (s >= 0 && !c.isNull(s)) size = c.getLong(s)
+            }
+        }
+        if (size > MAX_SONG_BYTES) {
+            result.error("tooBig", null, null)
+            return
+        }
+        // La copia puede tardar (un WAV largo): en otro hilo
+        Thread {
+            val ext = name.substringAfterLast('.', "").lowercase().take(5)
+            val file = File(songsDir(), "${System.currentTimeMillis()}" +
+                (if (ext.isNotEmpty()) ".$ext" else ""))
+            try {
+                var copied = 0L
+                contentResolver.openInputStream(uri).use { input ->
+                    requireNotNull(input)
+                    file.outputStream().use { out ->
+                        val buf = ByteArray(1 shl 16)
+                        while (true) {
+                            val n = input.read(buf)
+                            if (n < 0) break
+                            copied += n
+                            if (copied > MAX_SONG_BYTES) throw IllegalStateException("tooBig")
+                            out.write(buf, 0, n)
+                        }
+                    }
+                }
+                runOnUiThread {
+                    result.success(mapOf("file" to file.name, "name" to name, "size" to copied))
+                }
+            } catch (e: Exception) {
+                file.delete()  // lo que se haya copiado a medias
+                val code = if (e.message == "tooBig") "tooBig" else "copy"
+                runOnUiThread { result.error(code, e.message, null) }
+            }
+        }.start()
+    }
 
     // Las teclas que hacen de pedal se pasan a Dart y no siguen su camino (así
     // los botones de volumen no cambian el volumen). Aquí llegan antes que a
@@ -153,6 +247,11 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val MIC_REQUEST = 4201
+        private const val PICK_AUDIO = 4202
+
+        // Un archivo de audio más grande no cabe (10 min de WAV de 24 bits a
+        // 96 kHz en estéreo son unos 350 MB)
+        private const val MAX_SONG_BYTES = 400L * 1024 * 1024
 
         // Teclas que nunca se capturan, ni al aprender un pedal
         private val SYSTEM_KEYS = setOf(

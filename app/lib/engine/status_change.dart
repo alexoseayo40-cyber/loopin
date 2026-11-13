@@ -34,6 +34,17 @@ bool layoutChanged(EngineStatus a, EngineStatus b) {
       a.drumsEnabled != b.drumsEnabled ||
       a.drumStyle != b.drumStyle ||
       a.drumsPlaying != b.drumsPlaying ||
+      // Audio importado (entra en un 1, se prepara, se abre…)
+      a.backingEnabled != b.backingEnabled ||
+      a.backingPlaying != b.backingPlaying ||
+      a.backingId != b.backingId ||
+      a.backingSamplesPerBeat != b.backingSamplesPerBeat ||
+      a.backingBeatsPerBar != b.backingBeatsPerBar ||
+      a.songPrepState != b.songPrepState ||
+      a.songOpenState != b.songOpenState ||
+      a.previewId != b.previewId ||
+      a.previewPlaying != b.previewPlaying ||
+      a.previewClick != b.previewClick ||
       // Medidas de latencia
       a.latencyState != b.latencyState ||
       a.latencyFrames != b.latencyFrames ||

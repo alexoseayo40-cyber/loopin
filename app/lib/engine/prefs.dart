@@ -28,6 +28,10 @@ class Prefs {
   static const drumsOn = 'drumsOn';
   static const drumStyle = 'drumStyle';
   static const drumVolume = 'drumVolume';
+  static const songId = 'songId';
+  static const backingOn = 'backingOn';
+  static const backingVolume = 'backingVolume';
+  static const accompaniment = 'accompaniment';
 
   Future<String?> get(String key) async {
     try {

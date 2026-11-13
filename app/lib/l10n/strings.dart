@@ -10,6 +10,8 @@
 import 'package:loopin_engine/loopin_engine.dart';
 
 import '../engine/engine_controller.dart' show RecordDuck;
+import '../engine/song_backing.dart' show BackingPhase;
+import '../engine/songs.dart' show ImportError;
 import '../engine/meter.dart';
 import '../engine/pedal_keys.dart';
 import '../ui/theme.dart';
@@ -252,6 +254,150 @@ class Strings {
       'Con el altavoz y el micrófono del móvil, la batería se cuela en lo que grabas (no se '
       'calla al grabar: la necesitas para tocar a tempo). Si luego la apagas, seguirá en los '
       'loops. Para que no pase, usa cascos o una interfaz.';
+
+  // ---------------------------------------------------------------- looper: acompañamiento
+
+  /// El selector de la fila de abajo: batería o canción
+  String get accDrums => 'BATERÍA';
+  String get accSong => 'CANCIÓN';
+  String accShow(String what) => 'Enseñar: ${what.toLowerCase()}';
+
+  // ---------------------------------------------------------------- canción (audio importado)
+
+  /// «97,3», «120», «97,34»: con los decimales que tenga (coma decimal)
+  String bpmNumber(double v) {
+    var t = v.toStringAsFixed(2);
+    while (t.contains('.') && (t.endsWith('0') || t.endsWith('.'))) {
+      t = t.substring(0, t.length - 1);
+    }
+    return t.replaceAll('.', ',');
+  }
+
+  /// «3:45»
+  String duration(double seconds) {
+    final s = seconds.round();
+    return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
+  }
+
+  /// «1:23,4» (para la vista previa)
+  String clock(double seconds) {
+    final t = seconds < 0 ? 0.0 : seconds;
+    final m = t ~/ 60;
+    final rest = t - m * 60;
+    return '$m:${rest.toStringAsFixed(1).padLeft(4, '0').replaceAll('.', ',')}';
+  }
+
+  // En la fila
+  String get songChoose => 'ELEGIR';
+  String get songSetup => 'PREPARAR';
+  String get songTooFar => 'LEJOS';
+  String get songFailedChip => 'ERROR';
+  String songChip(String name) => name.toUpperCase();
+  String songSpeed(double v) => '${(v * 100).round()} %';
+  String get songMenu => 'Canciones';
+  String get songTurnOn => 'Encender la canción';
+  String get songTurnOff => 'Apagar la canción';
+  String songVolume(double v) => 'Volumen de la canción: ${(v * 100).round()} %';
+  String songSemantics(String? name, bool on, bool playing) =>
+      'Canción, ${name ?? 'ninguna'}, '
+      '${!on ? 'apagada' : (playing ? 'sonando' : 'encendida, entra en el próximo 1')}';
+  String get songBleed => 'Con el altavoz, el micro graba la canción';
+  String get songBleedHelp =>
+      'Con el altavoz y el micrófono del móvil, la canción se cuela en lo que grabas (no se '
+      'calla al grabar: la necesitas para tocar encima). Para que no pase, usa cascos o una '
+      'interfaz.';
+
+  /// En qué está la elegida (en la lista de canciones)
+  String backingPhase(BackingPhase p, {required String bpm, double progress = 0}) => switch (p) {
+    BackingPhase.noSong => 'Ninguna elegida.',
+    BackingPhase.needsSetup => 'Sin preparar: marca su tempo y dónde cae el 1.',
+    BackingPhase.preparing =>
+      'Preparándola a $bpm BPM… ${progress > 0 ? percent(progress) : ''}'.trim(),
+    BackingPhase.ready => 'Lista a $bpm BPM.',
+    BackingPhase.tooFar => 'A $bpm BPM está demasiado lejos de su tempo: va de la mitad al doble.',
+    BackingPhase.failed => 'No se ha podido preparar.',
+  };
+
+  // Lista de canciones
+  String get songsTitle => 'Canciones';
+  String get songsHow => 'Cómo funciona';
+  String get songsImport => 'Importar audio';
+  String get songsEmpty => 'Aún no hay ninguna';
+  String get songsEmptyLine => 'Importa un audio tuyo (WAV, MP3 o FLAC) para tocar encima.';
+  String get songsHelp =>
+      'Loopin estira la canción al tempo del metrónomo sin cambiar el tono, así puedes '
+      'tocarla más despacio para practicar. Para que cuadre con los loops necesita su tempo y '
+      'dónde cae un 1: se marcan una vez, al prepararla.\n'
+      'Al elegirla, el metrónomo se pone a su tempo y su compás (si no hay loops; elegirla otra '
+      'vez vuelve a su tempo). Con loops grabados se estira al tempo del loop.\n'
+      'Entra siempre en un 1 (con cuenta de entrada, al empezar a grabar) y, al acabar, vuelve '
+      'a empezar. Suena en mono y puede durar hasta 10 minutos (también estirada).';
+  String get songsCurrent => 'Elegida';
+  String get songsNone => 'Sin canción';
+  String songSubtitle(String bpm, String meter, double seconds) =>
+      '$bpm BPM · $meter${seconds > 0 ? ' · ${duration(seconds)}' : ''}';
+  String get songNotReady => 'Sin preparar: tócala para marcar su tempo y el 1';
+  String get songPrepare => 'Preparar (tempo y 1)';
+  String get songDelete => 'Borrar';
+  String get songOptions => 'Opciones de la canción';
+  String songDeleteTitle(String name) => '¿Borrar «$name»?';
+  String get songDeleteBody => 'Se borra la copia de Loopin. El archivo original no se toca.';
+  String get importing => 'Copiando el audio…';
+  String importError(ImportError e) => switch (e) {
+    ImportError.tooBig => 'El archivo es demasiado grande.',
+    ImportError.copy => 'No se ha podido copiar el archivo.',
+    ImportError.noStorage => 'No hay dónde guardar el archivo.',
+  };
+  String songError(SongError e) => switch (e) {
+    SongError.none => '',
+    SongError.open => 'No se puede abrir: tiene que ser WAV, MP3 o FLAC.',
+    SongError.tooLong => 'Dura demasiado: hasta 10 minutos (también estirada).',
+    SongError.memory => 'No hay memoria para abrirla.',
+    SongError.empty => 'No suena nada.',
+    SongError.tempo => 'Demasiado lejos de su tempo: va de la mitad al doble.',
+  };
+
+  // Preparar una canción
+  String get editorTitle => 'Preparar canción';
+  String editorOpening(double p) => 'Abriendo… ${p > 0 ? percent(p) : ''}'.trim();
+  String get editorName => 'Nombre';
+  String get editorPlay => 'Escuchar';
+  String get editorPause => 'Parar';
+  String get editorFromMark => 'Desde un compás antes del 1';
+  String get editorClick => 'CLIC';
+  String get editorClickTip => 'Clic en su tempo, desde el 1';
+  String get editorWaveTip => 'Toca para escuchar desde ahí';
+  String get editorMarkOne => 'MARCAR EL 1';
+  String get editorMarkLine => 'Mientras suena, justo en el primer tiempo de un compás.';
+  String get editorMarkHelp =>
+      'Toca el botón cuando oigas un 1 (el primer tiempo de un compás; vale cualquiera, no '
+      'hace falta el primero). Loopin lo pone en el golpe más claro de ahí cerca. Luego '
+      'afínalo en la vista de cerca (arrastra) o con los botones, y compruébalo con el clic '
+      'encendido: el clic fuerte tiene que caer en los unos.';
+  String get editorZoom => 'El 1, de cerca (arrastra para moverlo)';
+  String editorNudge(int ms) => 'Mover el 1 ${ms > 0 ? '+' : ''}$ms ms';
+  String get editorTempo => 'Tempo';
+  String editorBpm(String bpm) => '$bpm BPM';
+  String get editorTap => 'TAP';
+  String get editorTapTip => 'Toca al ritmo de la canción';
+  String editorGuess(String bpm) => 'Sugerido: $bpm';
+  String get editorTempoMinus => 'Bajar 0,1 BPM';
+  String get editorTempoPlus => 'Subir 0,1 BPM';
+  String get editorTempoHelp =>
+      'Escríbelo, márcalo con TAP mientras suena o, lo más exacto, marca otro 1 más '
+      'adelante: Loopin cuenta los compases que hay entre los dos y saca el tempo con '
+      'decimales. Con el clic encendido, escúchala cerca del final: si el clic se va '
+      'adelantando o retrasando, el tempo aún no es exacto.\n'
+      'Si la canción no lleva un tempo fijo (grabada sin metrónomo), no cuadrará del todo.';
+  String get editorBpmDialog => 'Tempo de la canción';
+  String get editorMeter => 'Compás';
+  String get editorSecond => 'MARCAR OTRO 1 MÁS ADELANTE';
+  String get editorSecondLine => 'Para sacar el tempo exacto (cuanto más lejos, mejor).';
+  String editorBarsBetween(int bars) => 'Entre los dos unos: ${this.bars(bars)}';
+  String get editorFewerBars => 'Un compás menos';
+  String get editorMoreBars => 'Un compás más';
+  String get editorClearSecond => 'Quitar el otro 1';
+  String get editorSave => 'GUARDAR Y USAR';
 
   // ---------------------------------------------------------------- looper: pulsador
 
@@ -508,7 +654,7 @@ class Strings {
 
   // ---------------------------------------------------------------- informe («Copiar resultados»)
 
-  String get reportTitle => 'Loopin · Etapa 4a';
+  String get reportTitle => 'Loopin · Etapa 4b';
   ReportStrings get report => const ReportStrings();
   String loopStateName(LoopState st) => switch (st) {
     LoopState.empty => 'vacío',
@@ -553,6 +699,10 @@ class ReportStrings {
   String drums(String style, bool on, bool playing, int volume, int loaded) =>
       'Batería: $style · ${on ? (playing ? 'sonando' : 'encendida') : 'apagada'} · '
       'volumen $volume % · sonidos cargados: $loaded de ${DrumSound.values.length}';
+  String song(String? name, String phase, bool on, bool playing, int volume, int count) =>
+      'Canción: ${name ?? 'ninguna'} · $phase · '
+      '${on ? (playing ? 'sonando' : 'encendida') : 'apagada'} · volumen $volume % · '
+      'en la lista: $count';
   String recordDuck(String setting, bool speaker) =>
       'Al grabar con el altavoz: $setting${speaker ? ' (ruta con altavoz: se aplica)' : ' (ahora no se aplica)'}';
   String looper(String state, String mode, int? baseBars, String autoAdvance) =>

@@ -7,7 +7,7 @@ import 'package:loopin/engine/drums.dart';
 import 'package:loopin/engine/engine_controller.dart';
 import 'package:loopin/engine/status_change.dart';
 import 'package:loopin/l10n/strings.dart';
-import 'package:loopin/ui/looper/drum_row.dart';
+import 'package:loopin/ui/looper/accompaniment_row.dart';
 import 'package:loopin/ui/looper_screen.dart';
 import 'package:loopin/ui/theme.dart';
 import 'package:loopin_engine/loopin_engine.dart';
@@ -142,7 +142,7 @@ void main() {
       await tester.pumpWidget(_app(LooperScreen(controller: c)));
       await tester.pump(const Duration(milliseconds: 100));
       expect(tester.takeException(), isNull);
-      expect(find.byType(DrumRow), findsOneWidget);
+      expect(find.byType(AccompanimentRow), findsOneWidget);
       // Tocar el estilo abre el menú con los 10
       await tester.tap(find.text(tr.drumStyleChip(DrumStyle.basic)));
       await _settle(tester);
@@ -157,7 +157,7 @@ void main() {
       expect(
         tester
             .widget<Slider>(
-              find.descendant(of: find.byType(DrumRow), matching: find.byType(Slider)),
+              find.descendant(of: find.byType(AccompanimentRow), matching: find.byType(Slider)),
             )
             .value,
         1.2,

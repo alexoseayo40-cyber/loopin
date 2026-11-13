@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // Aquí solo va la disposición (vertical y apaisado). Las piezas están en
-// ui/looper/: cabecera, pantalla de tempo, pistas, pulsador y barra de abajo.
+// ui/looper/: cabecera, pantalla de tempo, pistas, acompañamiento (batería o
+// canción), pulsador y barra de abajo.
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -11,7 +12,7 @@ import 'package:flutter/services.dart';
 import '../engine/engine_controller.dart';
 import 'audio_settings_screen.dart';
 import 'looper/bottom_bar.dart';
-import 'looper/drum_row.dart';
+import 'looper/accompaniment_row.dart';
 import 'looper/pedal_area.dart';
 import 'looper/tempo_display.dart';
 import 'looper/top_bar.dart';
@@ -143,7 +144,7 @@ class _TallLayout extends StatelessWidget {
                     SizedBox(height: gap),
                     TrackControls(view: view, mixer: mixer),
                     const SizedBox(height: 6),
-                    DrumRow(view: view, dense: compact),
+                    AccompanimentRow(view: view, dense: compact),
                   ],
                 ),
                 Padding(
@@ -195,7 +196,7 @@ class _WideLayout extends StatelessWidget {
                   SizedBox(height: gap),
                   TrackControls(view: view, mixer: mixer),
                   const SizedBox(height: 6),
-                  DrumRow(view: view, dense: compact),
+                  AccompanimentRow(view: view, dense: compact),
                 ],
               ),
             ),

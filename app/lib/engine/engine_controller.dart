@@ -10,6 +10,9 @@
 //   prefs.dart              ajustes guardados
 //   status_change.dart      qué cambios del motor se redibujan
 //   report.dart             «Copiar resultados»
+//   songs.dart              canciones importadas (lista y archivos)
+//   song_backing.dart       la canción que suena con los loops
+//   song_editor.dart        preparar una canción (tempo y dónde cae el 1)
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -25,12 +28,16 @@ import 'meter.dart';
 import 'pedal_keys.dart';
 import 'drums.dart';
 import 'prefs.dart';
+import 'song_backing.dart';
+import 'songs.dart';
 import 'status_change.dart';
 
 export 'latency_routes.dart' show LatencySource;
 export 'meter.dart';
 export 'pedal_keys.dart' show LearnedKey, PedalAction;
 export 'report.dart';
+export 'song_backing.dart' show BackingPhase;
+export 'songs.dart' show Song, ImportError, ImportException;
 
 /// Qué hacen las pistas que ya suenan mientras se graba otra (o un overdub),
 /// con el altavoz y el micrófono del móvil.
@@ -49,10 +56,12 @@ enum RecordDuck {
 }
 
 class EngineController extends ChangeNotifier {
-  EngineController({LoopinEngine? engine}) : _engine = engine ?? LoopinEngine.instance {
+  EngineController({LoopinEngine? engine, SongLibrary? songs})
+    : _engine = engine ?? LoopinEngine.instance {
     _lifecycle = AppLifecycleListener(onHide: _onHide, onShow: _onShow);
     _routes = LatencyRoutes(apply: _engine.setLatencyCompensation, prefs: _prefs);
     _keys = PedalKeys(onAction: _onPedalKey, onChanged: notifyListeners, prefs: _prefs);
+    _backing = SongBacking(engine: _engine, prefs: _prefs, library: songs ?? SongLibrary());
     _prefsLoaded = _loadPrefs();
   }
 
@@ -62,6 +71,7 @@ class EngineController extends ChangeNotifier {
   late final AppLifecycleListener _lifecycle;
   late final LatencyRoutes _routes;
   late final PedalKeys _keys;
+  late final SongBacking _backing;
   late final Future<void> _prefsLoaded;
   Timer? _poll;
 
@@ -232,6 +242,7 @@ class EngineController extends ChangeNotifier {
     _applyDrumStyle();
     _engine.setDrumVolume(drumVolume);
     _engine.setDrumsEnabled(drumsOn);
+    _backing.apply();
     for (var i = 0; i < kTrackCount; i++) {
       _engine.setTrackVolume(i, trackVolumes[i]);
     }
@@ -240,6 +251,7 @@ class EngineController extends ChangeNotifier {
   static double _dbToGain(double db) => math.pow(10, db / 20).toDouble();
 
   void _tick() {
+    var songChanged = false;
     final prev = status;
     final source = latencySource;
     final applied = _routes.applied;
@@ -259,6 +271,7 @@ class EngineController extends ChangeNotifier {
       _wantPlaying = status.playing;
       _updateRoute();
       _applyRecordDuck();
+      if (_backing.tick(status)) songChanged = true;
       if (prev.latencyState == LatencyState.running && status.latencyState == LatencyState.done) {
         _routes.saveMeasured(_currentRouteKey, status.latencyFrames);
       }
@@ -274,7 +287,10 @@ class EngineController extends ChangeNotifier {
       });
     }
     _live.fire();
-    if (layoutChanged(prev, status) || source != latencySource || applied != _routes.applied) {
+    if (layoutChanged(prev, status) ||
+        songChanged ||
+        source != latencySource ||
+        applied != _routes.applied) {
       notifyListeners();
     }
   }
@@ -312,11 +328,15 @@ class EngineController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setBpm(double value) {
+  void setBpm(double value) => _setBpm(value.clamp(40, 240).roundToDouble());
+
+  /// Con decimales (el tempo de una canción): así suena a su velocidad sin
+  /// estirarla.
+  void _setBpm(double value) {
     if (tempoLocked) return;
-    bpm = value.clamp(40, 240).roundToDouble();
+    bpm = (value.clamp(40, 240) * 100).roundToDouble() / 100;
     _engine.setBpm(bpm);
-    _prefs.set(Prefs.bpm, bpm.toStringAsFixed(0));
+    _prefs.set(Prefs.bpm, bpm.toStringAsFixed(2));
     notifyListeners();
   }
 
@@ -528,6 +548,113 @@ class EngineController extends ChangeNotifier {
 
   /// Al soltar el deslizador (no en cada movimiento).
   void saveDrumVolume() => _prefs.set(Prefs.drumVolume, drumVolume.toStringAsFixed(2));
+
+  // ---------- Audio importado ----------
+  //
+  // Ver SongBacking (la que suena con los loops) y SongEditor (prepararla).
+
+  List<Song> get songs => _backing.library.songs;
+  Song? get currentSong => _backing.current;
+  bool get backingOn => _backing.on;
+  double get backingVolume => _backing.volume;
+
+  /// La fila de abajo enseña la canción (si no, la batería).
+  bool get showSong => _backing.showSong;
+  BackingPhase get backingPhase => _backing.phase(status);
+
+  /// Lo que lleva preparado (0–1) mientras se estira al tempo de ahora.
+  double get backingProgress => _backing.progress(status);
+
+  /// Velocidad respecto a la suya (1 = su tempo), o null.
+  double? get songSpeed => _backing.speed(status);
+
+  /// La canción suena por el altavoz y el micro la graba.
+  bool get songBleed => backingOn && speakerRoute;
+
+  /// Ruta del archivo de una canción.
+  String? songPath(Song s) => _backing.library.pathOf(s);
+
+  /// El motor (para preparar una canción: ver SongEditor).
+  LoopinEngine get engine => _engine;
+
+  void setShowSong(bool value) {
+    _backing.setShowSong(value);
+    notifyListeners();
+  }
+
+  /// Elige la canción que suena con los loops. Sin loops, el metrónomo se
+  /// pone a su tempo y su compás (así suena tal cual, sin estirar); elegirla
+  /// otra vez vuelve a su tempo.
+  void selectSong(Song? song) {
+    _backing.select(song);
+    if (song != null) {
+      _backing.setShowSong(true);
+      if (song.ready && !tempoLocked) {
+        final ts = kTimeSignatures.where((t) => t.label == song.meter);
+        if (ts.isNotEmpty && ts.first != timeSignature) setTimeSignature(ts.first);
+        _setBpm(song.bpm);
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Encenderla con todo parado también arranca (como la batería).
+  void setBackingOn(bool on) {
+    _backing.setOn(on);
+    if (on && status.running && !status.playing) {
+      togglePlay();
+    } else {
+      notifyListeners();
+    }
+  }
+
+  void toggleBacking() => setBackingOn(!backingOn);
+
+  void setBackingVolume(double v) {
+    _backing.setVolume(v);
+    notifyListeners();
+  }
+
+  /// Al soltar el deslizador (no en cada movimiento).
+  void saveBackingVolume() => _backing.saveVolume();
+
+  /// Elige un archivo y lo copia en la app. null si se cancela; lanza
+  /// [ImportException] si no se puede.
+  Future<Song?> importSong() async {
+    final song = await _backing.library.import();
+    notifyListeners();
+    return song;
+  }
+
+  /// Guarda lo que se ha preparado de una canción (y la usa si es la elegida).
+  Future<void> saveSong(Song song) async {
+    await _backing.library.update(song);
+    _backing.updated(song);
+    notifyListeners();
+  }
+
+  Future<void> deleteSong(Song song) async {
+    if (currentSong?.id == song.id) _backing.select(null);
+    await _backing.library.remove(song);
+    notifyListeners();
+  }
+
+  /// Para todo (para preparar una canción con la vista previa).
+  void stopAll() {
+    if (!status.running) return;
+    _wantPlaying = false;
+    _engine.pause();
+  }
+
+  /// La muestra de la vista previa que se está oyendo ahora (descontando la
+  /// latencia de salida, como el pulso de las luces).
+  int previewHeardFrame() {
+    final s = status;
+    if (!s.previewPlaying || s.sampleRate <= 0) return s.previewPosition;
+    final elapsed = ((_clock.elapsedMicroseconds - _statusAt) / 1e6).clamp(0.0, 0.5);
+    final out = s.outputLatencyMs > 0 ? s.outputLatencyMs / 1000 : 0.0;
+    return math.max(0, s.previewPosition + ((elapsed - out) * s.sampleRate).round());
+  }
 
   /// Para o arranca todo (lo mismo que el doble toque).
   void toggleTransport() => togglePlay();
@@ -835,6 +962,7 @@ class EngineController extends ChangeNotifier {
 
     await _keys.load();
     await _routes.load();
+    await _backing.load();
     notifyListeners();
   }
 

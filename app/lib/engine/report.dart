@@ -74,6 +74,17 @@ extension EngineReport on EngineController {
         (drumVolume * 100).round(),
         drumSoundsLoaded,
       ),
+      r.song(
+        currentSong?.name,
+        tr
+            .backingPhase(backingPhase, bpm: tr.bpmNumber(s.bpm), progress: backingProgress)
+            .replaceAll('.', '')
+            .toLowerCase(),
+        backingOn,
+        s.backingPlaying,
+        (backingVolume * 100).round(),
+        songs.length,
+      ),
       r.recordDuck(tr.recordDuckName(recordDuck).toLowerCase(), speakerRoute),
       for (var i = 0; i < s.tracks.length; i++)
         if (s.tracks[i].state != LoopState.empty)

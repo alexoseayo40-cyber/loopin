@@ -13,7 +13,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:loopin/engine/engine_controller.dart';
 import 'package:loopin/ui/audio_settings_screen.dart';
 import 'package:loopin/ui/looper_screen.dart';
+import 'package:loopin/engine/songs.dart';
 import 'package:loopin/ui/settings_screen.dart';
+import 'package:loopin/ui/song_screen.dart';
+import 'package:loopin/ui/songs_screen.dart';
 import 'package:loopin/ui/theme.dart';
 import 'package:loopin_engine/loopin_engine.dart';
 
@@ -26,6 +29,56 @@ Future<void> _loadFont(String family, List<String> paths) async {
     loader.addFont(Future.value(ByteData.view(bytes.buffer)));
   }
   await loader.load();
+}
+
+const _songs = [
+  Song(id: 1, name: 'Blues en La', file: '1.mp3', bpm: 92, mark: 0.41, seconds: 214),
+  Song(id: 2, name: 'Mi maqueta (toma 3)', file: '2.wav', bpm: 0),
+  Song(id: 3, name: 'Vals para Marta', file: '3.flac', bpm: 84.5, mark: 1.2, meter: '3/4'),
+];
+
+/// El mismo estado con una canción cargada y sonando (o abierta para
+/// prepararla, si no suena)
+EngineStatus _songStatus(EngineStatus s, {required bool playing}) {
+  final peaks = <double>[];
+  return EngineStatus(
+    running: true,
+    sampleRate: 48000,
+    playing: s.playing,
+    bpm: 92,
+    beatsPerBar: 4,
+    beat: s.beat,
+    samplesPerBeat: 31304,
+    beatFrames: s.beatFrames,
+    inputDeviceId: s.inputDeviceId,
+    outputDeviceId: s.outputDeviceId,
+    outputLatencyMs: 40,
+    inputPeak: s.inputPeak,
+    loopState: s.loopState,
+    loopBarFrames: s.loopBarFrames,
+    loopLength: s.loopLength,
+    loopPosition: s.loopPosition,
+    loopLayers: s.loopLayers,
+    selectedTrack: s.selectedTrack,
+    autoAdvance: true,
+    baseLength: s.baseLength,
+    basePosition: s.basePosition,
+    tracks: s.tracks,
+    songPrepId: 1,
+    songPrepState: JobState.done,
+    backingId: playing ? 1 : 0,
+    backingSamplesPerBeat: 31304,
+    backingBeatsPerBar: 4,
+    backingEnabled: playing,
+    backingPlaying: playing,
+    songOpenId: 2,
+    songOpenState: JobState.done,
+    songOpenFrames: 48000 * 187,
+    songBpmGuess: 101.96,
+    songFirstAttack: 30000,
+    previewId: 2,
+    previewPosition: 400000 + peaks.length,
+  );
 }
 
 void main() {
@@ -56,22 +109,32 @@ void main() {
     bool settings = false,
     bool audio = false,
     DrumStyle? drums,
+    bool song = false,
+    Widget Function(EngineController c)? home,
   }) async {
     setScreen(tester, size, pixelRatio: 2);
     final engine = FakeEngine()
       ..next = fakeStatus(state, playing: state != LoopState.stopped, drums: drums != null);
-    final c = EngineController(engine: engine);
+    if (song || home != null) engine.next = _songStatus(engine.next, playing: song);
+    final c = EngineController(engine: engine, songs: SongLibrary.memory(_songs));
     final base = buildLoopinTheme(chassis, brightness);
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: base.copyWith(textTheme: base.textTheme.apply(fontFamily: 'Roboto')),
-        home: audio
+        home: home != null
+            ? home(c)
+            : audio
             ? AudioSettingsScreen(controller: c)
             : (settings ? SettingsScreen(controller: c) : LooperScreen(controller: c)),
       ),
     );
     await c.startAudio();
+    if (song) {
+      await tester.pump(const Duration(milliseconds: 50));
+      c.selectSong(_songs.first);
+      c.setBackingOn(true);
+    }
     if (drums != null) {
       c.setDrumStyle(drums);
       c.setDrumsOn(true);
@@ -84,6 +147,40 @@ void main() {
   }
 
   const phone = Size(393, 873);
+  testWidgets(
+    'canción',
+    (t) => shot(t, 'movil-cancion', phone, state: LoopState.playing, song: true),
+  );
+  testWidgets(
+    'canción pequeño',
+    (t) => shot(
+      t,
+      'movil-cancion-pequeno',
+      const Size(360, 640),
+      state: LoopState.playing,
+      song: true,
+    ),
+  );
+  testWidgets(
+    'canciones',
+    (t) => shot(
+      t,
+      'canciones',
+      phone,
+      state: LoopState.empty,
+      home: (c) => SongsScreen(controller: c),
+    ),
+  );
+  testWidgets(
+    'preparar canción',
+    (t) => shot(
+      t,
+      'preparar-cancion',
+      const Size(393, 1250),
+      state: LoopState.empty,
+      home: (c) => SongScreen(controller: c, song: _songs[1]),
+    ),
+  );
   testWidgets('vertical oscuro', (t) => shot(t, 'movil-oscuro-grabando', phone));
   testWidgets(
     'vertical sonando',

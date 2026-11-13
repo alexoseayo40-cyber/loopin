@@ -2,7 +2,7 @@
 
 Looper de guitarra libre para Android: varias pistas que cuadran al compás, metrónomo y backing tracks.
 
-> **Estado:** Etapa 4a. Looper de 4 pistas con interfaz de pedal, metrónomo con 10 compases, batería con 10 estilos, modo libre, «empezar al tocar», controles externos y latencia compensada (medida sola, tocando al clic o a mano). Próximo: audio importado.
+> **Estado:** Etapa 4b. Looper de 4 pistas con interfaz de pedal, metrónomo con 10 compases, batería con 10 estilos, tus propias canciones (WAV, MP3, FLAC) estiradas al tempo, modo libre, «empezar al tocar», controles externos y latencia compensada (medida sola, tocando al clic o a mano). Próximo: directo y práctica (afinador, reverse…).
 
 ## Cómo se usa
 
@@ -15,6 +15,8 @@ El botón grande hace de pedal (actúa al pulsar, no al soltar) sobre la pista e
 Modos de grabación: **sincronizado** (1, 2, 4 u 8 compases), **manual** (se cierra al pulsar, al compás más cercano) y **libre** (sin metrónomo: el tempo sale del primer loop). La primera pista lleva 1 compás de cuenta, o arranca con la primera nota si está encendido «empezar al tocar».
 
 **Batería:** la fila de debajo de la pista. Sigue el tempo y el compás; el estilo «Básico» sale de los acentos del compás y vale para los 10, y hay rock, pop, blues shuffle, funk, balada y reggae (4/4), vals (3/4), balada 6/8 y blues lento (12/8). Entra siempre en un 1; con ella encendida la cuenta de entrada suena con baquetas y el clic se calla mientras toca. Los sonidos son de [Virtuosity Drums](https://github.com/sfzinstruments/virtuosity_drums) (CC0).
+
+**Canciones:** la misma fila, en la posición «CANCIÓN». Importas un audio tuyo, marcas su tempo y dónde cae un 1 (escuchándola, con un clic encima para comprobarlo; el tempo exacto sale de marcar otro 1 más adelante) y suena con los loops, estirada al tempo del metrónomo sin cambiar el tono ([SoundTouch](https://codeberg.org/soundtouch/soundtouch), LGPL). Entra siempre en un 1 y al acabar vuelve a empezar.
 
 Mide la latencia una vez por cada combinación de entrada y salida (Ajustes › Audio y latencia): se guarda y se aplica sola.
 
@@ -31,6 +33,7 @@ app/                        App Flutter (interfaz)
 packages/loopin_engine/     Plugin FFI: puente Dart ↔ motor C++
   src/                      Motor C++ (Oboe)
   src/third_party/oboe/     Oboe 1.11.0 (submódulo de git)
+  src/third_party/          SoundTouch 2.4.1 y dr_libs (copiados; ver su README.md)
 engine_tests/               Tests del motor que se ejecutan en el PC
 app/test/                   Tests de la interfaz (flutter test)
 .github/workflows/          Compila y pasa los tests en cada push
@@ -74,4 +77,5 @@ build\engine_tests\Release\loopin_engine_tests.exe
 - El looper decide todo (inicio, fin, overdub) en índices de salida, que es lo que oye el músico. La muestra de entrada *j* se tocó mientras sonaba la salida *j − latencia*, y se escribe en esa posición del loop: la escritura va con retraso, a medida que llega la entrada (un anillo de 6 s guarda lo último).
 - Cada overdub va a una capa aparte para poder deshacerlo. Al acabar el siguiente overdub, la capa anterior se suma al loop base poco a poco en segundo plano; como lo que suena es la suma de todo, no se nota.
 - La batería es un secuenciador de muestras: al empezar cada tiempo apunta los golpes de ese tiempo con su desfase en muestras y los dispara al llegar. Como el tiempo dura un número entero de muestras y el tempo solo cambia al empezar uno, cada golpe cae siempre en la misma muestra respecto al compás.
+- Las canciones importadas se decodifican (dr_libs) y se estiran (SoundTouch) **una vez**, en un hilo aparte, y se guardan en memoria en 16 bits, mono, con el 1 en un inicio de compás y compases enteros. El callback solo las lee. Si cambia el tempo, la canción se calla y se vuelve a preparar; entra en el siguiente 1 por donde iría. Los audios nuevos llegan al hilo de audio con un intercambio atómico y los viejos vuelven por una cola para borrarlos fuera de él.
 - La carga del callback (media y pico de cada segundo, en % del tiempo disponible) se ve en Audio y latencia › Detalles técnicos y en «Copiar resultados».
