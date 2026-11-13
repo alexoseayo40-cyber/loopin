@@ -138,6 +138,7 @@ void loopin_backing_prepare(const char* path, double song_bpm, double mark_secon
   p.id = id;
   jobs().prepare(p);
 }
+void loopin_backing_cancel(void) { jobs().cancelPrepare(); }
 void loopin_backing_unload(void) { jobs().unload(); }
 void loopin_set_backing_enabled(int32_t enabled) {
   post(Command::Type::kSetBackingEnabled, enabled ? 1.0 : 0.0);

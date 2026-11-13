@@ -155,9 +155,21 @@ class SongBacking {
         changed = true;
       }
     }
-    // El motor la ha soltado (se ha reabierto el audio a otra frecuencia)
-    if (_loaded != null && s.backingId != song.id && _pending == null) {
+    // El motor ya no tiene lo que se cargó (se ha reabierto el audio a otra
+    // frecuencia, o ha llegado otra versión)
+    final loaded = _loaded;
+    if (loaded != null &&
+        _pending == null &&
+        (s.backingId != song.id ||
+            s.backingSamplesPerBeat != loaded.spb ||
+            s.backingBeatsPerBar != loaded.bpb)) {
       _loaded = null;
+      changed = true;
+    }
+    // Se ha vuelto al tempo de lo que suena antes de que acabe la otra: fuera
+    if (_loaded == key && _pending != null) {
+      engine.backingCancel();
+      _pending = null;
       changed = true;
     }
     if (_loaded == key || _pending == key || _failedKey == key) return changed;

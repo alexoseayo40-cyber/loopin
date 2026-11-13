@@ -615,6 +615,8 @@ class LoopinEngine {
     }
   }
 
+  /// Si se acaba de preparar igual (las 2 últimas se guardan), suena enseguida.
+  void backingCancel() => _b.loopin_backing_cancel();
   void backingUnload() => _b.loopin_backing_unload();
   void setBackingEnabled(bool on) => _b.loopin_set_backing_enabled(on ? 1 : 0);
   void setBackingVolume(double v) => _b.loopin_set_backing_volume(v);

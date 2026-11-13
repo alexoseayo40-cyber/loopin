@@ -333,6 +333,7 @@ class Strings {
       'Entra siempre en un 1 (con cuenta de entrada, al empezar a grabar) y, al acabar, vuelve '
       'a empezar. Suena en mono y puede durar hasta 10 minutos (también estirada).';
   String get songsCurrent => 'Elegida';
+  String songRestoreTempo(String bpm) => 'Volver a su tempo ($bpm BPM)';
   String get songsNone => 'Sin canción';
   String songSubtitle(String bpm, String meter, double seconds) =>
       '$bpm BPM · $meter${seconds > 0 ? ' · ${duration(seconds)}' : ''}';

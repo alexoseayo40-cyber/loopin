@@ -351,6 +351,8 @@ FFI_PLUGIN_EXPORT void loopin_preview_set_grid(double mark_frames, double beat_f
 FFI_PLUGIN_EXPORT void loopin_backing_prepare(const char* path, double song_bpm,
                                               double mark_seconds, int32_t samples_per_beat,
                                               int32_t beats_per_bar, int32_t id);
+// Cancela la preparación en marcha (la que suena sigue sonando).
+FFI_PLUGIN_EXPORT void loopin_backing_cancel(void);
 FFI_PLUGIN_EXPORT void loopin_backing_unload(void);
 // Encendida, suena mientras corre el transporte (entra siempre en un 1).
 FFI_PLUGIN_EXPORT void loopin_set_backing_enabled(int32_t enabled);

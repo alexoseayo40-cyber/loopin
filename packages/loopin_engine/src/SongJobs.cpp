@@ -59,6 +59,14 @@ void Worker::stop() {
   if (state_.load() == kRunning) state_.store(kIdle);
 }
 
+void Worker::finishNow(int32_t id) {
+  stop();
+  id_.store(id, std::memory_order_relaxed);
+  error_.store(0, std::memory_order_relaxed);
+  progress_.store(1000, std::memory_order_relaxed);
+  state_.store(kDone, std::memory_order_release);
+}
+
 void Worker::setProgress(double fraction) {
   progress_.store(static_cast<int32_t>(std::clamp(fraction, 0.0, 1.0) * 1000.0),
                   std::memory_order_relaxed);
@@ -234,6 +242,7 @@ int32_t SongJobs::buildBacking(const PrepareParams& p, Clip** out, Worker* w) {
   clip->samplesPerBeat = p.samplesPerBeat;
   clip->beatsPerBar = p.beatsPerBar;
   clip->barFrames = barFrames;
+  clip->key = keyOf(p);
   if (total > 0)
     clip->pcm.reserve(size_t(std::max<int64_t>(0, offset) + int64_t(double(total) * outPerIn) +
                              barFrames + int64_t(kChunk)));
@@ -377,7 +386,32 @@ void SongJobs::closeOpen() {
   backing_.previewSlot().offer(nullptr, bin_);
 }
 
+uint64_t SongJobs::keyOf(const PrepareParams& p) {
+  // FNV-1a de todo lo que cambia el resultado
+  uint64_t h = 1469598103934665603ull;
+  auto mix = [&h](const void* data, size_t n) {
+    const auto* b = static_cast<const unsigned char*>(data);
+    for (size_t i = 0; i < n; ++i) {
+      h ^= b[i];
+      h *= 1099511628211ull;
+    }
+  };
+  mix(p.path.data(), p.path.size());
+  mix(&p.songBpm, sizeof(p.songBpm));
+  mix(&p.markSeconds, sizeof(p.markSeconds));
+  mix(&p.samplesPerBeat, sizeof(p.samplesPerBeat));
+  mix(&p.beatsPerBar, sizeof(p.beatsPerBar));
+  mix(&p.rate, sizeof(p.rate));
+  mix(&p.id, sizeof(p.id));
+  return h == 0 ? 1 : h;
+}
+
 void SongJobs::prepare(const PrepareParams& p) {
+  if (Clip* kept = bin_.takeKept(keyOf(p))) {
+    preparer_.finishNow(p.id);
+    backing_.songSlot().offer(kept, bin_);
+    return;
+  }
   preparer_.run(p.id, [this, p](Worker& w) {
     Clip* clip = nullptr;
     const int32_t err = buildBacking(p, &clip, &w);

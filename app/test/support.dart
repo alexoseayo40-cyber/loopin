@@ -84,6 +84,8 @@ class FakeEngine implements LoopinEngine {
   @override
   void backingUnload() => calls.add('unload');
   @override
+  void backingCancel() => calls.add('cancel');
+  @override
   void setBackingEnabled(bool on) => calls.add('backing $on');
   @override
   void setBackingVolume(double v) => calls.add('backingVolume $v');

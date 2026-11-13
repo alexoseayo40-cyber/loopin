@@ -18,6 +18,9 @@ struct Clip {
   std::vector<int16_t> pcm;
   int32_t rate = 0;
   int32_t id = 0;  // el que puso la app (para saber qué canción es)
+  // Con qué se preparó (archivo, tempo, 1, rejilla, frecuencia): para volver
+  // a usarlo sin prepararlo otra vez. 0 en la vista previa.
+  uint64_t key = 0;
   // Rejilla, solo en los que suenan con el transporte (0 en la vista previa).
   // pcm.size() == bars * barFrames y el 1 de la canción cae en un inicio de
   // compás.
@@ -48,31 +51,66 @@ using RetiredClips = SpscQueue<Clip*, 64>;
 
 // Clips que hay que borrar y que no vienen del hilo de audio (los que nunca
 // llegó a coger). Solo se usa fuera del hilo de audio: puede bloquear.
+//
+// Las canciones ya preparadas (con key) no se borran enseguida: se guardan
+// las kKeep últimas, por si se vuelve a ese tempo (volver al tempo de la
+// canción después de practicar más despacio es instantáneo).
 class ClipBin {
  public:
-  ~ClipBin() { collect(nullptr); }
+  static constexpr size_t kKeep = 2;
+
+  ~ClipBin() {
+    collect(nullptr);
+    for (Clip* c : kept_) delete c;
+  }
   void add(Clip* c) {
     if (c == nullptr) return;
     std::lock_guard<std::mutex> lock(mutex_);
     clips_.push_back(c);
   }
-  // Borra lo pendiente y lo que haya devuelto el hilo de audio. Desde un solo
-  // hilo (el de la interfaz).
+  // Borra lo pendiente y lo que haya devuelto el hilo de audio (guardando
+  // las últimas canciones preparadas). Desde un solo hilo (el de la interfaz).
   void collect(RetiredClips* retired) {
+    std::vector<Clip*> v;
     Clip* c = nullptr;
     if (retired != nullptr)
-      while (retired->pop(c)) delete c;
-    std::vector<Clip*> v;
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      v.swap(clips_);
+      while (retired->pop(c)) v.push_back(c);
+    std::lock_guard<std::mutex> lock(mutex_);
+    v.insert(v.end(), clips_.begin(), clips_.end());
+    clips_.clear();
+    for (Clip* x : v) {
+      if (x->key == 0) {
+        delete x;
+        continue;
+      }
+      kept_.push_back(x);
+      if (kept_.size() > kKeep) {
+        delete kept_.front();
+        kept_.erase(kept_.begin());
+      }
     }
-    for (Clip* x : v) delete x;
+  }
+  // Una canción ya preparada con esa key (y deja de estar guardada), o nullptr.
+  Clip* takeKept(uint64_t key) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (size_t i = 0; i < kept_.size(); ++i) {
+      if (kept_[i]->key == key) {
+        Clip* c = kept_[i];
+        kept_.erase(kept_.begin() + long(i));
+        return c;
+      }
+    }
+    return nullptr;
+  }
+  size_t keptCount() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return kept_.size();
   }
 
  private:
   std::mutex mutex_;
   std::vector<Clip*> clips_;
+  std::vector<Clip*> kept_;
 };
 
 // Un hueco para un clip que suena. Cualquier hilo que no sea el de audio

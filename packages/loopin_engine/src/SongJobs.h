@@ -27,6 +27,8 @@ class Worker {
 
   bool cancelled() const { return cancel_.load(std::memory_order_relaxed); }
   void setProgress(double fraction);
+  // Hecho sin trabajar (lo pedido ya estaba): cancela el que haya.
+  void finishNow(int32_t id);
 
   int32_t id() const { return id_.load(std::memory_order_relaxed); }
   int32_t state() const { return state_.load(std::memory_order_acquire); }
@@ -95,7 +97,10 @@ class SongJobs {
   // --- Hilo de la interfaz ---
   void open(const std::string& path, int32_t rate, int32_t id);
   void closeOpen();
+  // Si ya se preparó hace poco igual (ver ClipBin), suena enseguida.
   void prepare(const PrepareParams& p);
+  // Cancela la preparación en marcha (la que suena sigue).
+  void cancelPrepare() { preparer_.stop(); }
   // Quita la canción que suena con el transporte
   void unload();
 
@@ -113,6 +118,7 @@ class SongJobs {
   static int32_t buildPreview(const std::string& path, int32_t rate, int32_t id, Clip** out,
                               PreviewInfo* info, Worker* w);
   static int32_t buildBacking(const PrepareParams& p, Clip** out, Worker* w);
+  static uint64_t keyOf(const PrepareParams& p);
   static int32_t peaksOf(const Clip& c, int64_t start, int64_t end, int32_t bins, float* out);
   static int64_t attackNear(const Clip& c, int64_t center, int64_t radius);
 

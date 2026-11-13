@@ -540,6 +540,16 @@ class LoopinEngineBindings {
   late final _loopin_backing_prepare = _loopin_backing_preparePtr
       .asFunction<void Function(ffi.Pointer<ffi.Char>, double, double, int, int, int)>();
 
+  /// Cancela la preparación en marcha (la que suena sigue sonando).
+  void loopin_backing_cancel() {
+    return _loopin_backing_cancel();
+  }
+
+  late final _loopin_backing_cancelPtr = _lookup<ffi.NativeFunction<ffi.Void Function()>>(
+    'loopin_backing_cancel',
+  );
+  late final _loopin_backing_cancel = _loopin_backing_cancelPtr.asFunction<void Function()>();
+
   void loopin_backing_unload() {
     return _loopin_backing_unload();
   }

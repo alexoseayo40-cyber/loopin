@@ -119,6 +119,18 @@ class _SongsScreenState extends State<SongsScreen> {
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),
+                  if (c.canRestoreSongTempo)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: FilledButton.tonalIcon(
+                        onPressed: () {
+                          c.restoreSongTempo();
+                          Navigator.of(context).pop();
+                        },
+                        icon: const Icon(Icons.restore),
+                        label: Text(tr.songRestoreTempo(tr.bpmNumber(current!.bpm))),
+                      ),
+                    ),
                   if (songs.isEmpty) _Empty(onImport: _importing ? null : _import),
                   for (final s in songs)
                     _SongTile(

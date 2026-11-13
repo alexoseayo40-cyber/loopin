@@ -598,6 +598,24 @@ class EngineController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Hay canción preparada y el metrónomo no está a su tempo (y se puede
+  /// cambiar: sin loops).
+  bool get canRestoreSongTempo {
+    final song = currentSong;
+    final speed = songSpeed;
+    return song != null &&
+        song.ready &&
+        !tempoLocked &&
+        speed != null &&
+        (speed - 1).abs() >= 0.002;
+  }
+
+  /// El metrónomo vuelve al tempo (y al compás) de la canción. Si se ha
+  /// preparado a ese tempo hace poco, suena enseguida.
+  void restoreSongTempo() {
+    if (canRestoreSongTempo) selectSong(currentSong);
+  }
+
   /// Encenderla con todo parado también arranca (como la batería).
   void setBackingOn(bool on) {
     _backing.setOn(on);

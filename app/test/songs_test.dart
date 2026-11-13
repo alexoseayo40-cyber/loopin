@@ -208,6 +208,70 @@ void main() {
     c.dispose();
   });
 
+  testWidgets('volver a su tempo: botón en la lista y, si se vuelve antes de acabar, cancela', (
+    tester,
+  ) async {
+    setScreen(tester, const Size(393, 873));
+    final engine = FakeEngine()..next = _st(playing: false, spb: 29599);
+    final c = EngineController(engine: engine, songs: SongLibrary.memory([_ready]));
+    await c.startAudio();
+    await tester.pump(const Duration(milliseconds: 100));
+    c.selectSong(_ready);
+    expect(c.canRestoreSongTempo, isFalse); // ya está a su tempo
+    // Preparada a su tempo
+    await tester.pump(const Duration(milliseconds: 500));
+    engine.next = _st(
+      playing: false,
+      spb: 29599,
+      prepId: 3,
+      prep: JobState.done,
+      backingId: 3,
+      backingSpb: 29599,
+    );
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(c.backingPhase, BackingPhase.ready);
+    // Más despacio: se pide otra versión…
+    c.setBpm(80);
+    engine.next = _st(
+      playing: false,
+      spb: 36000,
+      prepId: 3,
+      prep: JobState.done,
+      backingId: 3,
+      backingSpb: 29599,
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(engine.calls.last, startsWith('prepare 3 97.3 0.73 36000'));
+    expect(c.canRestoreSongTempo, isTrue);
+    // …y antes de que acabe se vuelve a su tempo: se cancela y sigue la que había
+    engine.next = _st(
+      playing: false,
+      spb: 36000,
+      prepId: 3,
+      prep: JobState.running,
+      backingId: 3,
+      backingSpb: 29599,
+    );
+    await tester.pumpWidget(_app(SongsScreen(controller: c)));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text(tr.songRestoreTempo('97,3')), findsOneWidget);
+    await tester.tap(find.text(tr.songRestoreTempo('97,3')));
+    engine.next = _st(
+      playing: false,
+      spb: 29599,
+      prepId: 3,
+      prep: JobState.running,
+      backingId: 3,
+      backingSpb: 29599,
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(c.bpm, 97.3);
+    expect(engine.calls, contains('cancel'));
+    expect(c.backingPhase, BackingPhase.ready);
+    c.stopAudio();
+    c.dispose();
+  });
+
   testWidgets('encender la canción con todo parado arranca', (tester) async {
     final engine = FakeEngine()..next = _st(playing: false);
     final c = EngineController(engine: engine, songs: SongLibrary.memory([_ready]));

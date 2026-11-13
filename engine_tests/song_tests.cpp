@@ -614,6 +614,62 @@ void testJobsThreaded() {
   CHECK_EQ(jobs.peaks(0, 100, 8, pk), 0);
 }
 
+// Volver a un tempo de hace poco (el de la canción, después de practicar
+// más despacio) no la prepara otra vez: se guardan las 2 últimas.
+void testKeptVersions() {
+  std::printf("Volver a un tempo de hace poco es instantáneo\n");
+  const std::string path = tmpPath("kept.wav");
+  writeSong(path, 48000, 1, 97.3, 0.73, 40);
+  SongRig r;
+  SongJobs jobs(r.core.backing(), r.core.clipBin());
+  auto waitFor = [&]() {
+    const auto t0 = std::chrono::steady_clock::now();
+    while (jobs.preparer().state() == Worker::kRunning &&
+           std::chrono::steady_clock::now() - t0 < std::chrono::seconds(30)) {
+      r.runFor(4800);
+      r.core.collectClips();
+    }
+    r.runFor(256);
+    r.core.collectClips();
+  };
+  PrepareParams p;
+  p.path = path;
+  p.songBpm = 97.3;
+  p.markSeconds = 0.73;
+  p.samplesPerBeat = 29599;  // su tempo
+  p.beatsPerBar = 4;
+  p.rate = 48000;
+  p.id = 40;
+  jobs.prepare(p);
+  waitFor();
+  CHECK_EQ(r.core.status().backingSpb, 29599);
+  p.samplesPerBeat = 34000;  // más despacio
+  jobs.prepare(p);
+  waitFor();
+  CHECK_EQ(r.core.status().backingSpb, 34000);
+  CHECK_EQ(int(r.core.clipBin().keptCount()), 1);
+  // Vuelta a su tempo: hecho al momento, sin trabajar
+  const auto t0 = std::chrono::steady_clock::now();
+  p.samplesPerBeat = 29599;
+  jobs.prepare(p);
+  CHECK_EQ(jobs.preparer().state(), Worker::kDone);
+  r.runFor(256);
+  const double ms =
+      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+  CHECK_EQ(r.core.status().backingSpb, 29599);
+  CHECK(ms < 50.0);
+  r.core.collectClips();
+  CHECK_EQ(int(r.core.clipBin().keptCount()), 1);  // ahora guarda la lenta
+  // Otro 1 u otro tempo de la canción: ya no vale lo guardado
+  p.markSeconds = 0.74;
+  CHECK(SongJobs::keyOf(p) != 0);
+  jobs.prepare(p);
+  CHECK_EQ(jobs.preparer().state(), Worker::kRunning);
+  jobs.cancelPrepare();
+  CHECK_EQ(jobs.preparer().state(), Worker::kIdle);
+  CHECK_EQ(r.core.status().backingSpb, 29599);  // la que sonaba sigue
+}
+
 // Con el audio cerrado se cambia de frecuencia: los clips de la otra ya no
 // valen (la app los vuelve a preparar).
 void testRateChange() {
@@ -687,6 +743,7 @@ void runSongTests() {
   testBackingLateEnable();
   testPreviewPlayback();
   testJobsThreaded();
+  testKeptVersions();
   testRateChange();
   testCost();
   std::printf("Ningún clip se queda sin borrar\n");
