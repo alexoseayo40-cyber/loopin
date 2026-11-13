@@ -5,14 +5,21 @@
 #include <memory>
 
 #include "AudioEngine.h"
+#include "SongJobs.h"
 
 using loopin::AudioEngine;
 using loopin::Command;
+using loopin::SongJobs;
 
 namespace {
 
 AudioEngine& engine() {
   static AudioEngine* instance = new AudioEngine();  // vive toda la app
+  return *instance;
+}
+
+SongJobs& jobs() {
+  static SongJobs* instance = new SongJobs(engine().core().backing(), engine().core().clipBin());
   return *instance;
 }
 
@@ -97,8 +104,50 @@ void loopin_set_drum_style(int32_t style, int32_t beat_is_eighth) {
 }
 void loopin_set_drum_volume(float volume) { post(Command::Type::kSetDrumVolume, volume); }
 
+void loopin_song_open(const char* path, int32_t id) {
+  if (path == nullptr) return;
+  jobs().open(path, engine().core().sampleRate(), id);
+}
+void loopin_song_close(void) { jobs().closeOpen(); }
+int32_t loopin_song_peaks(int64_t start, int64_t end, int32_t bins, float* out) {
+  return jobs().peaks(start, end, bins, out);
+}
+int64_t loopin_song_find_attack(int64_t center, int64_t radius) {
+  return jobs().findAttack(center, radius);
+}
+void loopin_preview_play(int64_t frame) { post(Command::Type::kPreviewPlay, double(frame)); }
+void loopin_preview_stop(void) { post(Command::Type::kPreviewStop); }
+void loopin_preview_set_click(int32_t enabled) {
+  post(Command::Type::kSetPreviewClick, enabled ? 1.0 : 0.0);
+}
+void loopin_preview_set_grid(double mark_frames, double beat_frames, int32_t beats_per_bar,
+                             int32_t accent_mask) {
+  post(Command::Type::kSetPreviewBeat, beat_frames, beats_per_bar);
+  post(Command::Type::kSetPreviewMark, mark_frames, accent_mask);
+}
+void loopin_backing_prepare(const char* path, double song_bpm, double mark_seconds,
+                            int32_t samples_per_beat, int32_t beats_per_bar, int32_t id) {
+  if (path == nullptr) return;
+  loopin::PrepareParams p;
+  p.path = path;
+  p.songBpm = song_bpm;
+  p.markSeconds = mark_seconds;
+  p.samplesPerBeat = samples_per_beat;
+  p.beatsPerBar = beats_per_bar;
+  p.rate = engine().core().sampleRate();
+  p.id = id;
+  jobs().prepare(p);
+}
+void loopin_backing_unload(void) { jobs().unload(); }
+void loopin_set_backing_enabled(int32_t enabled) {
+  post(Command::Type::kSetBackingEnabled, enabled ? 1.0 : 0.0);
+}
+void loopin_set_backing_volume(float volume) { post(Command::Type::kSetBackingVolume, volume); }
+
 void loopin_get_status(LoopinStatus* out) {
   if (out == nullptr) return;
+  // Los clips que ya no suenan se borran aquí, en el hilo de la interfaz
+  engine().core().collectClips();
   *out = LoopinStatus{};
   AudioEngine& e = engine();
   const loopin::CoreStatus c = e.core().status();
@@ -199,6 +248,33 @@ void loopin_get_status(LoopinStatus* out) {
   out->drum_style = c.drumStyle;
   out->drums_playing = c.drumsPlaying;
   out->drum_volume = c.drumVolume;
+
+  const SongJobs& j = jobs();
+  const loopin::PreviewInfo info = j.previewInfo();
+  out->song_open_id = j.opener().id();
+  out->song_open_state = j.opener().state();
+  out->song_open_progress = j.opener().progress();
+  out->song_open_error = j.opener().error();
+  out->song_open_frames = info.frames;
+  out->song_bpm_guess = info.bpmGuess;
+  out->song_first_attack = info.firstAttack;
+  out->song_prep_id = j.preparer().id();
+  out->song_prep_state = j.preparer().state();
+  out->song_prep_progress = j.preparer().progress();
+  out->song_prep_error = j.preparer().error();
+  out->backing_enabled = c.backingEnabled;
+  out->backing_playing = c.backingPlaying;
+  out->backing_id = c.backingId;
+  out->backing_samples_per_beat = c.backingSpb;
+  out->backing_beats_per_bar = c.backingBpb;
+  out->backing_position = c.backingPosition;
+  out->backing_length = c.backingLength;
+  out->backing_volume = c.backingVolume;
+  out->preview_id = c.previewId;
+  out->preview_playing = c.previewPlaying;
+  out->preview_click = c.previewClick;
+  out->preview_position = c.previewPosition;
+  out->preview_length = c.previewLength;
 }
 
 }  // extern "C"

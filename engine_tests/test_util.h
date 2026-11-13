@@ -33,3 +33,4 @@ inline int32_t randomBlock(std::mt19937& rng) {
 
 void runLooperTests();
 void runDrumTests();
+void runSongTests();

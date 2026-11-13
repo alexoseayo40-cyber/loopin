@@ -19,6 +19,7 @@ void EngineCore::prepare(int32_t sampleRate) {
   ring_.prepare(sampleRate_ * 6);
   looper_.prepare(sampleRate_, &transport_);
   drums_.prepare(sampleRate_);
+  backing_.prepare(sampleRate_, bin_);
   outPos_ = 0;
   monRead_ = 0;
   wasPlaying_ = false;
@@ -80,6 +81,27 @@ void EngineCore::apply(const Command& cmd) {
       break;
     case Command::Type::kSetDrumVolume:
       drums_.setVolume(static_cast<float>(cmd.value));
+      break;
+    case Command::Type::kSetBackingEnabled:
+      backing_.setEnabled(cmd.value != 0.0);
+      break;
+    case Command::Type::kSetBackingVolume:
+      backing_.setVolume(static_cast<float>(cmd.value));
+      break;
+    case Command::Type::kPreviewPlay:
+      backing_.previewPlay(static_cast<int64_t>(cmd.value));
+      break;
+    case Command::Type::kPreviewStop:
+      backing_.previewStop();
+      break;
+    case Command::Type::kSetPreviewClick:
+      backing_.setPreviewClick(cmd.value != 0.0);
+      break;
+    case Command::Type::kSetPreviewMark:
+      backing_.setPreviewMark(cmd.value, static_cast<uint32_t>(cmd.arg));
+      break;
+    case Command::Type::kSetPreviewBeat:
+      backing_.setPreviewBeat(cmd.value, cmd.arg);
       break;
     case Command::Type::kSetClickVolume:
       clickVolume_ = std::clamp(static_cast<float>(cmd.value), 0.0f, 1.0f);
@@ -149,6 +171,9 @@ void EngineCore::apply(const Command& cmd) {
 
 void EngineCore::process(const float* in, int32_t inFrames, int32_t inChannels, float* out,
                          int32_t outFrames, int32_t outChannels) {
+  // Los clips nuevos del audio importado van antes que las órdenes (una orden
+  // de la vista previa puede ser para el clip que acaba de llegar)
+  backing_.takeClips(retired_);
   Command cmd;
   while (queue_.pop(cmd)) apply(cmd);
 
@@ -206,28 +231,40 @@ void EngineCore::process(const float* in, int32_t inFrames, int32_t inChannels, 
                       transport_.framePosition() == 1)) {
         clickGate_ = false;
       }
+      backing_.beat(transport_.bar(), transport_.beat(), transport_.samplesPerBeat(),
+                    transport_.beatsPerBar(), countIn);
     } else if (!transport_.playing()) {
       drums_.halt();
-    } else if (!wasPlaying_ && transport_.beat() == 0 && drums_.enabled() &&
-               transport_.framesSinceBeat() >= 1 &&
+      backing_.halt();
+    } else if (!wasPlaying_ && transport_.beat() == 0 &&
+               (drums_.enabled() || backing_.enabled()) && transport_.framesSinceBeat() >= 1 &&
                transport_.framesSinceBeat() <= sampleRate_ / 50) {
       // El transporte acaba de arrancar «desde atrás», un pelín pasado un 1
       // (al cerrar el primer loop en libre se recorta a muestras enteras por
-      // tiempo): la batería entra ya en vez de esperar un compás entero
+      // tiempo): la batería y la canción entran ya en vez de esperar un compás
+      const int32_t late = transport_.framesSinceBeat() - 1;
       drums_.beat(transport_.bar(), 0, transport_.beatsPerBar(), transport_.accentMask(),
-                  transport_.samplesPerBeat(), false, false, false,
-                  transport_.framesSinceBeat() - 1);
+                  transport_.samplesPerBeat(), false, false, false, late);
+      backing_.beat(transport_.bar(), 0, transport_.samplesPerBeat(), transport_.beatsPerBar(),
+                    false, late);
     }
     wasPlaying_ = transport_.playing();
+    // La vista previa del audio importado lleva su propio clic (el transporte
+    // está parado mientras se prepara una canción)
+    if (const int32_t pc = backing_.previewClickNow()) {
+      metronome_.trigger(static_cast<Metronome::Accent>(pc - 1));
+      clickGate_ = true;
+    }
     const float click = metronome_.next();
     const float drums = drums_.next();
+    const float song = backing_.next(retired_);
     float mon = 0.0f;
     if (monRead_ < ring_.end()) mon = ring_.at(monRead_++);
     float s = 0.0f;
     if (!measuring) {
       if (clickGate_) s += click * clickVolume_;
       if (monitorEnabled_) s += mon * monitorVolume_;
-      s += loop + drums;
+      s += loop + drums + song;
     }
     outMono_[i] = s;
   }
@@ -300,6 +337,22 @@ void EngineCore::publish() {
   aDrumStyle_.store(static_cast<int32_t>(drums_.style()), std::memory_order_relaxed);
   aDrumsPlaying_.store(drums_.playing() ? 1 : 0, std::memory_order_relaxed);
   aDrumVolume_.store(drums_.volume(), std::memory_order_relaxed);
+  const Clip* song = backing_.song();
+  const Clip* preview = backing_.preview();
+  aBackingEnabled_.store(backing_.enabled() ? 1 : 0, std::memory_order_relaxed);
+  aBackingPlaying_.store(backing_.enabled() && backing_.playing() ? 1 : 0,
+                         std::memory_order_relaxed);
+  aBackingId_.store(song != nullptr ? song->id : 0, std::memory_order_relaxed);
+  aBackingSpb_.store(song != nullptr ? song->samplesPerBeat : 0, std::memory_order_relaxed);
+  aBackingBpb_.store(song != nullptr ? song->beatsPerBar : 0, std::memory_order_relaxed);
+  aBackingPosition_.store(backing_.position(), std::memory_order_relaxed);
+  aBackingLength_.store(song != nullptr ? song->frames() : 0, std::memory_order_relaxed);
+  aBackingVolume_.store(backing_.volume(), std::memory_order_relaxed);
+  aPreviewId_.store(preview != nullptr ? preview->id : 0, std::memory_order_relaxed);
+  aPreviewPlaying_.store(backing_.previewPlaying() ? 1 : 0, std::memory_order_relaxed);
+  aPreviewClick_.store(backing_.previewClick() ? 1 : 0, std::memory_order_relaxed);
+  aPreviewPosition_.store(backing_.previewPosition(), std::memory_order_relaxed);
+  aPreviewLength_.store(preview != nullptr ? preview->frames() : 0, std::memory_order_relaxed);
   aTapState_.store(static_cast<int32_t>(tap_.state()), std::memory_order_release);
 
   // El estado va el último: quien lo lea como «hecho» ve ya el resultado.
@@ -357,6 +410,19 @@ CoreStatus EngineCore::status() const {
   s.drumStyle = aDrumStyle_.load(std::memory_order_relaxed);
   s.drumsPlaying = aDrumsPlaying_.load(std::memory_order_relaxed);
   s.drumVolume = aDrumVolume_.load(std::memory_order_relaxed);
+  s.backingEnabled = aBackingEnabled_.load(std::memory_order_relaxed);
+  s.backingPlaying = aBackingPlaying_.load(std::memory_order_relaxed);
+  s.backingId = aBackingId_.load(std::memory_order_relaxed);
+  s.backingSpb = aBackingSpb_.load(std::memory_order_relaxed);
+  s.backingBpb = aBackingBpb_.load(std::memory_order_relaxed);
+  s.backingPosition = aBackingPosition_.load(std::memory_order_relaxed);
+  s.backingLength = aBackingLength_.load(std::memory_order_relaxed);
+  s.backingVolume = aBackingVolume_.load(std::memory_order_relaxed);
+  s.previewId = aPreviewId_.load(std::memory_order_relaxed);
+  s.previewPlaying = aPreviewPlaying_.load(std::memory_order_relaxed);
+  s.previewClick = aPreviewClick_.load(std::memory_order_relaxed);
+  s.previewPosition = aPreviewPosition_.load(std::memory_order_relaxed);
+  s.previewLength = aPreviewLength_.load(std::memory_order_relaxed);
   return s;
 }
 

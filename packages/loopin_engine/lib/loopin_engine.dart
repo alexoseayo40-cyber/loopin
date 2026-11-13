@@ -110,6 +110,32 @@ enum DrumSound { kick, snare, snareSoft, crossStick, hat, hatSoft, hatOpen, ride
 /// acentos del compás; los demás son de un compás concreto.
 enum DrumStyle { basic, rock, pop, shuffle, funk, ballad, reggae, waltz, sixEight, slowBlues }
 
+/// Estado de un trabajo en segundo plano del audio importado (mismo orden
+/// que LOOPIN_JOB_*).
+enum JobState { idle, running, done, failed }
+
+/// Por qué no se ha podido abrir o preparar una canción (mismo orden que
+/// LOOPIN_SONG_ERR_*, con [none] = 0).
+enum SongError {
+  none,
+
+  /// No se puede abrir o no es WAV, MP3 ni FLAC.
+  open,
+
+  /// Más de [kSongMaxSeconds] (a ese tempo).
+  tooLong,
+  memory,
+
+  /// No suena nada.
+  empty,
+
+  /// A más del doble o menos de la mitad de su tempo.
+  tempo,
+}
+
+/// Duración máxima de una canción (o de lo que dure estirada), en segundos.
+const int kSongMaxSeconds = 600;
+
 class TrackStatus {
   const TrackStatus({
     this.state = LoopState.empty,
@@ -208,6 +234,30 @@ class EngineStatus {
     this.drumStyle = DrumStyle.basic,
     this.drumsPlaying = false,
     this.drumVolume = 0.7,
+    this.songOpenId = 0,
+    this.songOpenState = JobState.idle,
+    this.songOpenProgress = 0,
+    this.songOpenError = SongError.none,
+    this.songOpenFrames = 0,
+    this.songBpmGuess = 0,
+    this.songFirstAttack = -1,
+    this.songPrepId = 0,
+    this.songPrepState = JobState.idle,
+    this.songPrepProgress = 0,
+    this.songPrepError = SongError.none,
+    this.backingEnabled = false,
+    this.backingPlaying = false,
+    this.backingId = 0,
+    this.backingSamplesPerBeat = 0,
+    this.backingBeatsPerBar = 0,
+    this.backingPosition = 0,
+    this.backingLength = 0,
+    this.backingVolume = 0.7,
+    this.previewId = 0,
+    this.previewPlaying = false,
+    this.previewClick = false,
+    this.previewPosition = 0,
+    this.previewLength = 0,
   });
 
   final bool running;
@@ -340,6 +390,53 @@ class EngineStatus {
   final bool drumsPlaying;
   final double drumVolume;
 
+  /// Audio importado: abrir una canción para prepararla (vista previa). El
+  /// progreso va de 0 a 1.
+  final int songOpenId;
+  final JobState songOpenState;
+  final double songOpenProgress;
+  final SongError songOpenError;
+
+  /// Duración de la abierta, en muestras (a [sampleRate]).
+  final int songOpenFrames;
+
+  /// Tempo sugerido (0 = ni idea).
+  final double songBpmGuess;
+
+  /// Primer golpe claro de la abierta (muestra; -1 = ninguno).
+  final int songFirstAttack;
+
+  /// Audio importado: preparar la canción para que suene (estirarla).
+  final int songPrepId;
+  final JobState songPrepState;
+  final double songPrepProgress;
+  final SongError songPrepError;
+
+  /// La canción que suena con el transporte: encendida, si ya ha entrado
+  /// (en un 1) y suena, cuál está cargada (0 = ninguna) y a qué tempo y
+  /// compás está estirada.
+  final bool backingEnabled;
+  final bool backingPlaying;
+  final int backingId;
+  final int backingSamplesPerBeat;
+  final int backingBeatsPerBar;
+  final int backingPosition;
+  final int backingLength;
+  final double backingVolume;
+
+  /// Vista previa (la canción abierta, sin estirar).
+  final int previewId;
+  final bool previewPlaying;
+  final bool previewClick;
+  final int previewPosition;
+  final int previewLength;
+
+  /// La canción cargada está estirada al tempo y compás de ahora.
+  bool get backingFits =>
+      backingId != 0 &&
+      backingSamplesPerBeat == samplesPerBeat &&
+      backingBeatsPerBar == beatsPerBar;
+
   static const tapCountInClicks = 4;
   static const tapCountedClicks = 12;
   static const tapTotalClicks = tapCountInClicks + tapCountedClicks;
@@ -462,6 +559,66 @@ class LoopinEngine {
       _b.loopin_set_drum_style(style.index, beatIsEighth ? 1 : 0);
   void setDrumVolume(double v) => _b.loopin_set_drum_volume(v);
 
+  // Audio importado
+  /// Abre una canción para prepararla (en segundo plano: ver
+  /// [EngineStatus.songOpenState]).
+  void songOpen(String path, int id) {
+    final p = path.toNativeUtf8();
+    try {
+      _b.loopin_song_open(p.cast(), id);
+    } finally {
+      calloc.free(p);
+    }
+  }
+
+  void songClose() => _b.loopin_song_close();
+
+  /// Picos (0..1) de la canción abierta entre [start] y [end] (muestras).
+  Float32List songPeaks(int start, int end, int bins) {
+    if (bins <= 0) return Float32List(0);
+    final p = calloc<Float>(bins);
+    try {
+      final n = _b.loopin_song_peaks(start, end, bins, p);
+      return Float32List.fromList(p.asTypedList(bins).sublist(0, n));
+    } finally {
+      calloc.free(p);
+    }
+  }
+
+  /// El ataque más claro cerca de [center] (± [radius] muestras).
+  int songFindAttack(int center, int radius) => _b.loopin_song_find_attack(center, radius);
+
+  void previewPlay(int frame) => _b.loopin_preview_play(frame);
+  void previewStop() => _b.loopin_preview_stop();
+  void setPreviewClick(bool on) => _b.loopin_preview_set_click(on ? 1 : 0);
+
+  /// Rejilla del clic de la vista previa: el 1 en [mark] y un tiempo cada
+  /// [beat] muestras (con decimales).
+  void setPreviewGrid(double mark, double beat, int beatsPerBar, int accentMask) =>
+      _b.loopin_preview_set_grid(mark, beat, beatsPerBar, accentMask);
+
+  /// Estira la canción para que un tiempo dure [samplesPerBeat] muestras, con
+  /// el 1 ([markSeconds] en el archivo) en un inicio de compás.
+  void backingPrepare({
+    required String path,
+    required double songBpm,
+    required double markSeconds,
+    required int samplesPerBeat,
+    required int beatsPerBar,
+    required int id,
+  }) {
+    final p = path.toNativeUtf8();
+    try {
+      _b.loopin_backing_prepare(p.cast(), songBpm, markSeconds, samplesPerBeat, beatsPerBar, id);
+    } finally {
+      calloc.free(p);
+    }
+  }
+
+  void backingUnload() => _b.loopin_backing_unload();
+  void setBackingEnabled(bool on) => _b.loopin_set_backing_enabled(on ? 1 : 0);
+  void setBackingVolume(double v) => _b.loopin_set_backing_volume(v);
+
   EngineStatus status() {
     _b.loopin_get_status(_status);
     final s = _status.ref;
@@ -548,6 +705,30 @@ class LoopinEngine {
       drumStyle: DrumStyle.values[s.drum_style.clamp(0, DrumStyle.values.length - 1)],
       drumsPlaying: s.drums_playing != 0,
       drumVolume: s.drum_volume,
+      songOpenId: s.song_open_id,
+      songOpenState: JobState.values[s.song_open_state.clamp(0, 3)],
+      songOpenProgress: s.song_open_progress / 1000,
+      songOpenError: SongError.values[s.song_open_error.clamp(0, SongError.values.length - 1)],
+      songOpenFrames: s.song_open_frames,
+      songBpmGuess: s.song_bpm_guess,
+      songFirstAttack: s.song_first_attack,
+      songPrepId: s.song_prep_id,
+      songPrepState: JobState.values[s.song_prep_state.clamp(0, 3)],
+      songPrepProgress: s.song_prep_progress / 1000,
+      songPrepError: SongError.values[s.song_prep_error.clamp(0, SongError.values.length - 1)],
+      backingEnabled: s.backing_enabled != 0,
+      backingPlaying: s.backing_playing != 0,
+      backingId: s.backing_id,
+      backingSamplesPerBeat: s.backing_samples_per_beat,
+      backingBeatsPerBar: s.backing_beats_per_bar,
+      backingPosition: s.backing_position,
+      backingLength: s.backing_length,
+      backingVolume: s.backing_volume,
+      previewId: s.preview_id,
+      previewPlaying: s.preview_playing != 0,
+      previewClick: s.preview_click != 0,
+      previewPosition: s.preview_position,
+      previewLength: s.preview_length,
     );
   }
 }

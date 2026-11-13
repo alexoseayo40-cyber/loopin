@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "Backing.h"
+#include "Clip.h"
 #include "Drums.h"
 #include "LatencyMeter.h"
 #include "Looper.h"
@@ -57,6 +59,14 @@ struct Command {
     kSetDrumsEnabled,
     kSetDrumStyle,     // value = estilo, arg = 1 si el tiempo es la corchea
     kSetDrumVolume,
+    // Etapa 4b: audio importado
+    kSetBackingEnabled,
+    kSetBackingVolume,
+    kPreviewPlay,      // value = muestra desde la que suena
+    kPreviewStop,
+    kSetPreviewClick,
+    kSetPreviewMark,   // value = muestra del 1 (con decimales), arg = acentos
+    kSetPreviewBeat,   // value = muestras por tiempo (con decimales), arg = tiempos
   };
   Type type = Type::kPlay;
   double value = 0.0;
@@ -123,6 +133,21 @@ struct CoreStatus {
   int32_t drumStyle;
   int32_t drumsPlaying;     // está sonando (ya ha entrado en un 1)
   float drumVolume;
+  // Audio importado: la canción que suena con el transporte
+  int32_t backingEnabled;
+  int32_t backingPlaying;
+  int32_t backingId;        // id del clip cargado (0 = ninguno)
+  int32_t backingSpb;       // tempo y compás a los que está estirado
+  int32_t backingBpb;
+  int64_t backingPosition;
+  int64_t backingLength;
+  float backingVolume;
+  // y la vista previa
+  int32_t previewId;
+  int32_t previewPlaying;
+  int32_t previewClick;
+  int64_t previewPosition;
+  int64_t previewLength;
 };
 
 class EngineCore {
@@ -131,6 +156,8 @@ class EngineCore {
   // Trabajo de fondo del looper por bloque (sumar/borrar capas): a 48 kHz y
   // bloques de 256 muestras es ~60 veces el tiempo real y cuesta microsegundos.
   static constexpr int32_t kBackgroundBudget = 16384;
+
+  ~EngineCore() { collectClips(); }
 
   // Fuera del hilo de audio (antes de arrancar el stream). Reserva memoria.
   void prepare(int32_t sampleRate);
@@ -143,6 +170,12 @@ class EngineCore {
 
   // Hilo de la interfaz: encola una orden. Devuelve false si la cola está llena.
   bool post(const Command& cmd) { return queue_.push(cmd); }
+
+  // Audio importado: los trabajos de fondo dejan aquí los clips (ver SongJobs)
+  Backing& backing() { return backing_; }
+  ClipBin& clipBin() { return bin_; }
+  // Hilo de la interfaz: borra los clips que ya no suenan.
+  void collectClips() { bin_.collect(&retired_); }
 
   // Hilo de audio. in: entrada entrelazada (inChannels canales); out: salida
   // entrelazada (outChannels canales). Sin reservas, sin bloqueos, sin E/S.
@@ -169,6 +202,9 @@ class EngineCore {
   TapCalibrator tap_;
   Looper looper_;
   Drums drums_;
+  Backing backing_;
+  ClipBin bin_;
+  RetiredClips retired_;
   InputRing ring_;
   int64_t outPos_ = 0;    // índice absoluto de la próxima muestra de salida
   int64_t monRead_ = 0;   // próxima muestra de entrada que sonará en el monitor
@@ -235,6 +271,19 @@ class EngineCore {
   std::atomic<int32_t> aDrumStyle_{0};
   std::atomic<int32_t> aDrumsPlaying_{0};
   std::atomic<float> aDrumVolume_{0.7f};
+  std::atomic<int32_t> aBackingEnabled_{0};
+  std::atomic<int32_t> aBackingPlaying_{0};
+  std::atomic<int32_t> aBackingId_{0};
+  std::atomic<int32_t> aBackingSpb_{0};
+  std::atomic<int32_t> aBackingBpb_{0};
+  std::atomic<int64_t> aBackingPosition_{0};
+  std::atomic<int64_t> aBackingLength_{0};
+  std::atomic<float> aBackingVolume_{0.7f};
+  std::atomic<int32_t> aPreviewId_{0};
+  std::atomic<int32_t> aPreviewPlaying_{0};
+  std::atomic<int32_t> aPreviewClick_{0};
+  std::atomic<int64_t> aPreviewPosition_{0};
+  std::atomic<int64_t> aPreviewLength_{0};
 };
 
 }  // namespace loopin

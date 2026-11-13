@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Núcleo independiente de Oboe (también lo compilan los tests del PC)
 set(LOOPIN_CORE_SOURCES
+  ${CMAKE_CURRENT_SOURCE_DIR}/Backing.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/Drums.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/EngineCore.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/LatencyMeter.cpp
@@ -15,9 +16,14 @@ set(LOOPIN_CORE_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/LooperBuffers.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/LooperRecord.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/Metronome.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/SongJobs.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/SongReader.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/TapCalibrator.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/Transport.cpp
 )
+
+# SoundTouch (LGPL) y dr_libs (dominio público), como código fuente
+include(${CMAKE_CURRENT_SOURCE_DIR}/third_party/soundtouch.cmake)
 
 # Oboe desde el submódulo de git (código fuente, como pide F-Droid)
 set(OBOE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/oboe)
@@ -37,7 +43,7 @@ set_target_properties(loopin_engine PROPERTIES
 target_include_directories(loopin_engine PRIVATE ${OBOE_DIR}/include)
 target_compile_definitions(loopin_engine PUBLIC DART_SHARED_LIB)
 target_compile_options(loopin_engine PRIVATE -Wall -Wextra "$<$<CONFIG:Release>:-O3>")
-target_link_libraries(loopin_engine PRIVATE oboe android log)
+target_link_libraries(loopin_engine PRIVATE oboe loopin_soundtouch android log)
 
 # Páginas de 16 KB (obligatorio para Android 15+ en Google Play)
 target_link_options(loopin_engine PRIVATE "-Wl,-z,max-page-size=16384")

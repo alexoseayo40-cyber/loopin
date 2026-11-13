@@ -11,10 +11,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/../packages/loopin_engine/src)
 
+include(${SRC}/third_party/soundtouch.cmake)
+
 add_executable(loopin_engine_tests
   tests.cpp
   looper_tests.cpp
   drum_tests.cpp
+  song_tests.cpp
+  ${SRC}/Backing.cpp
   ${SRC}/Drums.cpp
   ${SRC}/EngineCore.cpp
   ${SRC}/LatencyMeter.cpp
@@ -22,12 +26,16 @@ add_executable(loopin_engine_tests
   ${SRC}/LooperBuffers.cpp
   ${SRC}/LooperRecord.cpp
   ${SRC}/Metronome.cpp
+  ${SRC}/SongJobs.cpp
+  ${SRC}/SongReader.cpp
   ${SRC}/TapCalibrator.cpp
   ${SRC}/Transport.cpp
 )
 target_include_directories(loopin_engine_tests PRIVATE ${SRC})
 find_package(Threads REQUIRED)
-target_link_libraries(loopin_engine_tests PRIVATE Threads::Threads)
+target_link_libraries(loopin_engine_tests PRIVATE Threads::Threads loopin_soundtouch)
+# Cuenta los clips vivos del audio importado (ver Clip.h)
+target_compile_definitions(loopin_engine_tests PRIVATE LOOPIN_CLIP_COUNT)
 if(MSVC)
   target_compile_options(loopin_engine_tests PRIVATE /W4)
 else()
@@ -37,5 +45,5 @@ endif()
 # Demo de la batería (no es un test): drum_demo app/assets/drums <salida>
 add_executable(drum_demo drum_demo.cpp ${SRC}/Drums.cpp ${SRC}/EngineCore.cpp ${SRC}/Transport.cpp
   ${SRC}/Metronome.cpp ${SRC}/LatencyMeter.cpp ${SRC}/TapCalibrator.cpp ${SRC}/Looper.cpp
-  ${SRC}/LooperRecord.cpp ${SRC}/LooperBuffers.cpp)
+  ${SRC}/LooperRecord.cpp ${SRC}/LooperBuffers.cpp ${SRC}/Backing.cpp)
 target_include_directories(drum_demo PRIVATE ${SRC})

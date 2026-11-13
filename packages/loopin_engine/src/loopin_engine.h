@@ -81,6 +81,22 @@ extern "C" {
 #define LOOPIN_STYLE_SIX_EIGHT 8   // 6/8
 #define LOOPIN_STYLE_SLOW_BLUES 9  // 12/8
 
+// Audio importado: estado de un trabajo en segundo plano (abrir o preparar)
+#define LOOPIN_JOB_IDLE 0
+#define LOOPIN_JOB_RUNNING 1
+#define LOOPIN_JOB_DONE 2
+#define LOOPIN_JOB_FAILED 3
+
+// Audio importado: errores
+#define LOOPIN_SONG_ERR_OPEN 1      // no se puede abrir o no es WAV, MP3 ni FLAC
+#define LOOPIN_SONG_ERR_TOO_LONG 2  // más de 10 minutos (a ese tempo)
+#define LOOPIN_SONG_ERR_MEMORY 3
+#define LOOPIN_SONG_ERR_EMPTY 4     // no suena nada
+#define LOOPIN_SONG_ERR_TEMPO 5     // a más del doble o menos de la mitad de su tempo
+
+// Duración máxima de una canción (o de lo que dure estirada)
+#define LOOPIN_SONG_MAX_SECONDS 600
+
 // API de audio que Oboe ha elegido
 #define LOOPIN_API_UNKNOWN 0
 #define LOOPIN_API_OPENSLES 1
@@ -180,6 +196,34 @@ typedef struct {
   int32_t drum_style;         // LOOPIN_STYLE_* pedido
   int32_t drums_playing;      // 1 = ya ha entrado (en un primer tiempo) y suena
   float drum_volume;
+  // Audio importado: abrir una canción para prepararla (vista previa)
+  int32_t song_open_id;       // el id que se pasó a loopin_song_open
+  int32_t song_open_state;    // LOOPIN_JOB_*
+  int32_t song_open_progress; // 0..1000
+  int32_t song_open_error;    // LOOPIN_SONG_ERR_*
+  int64_t song_open_frames;   // duración (a sample_rate)
+  double song_bpm_guess;      // tempo sugerido (0 = ni idea)
+  int64_t song_first_attack;  // primer golpe claro (muestra; -1 = ninguno)
+  // Audio importado: preparar la canción para que suene (estirarla al tempo)
+  int32_t song_prep_id;
+  int32_t song_prep_state;    // LOOPIN_JOB_*
+  int32_t song_prep_progress; // 0..1000
+  int32_t song_prep_error;    // LOOPIN_SONG_ERR_*
+  // La canción que suena con el transporte
+  int32_t backing_enabled;
+  int32_t backing_playing;    // 1 = ha entrado (en un primer tiempo) y suena
+  int32_t backing_id;         // id de la que está cargada (0 = ninguna)
+  int32_t backing_samples_per_beat;  // tempo y compás a los que está estirada
+  int32_t backing_beats_per_bar;
+  int64_t backing_position;
+  int64_t backing_length;
+  float backing_volume;
+  // Vista previa (la canción abierta, sin estirar)
+  int32_t preview_id;
+  int32_t preview_playing;
+  int32_t preview_click;
+  int64_t preview_position;
+  int64_t preview_length;
 } LoopinStatus;
 
 // Abre los streams de entrada y salida y empieza a procesar audio.
@@ -277,6 +321,40 @@ FFI_PLUGIN_EXPORT void loopin_set_drums_enabled(int32_t enabled);
 // Sonando, el cambio espera al siguiente compás.
 FFI_PLUGIN_EXPORT void loopin_set_drum_style(int32_t style, int32_t beat_is_eighth);
 FFI_PLUGIN_EXPORT void loopin_set_drum_volume(float volume);
+
+// Audio importado (WAV, MP3 o FLAC). Lo pesado va en segundo plano y su
+// estado sale en LoopinStatus; el hilo de audio solo lee lo ya preparado.
+//
+// Abrir: decodifica la canción a la frecuencia del motor, sin estirar, para
+// prepararla (escucharla, ver la forma de onda, marcar el 1). Sugiere un tempo
+// y el primer golpe. id: cualquier número distinto de 0, para reconocerla.
+FFI_PLUGIN_EXPORT void loopin_song_open(const char* path, int32_t id);
+FFI_PLUGIN_EXPORT void loopin_song_close(void);
+// Picos (0..1) de la canción abierta entre start y end (muestras), en bins
+// trozos. Devuelve cuántos ha escrito (0 si no hay ninguna abierta).
+FFI_PLUGIN_EXPORT int32_t loopin_song_peaks(int64_t start, int64_t end, int32_t bins, float* out);
+// El ataque más claro de la canción abierta cerca de center (± radius).
+FFI_PLUGIN_EXPORT int64_t loopin_song_find_attack(int64_t center, int64_t radius);
+// Vista previa: suena sola (sin transporte) desde frame. Con el clic, suena
+// en la rejilla de la canción: el 1 en mark_frames y un tiempo cada
+// beat_frames muestras (los dos con decimales).
+FFI_PLUGIN_EXPORT void loopin_preview_play(int64_t frame);
+FFI_PLUGIN_EXPORT void loopin_preview_stop(void);
+FFI_PLUGIN_EXPORT void loopin_preview_set_click(int32_t enabled);
+FFI_PLUGIN_EXPORT void loopin_preview_set_grid(double mark_frames, double beat_frames,
+                                               int32_t beats_per_bar, int32_t accent_mask);
+// Preparar: decodifica y estira la canción (sin cambiar el tono) para que un
+// tiempo dure samples_per_beat muestras, con el 1 (mark_seconds en el archivo)
+// en un inicio de compás. Cuando acaba, suena con el transporte: entra en un 1
+// y, si el tempo del transporte deja de ser ese, se calla hasta que se prepare
+// otra vez. Pedir otra cancela la anterior.
+FFI_PLUGIN_EXPORT void loopin_backing_prepare(const char* path, double song_bpm,
+                                              double mark_seconds, int32_t samples_per_beat,
+                                              int32_t beats_per_bar, int32_t id);
+FFI_PLUGIN_EXPORT void loopin_backing_unload(void);
+// Encendida, suena mientras corre el transporte (entra siempre en un 1).
+FFI_PLUGIN_EXPORT void loopin_set_backing_enabled(int32_t enabled);
+FFI_PLUGIN_EXPORT void loopin_set_backing_volume(float volume);
 
 // Copia el estado actual en *out.
 FFI_PLUGIN_EXPORT void loopin_get_status(LoopinStatus* out);

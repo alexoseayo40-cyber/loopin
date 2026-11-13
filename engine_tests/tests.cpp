@@ -368,6 +368,8 @@ int main() {
   runLooperTests();
   std::printf("\n=== Batería ===\n");
   runDrumTests();
+  std::printf("\n=== Audio importado ===\n");
+  runSongTests();
   if (gFailures == 0) {
     std::printf("\nTodo OK\n");
     return 0;

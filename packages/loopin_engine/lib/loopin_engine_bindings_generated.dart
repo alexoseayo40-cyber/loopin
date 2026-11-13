@@ -413,6 +413,160 @@ class LoopinEngineBindings {
   late final _loopin_set_latency_compensation = _loopin_set_latency_compensationPtr
       .asFunction<void Function(int)>();
 
+  /// Audio importado. Abrir: decodifica la canción a la frecuencia del motor,
+  /// sin estirar, para prepararla (vista previa).
+  void loopin_song_open(ffi.Pointer<ffi.Char> path, int id) {
+    return _loopin_song_open(path, id);
+  }
+
+  late final _loopin_song_openPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Char>, ffi.Int32)>>(
+        'loopin_song_open',
+      );
+  late final _loopin_song_open = _loopin_song_openPtr
+      .asFunction<void Function(ffi.Pointer<ffi.Char>, int)>();
+
+  void loopin_song_close() {
+    return _loopin_song_close();
+  }
+
+  late final _loopin_song_closePtr = _lookup<ffi.NativeFunction<ffi.Void Function()>>(
+    'loopin_song_close',
+  );
+  late final _loopin_song_close = _loopin_song_closePtr.asFunction<void Function()>();
+
+  /// Picos (0..1) de la canción abierta entre start y end, en bins trozos.
+  int loopin_song_peaks(int start, int end, int bins, ffi.Pointer<ffi.Float> out) {
+    return _loopin_song_peaks(start, end, bins, out);
+  }
+
+  late final _loopin_song_peaksPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Int32 Function(ffi.Int64, ffi.Int64, ffi.Int32, ffi.Pointer<ffi.Float>)
+        >
+      >('loopin_song_peaks');
+  late final _loopin_song_peaks = _loopin_song_peaksPtr
+      .asFunction<int Function(int, int, int, ffi.Pointer<ffi.Float>)>();
+
+  /// El ataque más claro de la canción abierta cerca de center (± radius).
+  int loopin_song_find_attack(int center, int radius) {
+    return _loopin_song_find_attack(center, radius);
+  }
+
+  late final _loopin_song_find_attackPtr =
+      _lookup<ffi.NativeFunction<ffi.Int64 Function(ffi.Int64, ffi.Int64)>>(
+        'loopin_song_find_attack',
+      );
+  late final _loopin_song_find_attack = _loopin_song_find_attackPtr
+      .asFunction<int Function(int, int)>();
+
+  void loopin_preview_play(int frame) {
+    return _loopin_preview_play(frame);
+  }
+
+  late final _loopin_preview_playPtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int64)>>(
+    'loopin_preview_play',
+  );
+  late final _loopin_preview_play = _loopin_preview_playPtr.asFunction<void Function(int)>();
+
+  void loopin_preview_stop() {
+    return _loopin_preview_stop();
+  }
+
+  late final _loopin_preview_stopPtr = _lookup<ffi.NativeFunction<ffi.Void Function()>>(
+    'loopin_preview_stop',
+  );
+  late final _loopin_preview_stop = _loopin_preview_stopPtr.asFunction<void Function()>();
+
+  void loopin_preview_set_click(int enabled) {
+    return _loopin_preview_set_click(enabled);
+  }
+
+  late final _loopin_preview_set_clickPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>('loopin_preview_set_click');
+  late final _loopin_preview_set_click = _loopin_preview_set_clickPtr
+      .asFunction<void Function(int)>();
+
+  void loopin_preview_set_grid(
+    double mark_frames,
+    double beat_frames,
+    int beats_per_bar,
+    int accent_mask,
+  ) {
+    return _loopin_preview_set_grid(mark_frames, beat_frames, beats_per_bar, accent_mask);
+  }
+
+  late final _loopin_preview_set_gridPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Double, ffi.Double, ffi.Int32, ffi.Int32)>>(
+        'loopin_preview_set_grid',
+      );
+  late final _loopin_preview_set_grid = _loopin_preview_set_gridPtr
+      .asFunction<void Function(double, double, int, int)>();
+
+  /// Preparar: decodifica y estira la canción al tempo del transporte, con el
+  /// 1 en un inicio de compás.
+  void loopin_backing_prepare(
+    ffi.Pointer<ffi.Char> path,
+    double song_bpm,
+    double mark_seconds,
+    int samples_per_beat,
+    int beats_per_bar,
+    int id,
+  ) {
+    return _loopin_backing_prepare(
+      path,
+      song_bpm,
+      mark_seconds,
+      samples_per_beat,
+      beats_per_bar,
+      id,
+    );
+  }
+
+  late final _loopin_backing_preparePtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Void Function(
+            ffi.Pointer<ffi.Char>,
+            ffi.Double,
+            ffi.Double,
+            ffi.Int32,
+            ffi.Int32,
+            ffi.Int32,
+          )
+        >
+      >('loopin_backing_prepare');
+  late final _loopin_backing_prepare = _loopin_backing_preparePtr
+      .asFunction<void Function(ffi.Pointer<ffi.Char>, double, double, int, int, int)>();
+
+  void loopin_backing_unload() {
+    return _loopin_backing_unload();
+  }
+
+  late final _loopin_backing_unloadPtr = _lookup<ffi.NativeFunction<ffi.Void Function()>>(
+    'loopin_backing_unload',
+  );
+  late final _loopin_backing_unload = _loopin_backing_unloadPtr.asFunction<void Function()>();
+
+  void loopin_set_backing_enabled(int enabled) {
+    return _loopin_set_backing_enabled(enabled);
+  }
+
+  late final _loopin_set_backing_enabledPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>('loopin_set_backing_enabled');
+  late final _loopin_set_backing_enabled = _loopin_set_backing_enabledPtr
+      .asFunction<void Function(int)>();
+
+  void loopin_set_backing_volume(double volume) {
+    return _loopin_set_backing_volume(volume);
+  }
+
+  late final _loopin_set_backing_volumePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Float)>>('loopin_set_backing_volume');
+  late final _loopin_set_backing_volume = _loopin_set_backing_volumePtr
+      .asFunction<void Function(double)>();
+
   /// Copia el estado actual en *out.
   void loopin_get_status(ffi.Pointer<LoopinStatus> out) {
     return _loopin_get_status(out);
@@ -705,6 +859,88 @@ final class LoopinStatus extends ffi.Struct {
 
   @ffi.Float()
   external double drum_volume;
+
+  /// Audio importado: abrir una canción para prepararla
+  @ffi.Int32()
+  external int song_open_id;
+
+  /// LOOPIN_JOB_*
+  @ffi.Int32()
+  external int song_open_state;
+
+  /// 0..1000
+  @ffi.Int32()
+  external int song_open_progress;
+
+  /// LOOPIN_SONG_ERR_*
+  @ffi.Int32()
+  external int song_open_error;
+
+  /// duración (a sample_rate)
+  @ffi.Int64()
+  external int song_open_frames;
+
+  /// tempo sugerido (0 = ni idea)
+  @ffi.Double()
+  external double song_bpm_guess;
+
+  /// primer golpe claro (muestra; -1 = ninguno)
+  @ffi.Int64()
+  external int song_first_attack;
+
+  /// Audio importado: preparar la canción para que suene
+  @ffi.Int32()
+  external int song_prep_id;
+
+  @ffi.Int32()
+  external int song_prep_state;
+
+  @ffi.Int32()
+  external int song_prep_progress;
+
+  @ffi.Int32()
+  external int song_prep_error;
+
+  /// La canción que suena con el transporte
+  @ffi.Int32()
+  external int backing_enabled;
+
+  @ffi.Int32()
+  external int backing_playing;
+
+  @ffi.Int32()
+  external int backing_id;
+
+  @ffi.Int32()
+  external int backing_samples_per_beat;
+
+  @ffi.Int32()
+  external int backing_beats_per_bar;
+
+  @ffi.Int64()
+  external int backing_position;
+
+  @ffi.Int64()
+  external int backing_length;
+
+  @ffi.Float()
+  external double backing_volume;
+
+  /// Vista previa
+  @ffi.Int32()
+  external int preview_id;
+
+  @ffi.Int32()
+  external int preview_playing;
+
+  @ffi.Int32()
+  external int preview_click;
+
+  @ffi.Int64()
+  external int preview_position;
+
+  @ffi.Int64()
+  external int preview_length;
 }
 
 const int LOOPIN_TRACKS = 4;
@@ -748,6 +984,26 @@ const int LOOPIN_LOOP_STOPPED = 5;
 const int LOOPIN_MODE_SYNC = 0;
 
 const int LOOPIN_MODE_MANUAL = 1;
+
+const int LOOPIN_JOB_IDLE = 0;
+
+const int LOOPIN_JOB_RUNNING = 1;
+
+const int LOOPIN_JOB_DONE = 2;
+
+const int LOOPIN_JOB_FAILED = 3;
+
+const int LOOPIN_SONG_ERR_OPEN = 1;
+
+const int LOOPIN_SONG_ERR_TOO_LONG = 2;
+
+const int LOOPIN_SONG_ERR_MEMORY = 3;
+
+const int LOOPIN_SONG_ERR_EMPTY = 4;
+
+const int LOOPIN_SONG_ERR_TEMPO = 5;
+
+const int LOOPIN_SONG_MAX_SECONDS = 600;
 
 const int LOOPIN_API_UNKNOWN = 0;
 
