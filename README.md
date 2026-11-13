@@ -2,7 +2,7 @@
 
 Looper de guitarra libre para Android: varias pistas que cuadran al compás, metrónomo y backing tracks.
 
-> **Estado:** Etapa 3.5. Looper de 4 pistas con interfaz de pedal, metrónomo con 10 compases, modo libre, «empezar al tocar», controles externos y latencia compensada (medida sola, tocando al clic o a mano). Próximo: batería.
+> **Estado:** Etapa 4a. Looper de 4 pistas con interfaz de pedal, metrónomo con 10 compases, batería con 10 estilos, modo libre, «empezar al tocar», controles externos y latencia compensada (medida sola, tocando al clic o a mano). Próximo: audio importado.
 
 ## Cómo se usa
 
@@ -13,6 +13,8 @@ El botón grande hace de pedal (actúa al pulsar, no al soltar) sobre la pista e
 - **Doble toque:** parar / arrancar todo.
 
 Modos de grabación: **sincronizado** (1, 2, 4 u 8 compases), **manual** (se cierra al pulsar, al compás más cercano) y **libre** (sin metrónomo: el tempo sale del primer loop). La primera pista lleva 1 compás de cuenta, o arranca con la primera nota si está encendido «empezar al tocar».
+
+**Batería:** la fila de debajo de la pista. Sigue el tempo y el compás; el estilo «Básico» sale de los acentos del compás y vale para los 10, y hay rock, pop, blues shuffle, funk, balada y reggae (4/4), vals (3/4), balada 6/8 y blues lento (12/8). Entra siempre en un 1; con ella encendida la cuenta de entrada suena con baquetas y el clic se calla mientras toca. Los sonidos son de [Virtuosity Drums](https://github.com/sfzinstruments/virtuosity_drums) (CC0).
 
 Mide la latencia una vez por cada combinación de entrada y salida (Ajustes › Audio y latencia): se guarda y se aplica sola.
 
@@ -25,6 +27,7 @@ app/                        App Flutter (interfaz)
   lib/engine/               Estado y órdenes al motor, latencia por ruta, teclas externas
   lib/ui/                   Pantallas; ui/looper/ son las piezas de la del looper
   lib/l10n/strings.dart     Todos los textos (preparado para traducir)
+  assets/drums/             Sonidos de la batería (CC0; tool/make_drums.py los genera)
 packages/loopin_engine/     Plugin FFI: puente Dart ↔ motor C++
   src/                      Motor C++ (Oboe)
   src/third_party/oboe/     Oboe 1.11.0 (submódulo de git)
@@ -59,6 +62,8 @@ cmake --build build/engine_tests --config Release
 build\engine_tests\Release\loopin_engine_tests.exe
 ```
 
+`drum_demo app/assets/drums <carpeta>` deja en la carpeta un WAV por estilo de batería, para oírlos sin móvil.
+
 ## Cómo funciona el motor
 
 - Un stream full-duplex de Oboe: la entrada se lee dentro del callback de salida, así que las dos van a la par.
@@ -68,4 +73,5 @@ build\engine_tests\Release\loopin_engine_tests.exe
 - En cada callback se lee **toda** la entrada que haya llegado (no un bloque fijo, como hace `oboe::FullDuplexStream`), así no se acumula retraso. Entrada y salida se cuentan por separado y no necesitan bloques iguales.
 - El looper decide todo (inicio, fin, overdub) en índices de salida, que es lo que oye el músico. La muestra de entrada *j* se tocó mientras sonaba la salida *j − latencia*, y se escribe en esa posición del loop: la escritura va con retraso, a medida que llega la entrada (un anillo de 6 s guarda lo último).
 - Cada overdub va a una capa aparte para poder deshacerlo. Al acabar el siguiente overdub, la capa anterior se suma al loop base poco a poco en segundo plano; como lo que suena es la suma de todo, no se nota.
+- La batería es un secuenciador de muestras: al empezar cada tiempo apunta los golpes de ese tiempo con su desfase en muestras y los dispara al llegar. Como el tiempo dura un número entero de muestras y el tempo solo cambia al empezar uno, cada golpe cae siempre en la misma muestra respecto al compás.
 - La carga del callback (media y pico de cada segundo, en % del tiempo disponible) se ve en Audio y latencia › Detalles técnicos y en «Copiar resultados».

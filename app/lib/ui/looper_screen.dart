@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import '../engine/engine_controller.dart';
 import 'audio_settings_screen.dart';
 import 'looper/bottom_bar.dart';
+import 'looper/drum_row.dart';
 import 'looper/pedal_area.dart';
 import 'looper/tempo_display.dart';
 import 'looper/top_bar.dart';
@@ -107,14 +108,19 @@ class _TallLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     // En una tablet la columna no ocupa todo el ancho
     final width = math.min(box.maxWidth, 720.0);
-    final compact = box.maxHeight < 760;
-    final gap = compact ? 8.0 : 14.0;
-    // Lo que ocupa todo menos el pulsador (medido), para darle el resto
-    final fixed = (compact ? 500.0 : 630.0) + (mixer ? 3 * 52.0 : 0);
+    // Pantallas bajas: todo más apretado; en las muy bajas, más aún (y el
+    // pulsador puede bajar hasta 100)
+    final compact = box.maxHeight < 820;
+    final tight = box.maxHeight < 700;
+    final gap = tight ? 4.0 : (compact ? 8.0 : 14.0);
+    final rings = tight ? 48.0 : (compact ? 60.0 : 96.0);
+    // Lo que ocupa todo menos el pulsador (medido, con la fila de la batería),
+    // para darle el resto
+    final fixed = (tight ? 543.0 : (compact ? 568.0 : 694.0)) + (mixer ? 3 * 52.0 : 0);
     final pedal = (math.min(
       width * 0.62,
       box.maxHeight - fixed,
-    )).clamp(132.0, mixer ? 420.0 : 340.0);
+    )).clamp(tight ? 100.0 : 132.0, mixer ? 420.0 : 340.0);
     return Center(
       child: SizedBox(
         width: width,
@@ -133,9 +139,11 @@ class _TallLayout extends StatelessWidget {
                     TopBar(view: view),
                     TempoDisplay(view: view, compact: compact),
                     SizedBox(height: gap),
-                    TrackRings(view: view, maxSize: compact ? 60 : 96),
+                    TrackRings(view: view, maxSize: rings),
                     SizedBox(height: gap),
                     TrackControls(view: view, mixer: mixer),
+                    const SizedBox(height: 6),
+                    DrumRow(view: view, dense: compact),
                   ],
                 ),
                 Padding(
@@ -186,6 +194,8 @@ class _WideLayout extends StatelessWidget {
                   TrackRings(view: view, maxSize: compact ? 64 : 96),
                   SizedBox(height: gap),
                   TrackControls(view: view, mixer: mixer),
+                  const SizedBox(height: 6),
+                  DrumRow(view: view, dense: compact),
                 ],
               ),
             ),

@@ -23,6 +23,7 @@ import '../ui/theme.dart';
 import 'latency_routes.dart';
 import 'meter.dart';
 import 'pedal_keys.dart';
+import 'drums.dart';
 import 'prefs.dart';
 import 'status_change.dart';
 
@@ -104,6 +105,16 @@ class EngineController extends ChangeNotifier {
   RecordDuck recordDuck = RecordDuck.silent;
   double _appliedDuck = -1;
 
+  // Batería
+  bool drumsOn = false;
+  DrumStyle drumStyle = DrumStyle.basic;
+  double drumVolume = 0.7;
+
+  /// Sonidos del kit cargados en el motor (de 10; se cargan una vez, antes de
+  /// abrir el audio por primera vez).
+  int drumSoundsLoaded = 0;
+  bool _drumsLoaded = false;
+
   /// Volumen de cada pista (lo que marca el deslizador).
   final List<double> trackVolumes = List.filled(kTrackCount, 1.0);
 
@@ -162,6 +173,12 @@ class EngineController extends ChangeNotifier {
       }
     }
     await _prefsLoaded;
+    if (!_drumsLoaded) {
+      // Las muestras van antes de abrir el audio (el motor las pasa ahí a la
+      // frecuencia del móvil)
+      drumSoundsLoaded = await loadDrumKit(_engine);
+      _drumsLoaded = true;
+    }
     await refreshDevices();
     _wantRunning = true;
     _openStream();
@@ -212,6 +229,9 @@ class EngineController extends ChangeNotifier {
     _engine.setSyncBars(syncBars);
     _engine.setLoopVolume(loopVolume);
     _engine.setAutoAdvance(autoAdvance);
+    _applyDrumStyle();
+    _engine.setDrumVolume(drumVolume);
+    _engine.setDrumsEnabled(drumsOn);
     for (var i = 0; i < kTrackCount; i++) {
       _engine.setTrackVolume(i, trackVolumes[i]);
     }
@@ -318,6 +338,7 @@ class EngineController extends ChangeNotifier {
     if (tempoLocked) return;
     timeSignature = ts;
     _engine.setMeter(ts.beats, ts.accentMask);
+    _applyDrumStyle(); // en los de 8 el tiempo es la corchea
     _prefs.set(Prefs.meter, ts.label);
     notifyListeners();
   }
@@ -455,6 +476,58 @@ class EngineController extends ChangeNotifier {
     _prefs.setBool(Prefs.autoAdvance, on);
     notifyListeners();
   }
+
+  // ---------- Batería ----------
+
+  /// El estilo que suena con el compás de ahora (el básico si el elegido es
+  /// de otro compás).
+  DrumStyle get drumStyleNow => effectiveDrumStyle(drumStyle, timeSignature);
+
+  /// Se puede elegir este estilo: vale con el compás o el compás se puede
+  /// cambiar (no hay loops).
+  bool drumStyleAvailable(DrumStyle s) => drumStyleFits(s, timeSignature) || !tempoLocked;
+
+  /// La batería suena por el altavoz y el micro la graba.
+  bool get drumsBleed => drumsOn && speakerRoute;
+
+  /// Encenderla con todo parado también arranca (como ▶).
+  void setDrumsOn(bool on) {
+    drumsOn = on;
+    _engine.setDrumsEnabled(on);
+    _prefs.setBool(Prefs.drumsOn, on);
+    if (on && status.running && !status.playing) {
+      togglePlay();
+    } else {
+      notifyListeners();
+    }
+  }
+
+  void toggleDrums() => setDrumsOn(!drumsOn);
+
+  /// Elegir un estilo de otro compás cambia el compás (si se puede).
+  void setDrumStyle(DrumStyle s) {
+    if (!drumStyleAvailable(s)) return;
+    drumStyle = s;
+    final meter = drumStyleMeter(s);
+    if (meter != null && meter != timeSignature.label) {
+      setTimeSignature(kTimeSignatures.firstWhere((t) => t.label == meter));
+    } else {
+      _applyDrumStyle();
+    }
+    _prefs.set(Prefs.drumStyle, s.name);
+    notifyListeners();
+  }
+
+  void _applyDrumStyle() => _engine.setDrumStyle(drumStyle, beatIsEighth: timeSignature.eighths);
+
+  void setDrumVolume(double v) {
+    drumVolume = v.clamp(0.0, 1.5);
+    _engine.setDrumVolume(drumVolume);
+    notifyListeners();
+  }
+
+  /// Al soltar el deslizador (no en cada movimiento).
+  void saveDrumVolume() => _prefs.set(Prefs.drumVolume, drumVolume.toStringAsFixed(2));
 
   /// Para o arranca todo (lo mismo que el doble toque).
   void toggleTransport() => togglePlay();
@@ -744,6 +817,13 @@ class EngineController extends ChangeNotifier {
     final bars = int.tryParse(await _prefs.get(Prefs.syncBars) ?? '');
     if (bars != null && kSyncBarOptions.contains(bars)) syncBars = bars;
     startOnSound = await _prefs.getBool(Prefs.startOnSound) ?? false;
+
+    // Batería
+    drumsOn = await _prefs.getBool(Prefs.drumsOn) ?? false;
+    final style = await _prefs.get(Prefs.drumStyle);
+    drumStyle = DrumStyle.values.firstWhere((d) => d.name == style, orElse: () => drumStyle);
+    final dv = double.tryParse(await _prefs.get(Prefs.drumVolume) ?? '');
+    if (dv != null) drumVolume = dv.clamp(0.0, 1.5);
 
     // Apariencia
     final theme = await _prefs.get(Prefs.themeMode);

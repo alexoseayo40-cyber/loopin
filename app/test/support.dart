@@ -3,6 +3,9 @@
 import 'dart:math' as math;
 
 import 'package:flutter/services.dart';
+
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:loopin_engine/loopin_engine.dart';
 
@@ -56,6 +59,19 @@ class FakeEngine implements LoopinEngine {
   @override
   void setLoopMode(LoopMode mode) => calls.add('mode ${mode.name}');
   @override
+  void setDrumsEnabled(bool on) => calls.add('drums $on');
+  @override
+  void setDrumStyle(DrumStyle style, {required bool beatIsEighth}) =>
+      calls.add('drumStyle ${style.name}${beatIsEighth ? ' 8' : ''}');
+  @override
+  void setDrumVolume(double v) => calls.add('drumVolume $v');
+
+  /// Sonidos que ha recibido el motor (y cuántas muestras cada uno).
+  final Map<DrumSound, int> drumSamples = {};
+  @override
+  void setDrumSample(DrumSound sound, Float32List data, int sampleRate) =>
+      drumSamples[sound] = data.length;
+  @override
   void startTapCalibration() => calls.add('tapStart');
   @override
   void cancelTapCalibration() => calls.add('tapCancel');
@@ -75,6 +91,7 @@ EngineStatus fakeStatus(
   bool waiting = false,
   LatencyState tapState = LatencyState.idle,
   int tapClicks = 0,
+  bool drums = false,
 }) {
   final any = st != LoopState.empty;
   final rest = st == LoopState.stopped ? LoopState.stopped : LoopState.playing;
@@ -95,6 +112,8 @@ EngineStatus fakeStatus(
     inputPeak: 0.4,
     loopState: st,
     loopWaiting: waiting,
+    drumsEnabled: drums,
+    drumsPlaying: drums,
     tapState: tapState,
     tapClicks: tapClicks,
     tapHits: tapClicks > 4 ? tapClicks - 4 : 0,

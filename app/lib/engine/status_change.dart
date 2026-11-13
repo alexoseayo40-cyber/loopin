@@ -30,6 +30,10 @@ bool layoutChanged(EngineStatus a, EngineStatus b) {
       a.accentMask != b.accentMask ||
       a.clickMode != b.clickMode ||
       a.startOnSound != b.startOnSound ||
+      // Batería (entra en un 1: cambia lo que se ve)
+      a.drumsEnabled != b.drumsEnabled ||
+      a.drumStyle != b.drumStyle ||
+      a.drumsPlaying != b.drumsPlaying ||
       // Medidas de latencia
       a.latencyState != b.latencyState ||
       a.latencyFrames != b.latencyFrames ||

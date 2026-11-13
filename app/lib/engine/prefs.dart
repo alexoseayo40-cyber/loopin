@@ -25,6 +25,9 @@ class Prefs {
   static const syncBars = 'syncBars';
   static const startOnSound = 'startOnSound';
   static const recordDuck = 'recordDuck';
+  static const drumsOn = 'drumsOn';
+  static const drumStyle = 'drumStyle';
+  static const drumVolume = 'drumVolume';
 
   Future<String?> get(String key) async {
     try {

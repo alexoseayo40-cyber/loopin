@@ -56,6 +56,10 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # Sonidos de la batería (CC0, ver assets/drums/LICENSE.md)
+  assets:
+    - assets/drums/
+
   # Tipografías libres (SIL Open Font License, ver assets/fonts/OFL-*.txt)
   fonts:
     - family: BarlowCondensed

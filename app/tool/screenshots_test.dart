@@ -55,9 +55,11 @@ void main() {
     Brightness brightness = Brightness.dark,
     bool settings = false,
     bool audio = false,
+    DrumStyle? drums,
   }) async {
     setScreen(tester, size, pixelRatio: 2);
-    final engine = FakeEngine()..next = fakeStatus(state, playing: state != LoopState.stopped);
+    final engine = FakeEngine()
+      ..next = fakeStatus(state, playing: state != LoopState.stopped, drums: drums != null);
     final c = EngineController(engine: engine);
     final base = buildLoopinTheme(chassis, brightness);
     await tester.pumpWidget(
@@ -70,6 +72,10 @@ void main() {
       ),
     );
     await c.startAudio();
+    if (drums != null) {
+      c.setDrumStyle(drums);
+      c.setDrumsOn(true);
+    }
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pump(const Duration(milliseconds: 400)); // que acaben las animaciones
     await expectLater(find.byType(MaterialApp), matchesGoldenFile('screenshots/$name.png'));
@@ -126,6 +132,21 @@ void main() {
       state: LoopState.stopped,
       chassis: Chassis.blue,
       brightness: Brightness.light,
+    ),
+  );
+  testWidgets(
+    'batería',
+    (t) => shot(t, 'movil-bateria', phone, state: LoopState.playing, drums: DrumStyle.rock),
+  );
+  testWidgets(
+    'batería clara',
+    (t) => shot(
+      t,
+      'movil-bateria-claro',
+      phone,
+      state: LoopState.playing,
+      brightness: Brightness.light,
+      drums: DrumStyle.funk,
     ),
   );
   testWidgets(

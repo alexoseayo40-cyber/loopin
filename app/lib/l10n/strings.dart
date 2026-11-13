@@ -29,6 +29,7 @@ class Strings {
 
   String get appName => 'Loopin';
   String get cancel => 'Cancelar';
+  String get ok => 'Entendido';
   String get showHelp => 'Explicación';
   String get hideHelp => 'Ocultar la explicación';
   String get yes => 'sí';
@@ -215,6 +216,43 @@ class Strings {
   String muteTrack(int n) => 'Silenciar la pista $n';
   String clearTrack(int n) => 'Borrar la pista $n';
 
+  // ---------------------------------------------------------------- looper: batería
+
+  String get drums => 'BATERÍA';
+  String drumStyleName(DrumStyle st) => switch (st) {
+    DrumStyle.basic => 'Básico',
+    DrumStyle.rock => 'Rock',
+    DrumStyle.pop => 'Pop',
+    DrumStyle.shuffle => 'Blues shuffle',
+    DrumStyle.funk => 'Funk',
+    DrumStyle.ballad => 'Balada',
+    DrumStyle.reggae => 'Reggae',
+    DrumStyle.waltz => 'Vals',
+    DrumStyle.sixEight => 'Balada 6/8',
+    DrumStyle.slowBlues => 'Blues lento',
+  };
+  String drumStyleChip(DrumStyle st) => switch (st) {
+    DrumStyle.shuffle => 'SHUFFLE',
+    DrumStyle.sixEight => 'BALADA',
+    DrumStyle.slowBlues => 'BLUES',
+    _ => drumStyleName(st).toUpperCase(),
+  };
+
+  /// En el menú: «Rock · 4/4», «Básico · cualquier compás»
+  String drumStyleItem(DrumStyle st, String? meter) =>
+      '${drumStyleName(st)} · ${meter ?? 'cualquier compás'}';
+  String get drumStyleMenu => 'Estilo de la batería';
+  String get drumsTurnOn => 'Encender la batería';
+  String get drumsTurnOff => 'Apagar la batería';
+  String drumVolume(double v) => 'Volumen de la batería: ${(v * 100).round()} %';
+  String drumsSemantics(String style, bool on, bool playing) =>
+      'Batería, $style, ${!on ? 'apagada' : (playing ? 'sonando' : 'encendida, entra en el próximo 1')}';
+  String get drumsBleed => 'Con el altavoz, el micro graba la batería';
+  String get drumsBleedHelp =>
+      'Con el altavoz y el micrófono del móvil, la batería se cuela en lo que grabas (no se '
+      'calla al grabar: la necesitas para tocar a tempo). Si luego la apagas, seguirá en los '
+      'loops. Para que no pase, usa cascos o una interfaz.';
+
   // ---------------------------------------------------------------- looper: pulsador
 
   String get pedal => 'Botón principal';
@@ -295,7 +333,8 @@ class Strings {
       'grabas, lo que ya suena puede seguir normal, sonar más bajo o callarse; vuelve al '
       'acabar de grabar. El tempo lo sigues viendo en las luces y en el pulsador. Con '
       'cascos o una interfaz suena siempre normal. El clic en «siempre» también se graba: '
-      'mejor «solo la cuenta».';
+      'mejor «solo la cuenta». La batería no se calla (hace falta para tocar a tempo), así '
+      'que también se graba.';
   String recordDuckName(RecordDuck d) => switch (d) {
     RecordDuck.normal => 'Normal',
     RecordDuck.low => 'Más bajo',
@@ -469,7 +508,7 @@ class Strings {
 
   // ---------------------------------------------------------------- informe («Copiar resultados»)
 
-  String get reportTitle => 'Loopin · Etapa 3.5';
+  String get reportTitle => 'Loopin · Etapa 4a';
   ReportStrings get report => const ReportStrings();
   String loopStateName(LoopState st) => switch (st) {
     LoopState.empty => 'vacío',
@@ -511,6 +550,9 @@ class ReportStrings {
   String xrunsSinceOpen(int n) => 'Cortes desde que se abrió el audio: $n';
   String metronome(String meter, String click, String onSound) =>
       'Metrónomo: $meter · clic: $click · empezar al tocar: $onSound';
+  String drums(String style, bool on, bool playing, int volume, int loaded) =>
+      'Batería: $style · ${on ? (playing ? 'sonando' : 'encendida') : 'apagada'} · '
+      'volumen $volume % · sonidos cargados: $loaded de ${DrumSound.values.length}';
   String recordDuck(String setting, bool speaker) =>
       'Al grabar con el altavoz: $setting${speaker ? ' (ruta con altavoz: se aplica)' : ' (ahora no se aplica)'}';
   String looper(String state, String mode, int? baseBars, String autoAdvance) =>

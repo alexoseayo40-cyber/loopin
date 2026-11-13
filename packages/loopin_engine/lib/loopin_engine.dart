@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
@@ -35,11 +36,11 @@ class AudioDevice {
   const AudioDevice({required this.id, required this.type, this.name = '', this.address = ''});
 
   factory AudioDevice.fromMap(Map<Object?, Object?> m) => AudioDevice(
-        id: (m['id'] as num).toInt(),
-        type: (m['type'] as num).toInt(),
-        name: (m['name'] as String?) ?? '',
-        address: (m['address'] as String?) ?? '',
-      );
+    id: (m['id'] as num).toInt(),
+    type: (m['type'] as num).toInt(),
+    name: (m['name'] as String?) ?? '',
+    address: (m['address'] as String?) ?? '',
+  );
 
   final int id;
   final int type; // AudioDeviceInfo.TYPE_*
@@ -102,6 +103,13 @@ enum ClickMode {
 const int kTrackCount = 4;
 
 /// Estado de una pista.
+/// Sonidos del kit de batería (mismo orden que LOOPIN_DRUM_*).
+enum DrumSound { kick, snare, snareSoft, crossStick, hat, hatSoft, hatOpen, ride, crash, sticks }
+
+/// Estilos de batería (mismo orden que LOOPIN_STYLE_*). [basic] sale de los
+/// acentos del compás; los demás son de un compás concreto.
+enum DrumStyle { basic, rock, pop, shuffle, funk, ballad, reggae, waltz, sixEight, slowBlues }
+
 class TrackStatus {
   const TrackStatus({
     this.state = LoopState.empty,
@@ -196,6 +204,10 @@ class EngineStatus {
     this.cpuLoad = 0,
     this.cpuLoadPeak = 0,
     this.cpuLoadMax = 0,
+    this.drumsEnabled = false,
+    this.drumStyle = DrumStyle.basic,
+    this.drumsPlaying = false,
+    this.drumVolume = 0.7,
   });
 
   final bool running;
@@ -321,6 +333,13 @@ class EngineStatus {
   final double cpuLoadPeak;
   final double cpuLoadMax;
 
+  /// Batería: encendida, estilo pedido, si ya ha entrado y suena (entra en
+  /// un primer tiempo) y su volumen.
+  final bool drumsEnabled;
+  final DrumStyle drumStyle;
+  final bool drumsPlaying;
+  final double drumVolume;
+
   static const tapCountInClicks = 4;
   static const tapCountedClicks = 12;
   static const tapTotalClicks = tapCountInClicks + tapCountedClicks;
@@ -375,6 +394,7 @@ class LoopinEngine {
   void setClickEnabled(bool on) => _b.loopin_set_click_enabled(on ? 1 : 0);
   void setClickMode(ClickMode mode) => _b.loopin_set_click_mode(mode.index);
   void setClickVolume(double v) => _b.loopin_set_click_volume(v);
+
   /// Se aplica la próxima vez que se abra el audio ([start]).
   void setInputPreset(InputPreset preset) => _b.loopin_set_input_preset(preset.code);
 
@@ -420,6 +440,27 @@ class LoopinEngine {
 
   /// La primera pista espera a que suene la guitarra.
   void setStartOnSound(bool on) => _b.loopin_set_start_on_sound(on ? 1 : 0);
+
+  // Batería
+  /// Muestra de un sonido (mono). Se aplica la próxima vez que se abra el
+  /// audio ([start]): hay que darlas antes.
+  void setDrumSample(DrumSound sound, Float32List data, int sampleRate) {
+    if (data.isEmpty) return;
+    final p = calloc<Float>(data.length);
+    try {
+      p.asTypedList(data.length).setAll(0, data);
+      _b.loopin_set_drum_sample(sound.index, p, data.length, sampleRate);
+    } finally {
+      calloc.free(p);
+    }
+  }
+
+  void setDrumsEnabled(bool on) => _b.loopin_set_drums_enabled(on ? 1 : 0);
+
+  /// [beatIsEighth]: el tiempo es la corchea (compases de 8).
+  void setDrumStyle(DrumStyle style, {required bool beatIsEighth}) =>
+      _b.loopin_set_drum_style(style.index, beatIsEighth ? 1 : 0);
+  void setDrumVolume(double v) => _b.loopin_set_drum_volume(v);
 
   EngineStatus status() {
     _b.loopin_get_status(_status);
@@ -503,6 +544,10 @@ class LoopinEngine {
       cpuLoad: s.cpu_load_avg,
       cpuLoadPeak: s.cpu_load_peak,
       cpuLoadMax: s.cpu_load_max,
+      drumsEnabled: s.drums_enabled != 0,
+      drumStyle: DrumStyle.values[s.drum_style.clamp(0, DrumStyle.values.length - 1)],
+      drumsPlaying: s.drums_playing != 0,
+      drumVolume: s.drum_volume,
     );
   }
 }

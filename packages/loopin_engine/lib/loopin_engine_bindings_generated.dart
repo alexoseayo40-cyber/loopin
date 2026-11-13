@@ -12,12 +12,10 @@ import 'dart:ffi' as ffi;
 ///
 class LoopinEngineBindings {
   /// Holds the symbol lookup function.
-  final ffi.Pointer<T> Function<T extends ffi.NativeType>(String symbolName)
-  _lookup;
+  final ffi.Pointer<T> Function<T extends ffi.NativeType>(String symbolName) _lookup;
 
   /// The symbols are looked up in [dynamicLibrary].
-  LoopinEngineBindings(ffi.DynamicLibrary dynamicLibrary)
-    : _lookup = dynamicLibrary.lookup;
+  LoopinEngineBindings(ffi.DynamicLibrary dynamicLibrary) : _lookup = dynamicLibrary.lookup;
 
   /// The symbols are looked up with [lookup].
   LoopinEngineBindings.fromLookup(
@@ -30,17 +28,14 @@ class LoopinEngineBindings {
     return _loopin_start();
   }
 
-  late final _loopin_startPtr =
-      _lookup<ffi.NativeFunction<ffi.Int32 Function()>>('loopin_start');
+  late final _loopin_startPtr = _lookup<ffi.NativeFunction<ffi.Int32 Function()>>('loopin_start');
   late final _loopin_start = _loopin_startPtr.asFunction<int Function()>();
 
   void loopin_stop() {
     return _loopin_stop();
   }
 
-  late final _loopin_stopPtr = _lookup<ffi.NativeFunction<ffi.Void Function()>>(
-    'loopin_stop',
-  );
+  late final _loopin_stopPtr = _lookup<ffi.NativeFunction<ffi.Void Function()>>('loopin_stop');
   late final _loopin_stop = _loopin_stopPtr.asFunction<void Function()>();
 
   /// Transporte (metrónomo en marcha o parado)
@@ -48,29 +43,24 @@ class LoopinEngineBindings {
     return _loopin_play();
   }
 
-  late final _loopin_playPtr = _lookup<ffi.NativeFunction<ffi.Void Function()>>(
-    'loopin_play',
-  );
+  late final _loopin_playPtr = _lookup<ffi.NativeFunction<ffi.Void Function()>>('loopin_play');
   late final _loopin_play = _loopin_playPtr.asFunction<void Function()>();
 
   void loopin_pause() {
     return _loopin_pause();
   }
 
-  late final _loopin_pausePtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function()>>('loopin_pause');
+  late final _loopin_pausePtr = _lookup<ffi.NativeFunction<ffi.Void Function()>>('loopin_pause');
   late final _loopin_pause = _loopin_pausePtr.asFunction<void Function()>();
 
   void loopin_set_bpm(double bpm) {
     return _loopin_set_bpm(bpm);
   }
 
-  late final _loopin_set_bpmPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Double)>>(
-        'loopin_set_bpm',
-      );
-  late final _loopin_set_bpm = _loopin_set_bpmPtr
-      .asFunction<void Function(double)>();
+  late final _loopin_set_bpmPtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Double)>>(
+    'loopin_set_bpm',
+  );
+  late final _loopin_set_bpm = _loopin_set_bpmPtr.asFunction<void Function(double)>();
 
   /// beats_per_bar: 4 (4/4), 3 (3/4) o 6 (6/8, el tiempo es la corchea)
   void loopin_set_beats_per_bar(int beats_per_bar) {
@@ -78,9 +68,7 @@ class LoopinEngineBindings {
   }
 
   late final _loopin_set_beats_per_barPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
-        'loopin_set_beats_per_bar',
-      );
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>('loopin_set_beats_per_bar');
   late final _loopin_set_beats_per_bar = _loopin_set_beats_per_barPtr
       .asFunction<void Function(int)>();
 
@@ -90,9 +78,7 @@ class LoopinEngineBindings {
   }
 
   late final _loopin_set_click_enabledPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
-        'loopin_set_click_enabled',
-      );
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>('loopin_set_click_enabled');
   late final _loopin_set_click_enabled = _loopin_set_click_enabledPtr
       .asFunction<void Function(int)>();
 
@@ -101,9 +87,7 @@ class LoopinEngineBindings {
   }
 
   late final _loopin_set_click_volumePtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Float)>>(
-        'loopin_set_click_volume',
-      );
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Float)>>('loopin_set_click_volume');
   late final _loopin_set_click_volume = _loopin_set_click_volumePtr
       .asFunction<void Function(double)>();
 
@@ -115,9 +99,7 @@ class LoopinEngineBindings {
   }
 
   late final _loopin_set_input_presetPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
-        'loopin_set_input_preset',
-      );
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>('loopin_set_input_preset');
   late final _loopin_set_input_preset = _loopin_set_input_presetPtr
       .asFunction<void Function(int)>();
 
@@ -129,9 +111,7 @@ class LoopinEngineBindings {
   }
 
   late final _loopin_set_input_devicePtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
-        'loopin_set_input_device',
-      );
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>('loopin_set_input_device');
   late final _loopin_set_input_device = _loopin_set_input_devicePtr
       .asFunction<void Function(int)>();
 
@@ -141,12 +121,10 @@ class LoopinEngineBindings {
     return _loopin_set_input_gain(gain);
   }
 
-  late final _loopin_set_input_gainPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Float)>>(
-        'loopin_set_input_gain',
-      );
-  late final _loopin_set_input_gain = _loopin_set_input_gainPtr
-      .asFunction<void Function(double)>();
+  late final _loopin_set_input_gainPtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Float)>>(
+    'loopin_set_input_gain',
+  );
+  late final _loopin_set_input_gain = _loopin_set_input_gainPtr.asFunction<void Function(double)>();
 
   /// Monitor: escuchar la entrada en directo
   void loopin_set_monitor_enabled(int enabled) {
@@ -154,9 +132,7 @@ class LoopinEngineBindings {
   }
 
   late final _loopin_set_monitor_enabledPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
-        'loopin_set_monitor_enabled',
-      );
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>('loopin_set_monitor_enabled');
   late final _loopin_set_monitor_enabled = _loopin_set_monitor_enabledPtr
       .asFunction<void Function(int)>();
 
@@ -165,9 +141,7 @@ class LoopinEngineBindings {
   }
 
   late final _loopin_set_monitor_volumePtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Float)>>(
-        'loopin_set_monitor_volume',
-      );
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Float)>>('loopin_set_monitor_volume');
   late final _loopin_set_monitor_volume = _loopin_set_monitor_volumePtr
       .asFunction<void Function(double)>();
 
@@ -176,12 +150,10 @@ class LoopinEngineBindings {
     return _loopin_measure_latency();
   }
 
-  late final _loopin_measure_latencyPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function()>>(
-        'loopin_measure_latency',
-      );
-  late final _loopin_measure_latency = _loopin_measure_latencyPtr
-      .asFunction<void Function()>();
+  late final _loopin_measure_latencyPtr = _lookup<ffi.NativeFunction<ffi.Void Function()>>(
+    'loopin_measure_latency',
+  );
+  late final _loopin_measure_latency = _loopin_measure_latencyPtr.asFunction<void Function()>();
 
   /// Looper. El botón principal hace de pedal:
   /// toque: graba → reproduce → overdub → reproduce → overdub…
@@ -193,71 +165,65 @@ class LoopinEngineBindings {
     return _loopin_loop_press();
   }
 
-  late final _loopin_loop_pressPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function()>>('loopin_loop_press');
-  late final _loopin_loop_press = _loopin_loop_pressPtr
-      .asFunction<void Function()>();
+  late final _loopin_loop_pressPtr = _lookup<ffi.NativeFunction<ffi.Void Function()>>(
+    'loopin_loop_press',
+  );
+  late final _loopin_loop_press = _loopin_loop_pressPtr.asFunction<void Function()>();
 
   void loopin_loop_hold() {
     return _loopin_loop_hold();
   }
 
-  late final _loopin_loop_holdPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function()>>('loopin_loop_hold');
-  late final _loopin_loop_hold = _loopin_loop_holdPtr
-      .asFunction<void Function()>();
+  late final _loopin_loop_holdPtr = _lookup<ffi.NativeFunction<ffi.Void Function()>>(
+    'loopin_loop_hold',
+  );
+  late final _loopin_loop_hold = _loopin_loop_holdPtr.asFunction<void Function()>();
 
   void loopin_loop_double_tap() {
     return _loopin_loop_double_tap();
   }
 
-  late final _loopin_loop_double_tapPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function()>>(
-        'loopin_loop_double_tap',
-      );
-  late final _loopin_loop_double_tap = _loopin_loop_double_tapPtr
-      .asFunction<void Function()>();
+  late final _loopin_loop_double_tapPtr = _lookup<ffi.NativeFunction<ffi.Void Function()>>(
+    'loopin_loop_double_tap',
+  );
+  late final _loopin_loop_double_tap = _loopin_loop_double_tapPtr.asFunction<void Function()>();
 
   void loopin_loop_undo() {
     return _loopin_loop_undo();
   }
 
-  late final _loopin_loop_undoPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function()>>('loopin_loop_undo');
-  late final _loopin_loop_undo = _loopin_loop_undoPtr
-      .asFunction<void Function()>();
+  late final _loopin_loop_undoPtr = _lookup<ffi.NativeFunction<ffi.Void Function()>>(
+    'loopin_loop_undo',
+  );
+  late final _loopin_loop_undo = _loopin_loop_undoPtr.asFunction<void Function()>();
 
   void loopin_loop_clear() {
     return _loopin_loop_clear();
   }
 
-  late final _loopin_loop_clearPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function()>>('loopin_loop_clear');
-  late final _loopin_loop_clear = _loopin_loop_clearPtr
-      .asFunction<void Function()>();
+  late final _loopin_loop_clearPtr = _lookup<ffi.NativeFunction<ffi.Void Function()>>(
+    'loopin_loop_clear',
+  );
+  late final _loopin_loop_clear = _loopin_loop_clearPtr.asFunction<void Function()>();
 
   /// Pistas (track de 0 a LOOPIN_TRACKS - 1)
   void loopin_select_track(int track) {
     return _loopin_select_track(track);
   }
 
-  late final _loopin_select_trackPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
-        'loopin_select_track',
-      );
-  late final _loopin_select_track = _loopin_select_trackPtr
-      .asFunction<void Function(int)>();
+  late final _loopin_select_trackPtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+    'loopin_select_track',
+  );
+  late final _loopin_select_track = _loopin_select_trackPtr.asFunction<void Function(int)>();
 
   void loopin_select_next_track() {
     return _loopin_select_next_track();
   }
 
-  late final _loopin_select_next_trackPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function()>>(
-        'loopin_select_next_track',
-      );
-  late final _loopin_select_next_track = _loopin_select_next_trackPtr
-      .asFunction<void Function()>();
+  late final _loopin_select_next_trackPtr = _lookup<ffi.NativeFunction<ffi.Void Function()>>(
+    'loopin_select_next_track',
+  );
+  late final _loopin_select_next_track = _loopin_select_next_trackPtr.asFunction<void Function()>();
 
   void loopin_set_track_volume(int track, double volume) {
     return _loopin_set_track_volume(track, volume);
@@ -285,43 +251,35 @@ class LoopinEngineBindings {
     return _loopin_clear_track(track);
   }
 
-  late final _loopin_clear_trackPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
-        'loopin_clear_track',
-      );
-  late final _loopin_clear_track = _loopin_clear_trackPtr
-      .asFunction<void Function(int)>();
+  late final _loopin_clear_trackPtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+    'loopin_clear_track',
+  );
+  late final _loopin_clear_track = _loopin_clear_trackPtr.asFunction<void Function(int)>();
 
   void loopin_set_meter(int beats, int accentMask) {
     return _loopin_set_meter(beats, accentMask);
   }
 
   late final _loopin_set_meterPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32, ffi.Int32)>>(
-        'loopin_set_meter',
-      );
-  late final _loopin_set_meter = _loopin_set_meterPtr
-      .asFunction<void Function(int, int)>();
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32, ffi.Int32)>>('loopin_set_meter');
+  late final _loopin_set_meter = _loopin_set_meterPtr.asFunction<void Function(int, int)>();
 
   void loopin_set_click_mode(int mode) {
     return _loopin_set_click_mode(mode);
   }
 
-  late final _loopin_set_click_modePtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
-        'loopin_set_click_mode',
-      );
-  late final _loopin_set_click_mode = _loopin_set_click_modePtr
-      .asFunction<void Function(int)>();
+  late final _loopin_set_click_modePtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+    'loopin_set_click_mode',
+  );
+  late final _loopin_set_click_mode = _loopin_set_click_modePtr.asFunction<void Function(int)>();
 
   void loopin_start_tap_calibration() {
     return _loopin_start_tap_calibration();
   }
 
-  late final _loopin_start_tap_calibrationPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function()>>(
-        'loopin_start_tap_calibration',
-      );
+  late final _loopin_start_tap_calibrationPtr = _lookup<ffi.NativeFunction<ffi.Void Function()>>(
+    'loopin_start_tap_calibration',
+  );
   late final _loopin_start_tap_calibration = _loopin_start_tap_calibrationPtr
       .asFunction<void Function()>();
 
@@ -329,10 +287,9 @@ class LoopinEngineBindings {
     return _loopin_cancel_tap_calibration();
   }
 
-  late final _loopin_cancel_tap_calibrationPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function()>>(
-        'loopin_cancel_tap_calibration',
-      );
+  late final _loopin_cancel_tap_calibrationPtr = _lookup<ffi.NativeFunction<ffi.Void Function()>>(
+    'loopin_cancel_tap_calibration',
+  );
   late final _loopin_cancel_tap_calibration = _loopin_cancel_tap_calibrationPtr
       .asFunction<void Function()>();
 
@@ -340,32 +297,67 @@ class LoopinEngineBindings {
     return _loopin_nudge_latency(frames);
   }
 
-  late final _loopin_nudge_latencyPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
-        'loopin_nudge_latency',
-      );
-  late final _loopin_nudge_latency = _loopin_nudge_latencyPtr
-      .asFunction<void Function(int)>();
+  late final _loopin_nudge_latencyPtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+    'loopin_nudge_latency',
+  );
+  late final _loopin_nudge_latency = _loopin_nudge_latencyPtr.asFunction<void Function(int)>();
 
   void loopin_set_start_on_sound(int enabled) {
     return _loopin_set_start_on_sound(enabled);
   }
 
   late final _loopin_set_start_on_soundPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
-        'loopin_set_start_on_sound',
-      );
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>('loopin_set_start_on_sound');
   late final _loopin_set_start_on_sound = _loopin_set_start_on_soundPtr
       .asFunction<void Function(int)>();
+
+  void loopin_set_drum_sample(int sound, ffi.Pointer<ffi.Float> data, int frames, int sample_rate) {
+    return _loopin_set_drum_sample(sound, data, frames, sample_rate);
+  }
+
+  late final _loopin_set_drum_samplePtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Void Function(ffi.Int32, ffi.Pointer<ffi.Float>, ffi.Int32, ffi.Int32)
+        >
+      >('loopin_set_drum_sample');
+  late final _loopin_set_drum_sample = _loopin_set_drum_samplePtr
+      .asFunction<void Function(int, ffi.Pointer<ffi.Float>, int, int)>();
+
+  void loopin_set_drums_enabled(int enabled) {
+    return _loopin_set_drums_enabled(enabled);
+  }
+
+  late final _loopin_set_drums_enabledPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>('loopin_set_drums_enabled');
+  late final _loopin_set_drums_enabled = _loopin_set_drums_enabledPtr
+      .asFunction<void Function(int)>();
+
+  void loopin_set_drum_style(int style, int beat_is_eighth) {
+    return _loopin_set_drum_style(style, beat_is_eighth);
+  }
+
+  late final _loopin_set_drum_stylePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32, ffi.Int32)>>('loopin_set_drum_style');
+  late final _loopin_set_drum_style = _loopin_set_drum_stylePtr
+      .asFunction<void Function(int, int)>();
+
+  void loopin_set_drum_volume(double volume) {
+    return _loopin_set_drum_volume(volume);
+  }
+
+  late final _loopin_set_drum_volumePtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Float)>>(
+    'loopin_set_drum_volume',
+  );
+  late final _loopin_set_drum_volume = _loopin_set_drum_volumePtr
+      .asFunction<void Function(double)>();
 
   void loopin_set_auto_advance(int enabled) {
     return _loopin_set_auto_advance(enabled);
   }
 
   late final _loopin_set_auto_advancePtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
-        'loopin_set_auto_advance',
-      );
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>('loopin_set_auto_advance');
   late final _loopin_set_auto_advance = _loopin_set_auto_advancePtr
       .asFunction<void Function(int)>();
 
@@ -373,32 +365,27 @@ class LoopinEngineBindings {
     return _loopin_set_loop_mode(mode);
   }
 
-  late final _loopin_set_loop_modePtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
-        'loopin_set_loop_mode',
-      );
-  late final _loopin_set_loop_mode = _loopin_set_loop_modePtr
-      .asFunction<void Function(int)>();
+  late final _loopin_set_loop_modePtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+    'loopin_set_loop_mode',
+  );
+  late final _loopin_set_loop_mode = _loopin_set_loop_modePtr.asFunction<void Function(int)>();
 
   void loopin_set_sync_bars(int bars) {
     return _loopin_set_sync_bars(bars);
   }
 
-  late final _loopin_set_sync_barsPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
-        'loopin_set_sync_bars',
-      );
-  late final _loopin_set_sync_bars = _loopin_set_sync_barsPtr
-      .asFunction<void Function(int)>();
+  late final _loopin_set_sync_barsPtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+    'loopin_set_sync_bars',
+  );
+  late final _loopin_set_sync_bars = _loopin_set_sync_barsPtr.asFunction<void Function(int)>();
 
   void loopin_set_loop_volume(double volume) {
     return _loopin_set_loop_volume(volume);
   }
 
-  late final _loopin_set_loop_volumePtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Float)>>(
-        'loopin_set_loop_volume',
-      );
+  late final _loopin_set_loop_volumePtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Float)>>(
+    'loopin_set_loop_volume',
+  );
   late final _loopin_set_loop_volume = _loopin_set_loop_volumePtr
       .asFunction<void Function(double)>();
 
@@ -409,10 +396,9 @@ class LoopinEngineBindings {
     return _loopin_set_record_duck(gain);
   }
 
-  late final _loopin_set_record_duckPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Float)>>(
-        'loopin_set_record_duck',
-      );
+  late final _loopin_set_record_duckPtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Float)>>(
+    'loopin_set_record_duck',
+  );
   late final _loopin_set_record_duck = _loopin_set_record_duckPtr
       .asFunction<void Function(double)>();
 
@@ -423,11 +409,9 @@ class LoopinEngineBindings {
   }
 
   late final _loopin_set_latency_compensationPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
-        'loopin_set_latency_compensation',
-      );
-  late final _loopin_set_latency_compensation =
-      _loopin_set_latency_compensationPtr.asFunction<void Function(int)>();
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>('loopin_set_latency_compensation');
+  late final _loopin_set_latency_compensation = _loopin_set_latency_compensationPtr
+      .asFunction<void Function(int)>();
 
   /// Copia el estado actual en *out.
   void loopin_get_status(ffi.Pointer<LoopinStatus> out) {
@@ -706,6 +690,21 @@ final class LoopinStatus extends ffi.Struct {
   /// mayor pico desde que se abrió el audio
   @ffi.Float()
   external double cpu_load_max;
+
+  /// Batería
+  @ffi.Int32()
+  external int drums_enabled;
+
+  /// LOOPIN_STYLE_* pedido
+  @ffi.Int32()
+  external int drum_style;
+
+  /// 1 = ya ha entrado (en un primer tiempo) y suena
+  @ffi.Int32()
+  external int drums_playing;
+
+  @ffi.Float()
+  external double drum_volume;
 }
 
 const int LOOPIN_TRACKS = 4;
