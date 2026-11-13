@@ -117,22 +117,27 @@ class _LooperScreenState extends State<LooperScreen> {
                   // Con sitio de sobra (tablet) se ven los controles de las 4 pistas
                   final roomy = math.min(box.maxWidth, box.maxHeight) >= 560;
                   if (wide) return _WideLayout(view: view, box: box, mixer: roomy);
-                  // Tablet en vertical: la misma pantalla, más grande (letra y
-                  // piezas), como si midiera 600 de ancho
+                  // Tablet en vertical: la pantalla del móvil, más grande (letra
+                  // y piezas). Con los controles de una pista, como en el móvil:
+                  // con los de las 4 el pulsador se quedaría pequeño
                   final scale = tabletScale(box);
                   if (scale > 1) {
                     final virtual = BoxConstraints.tight(
                       Size(box.maxWidth / scale, box.maxHeight / scale),
                     );
-                    return FittedBox(
-                      fit: BoxFit.contain,
-                      alignment: Alignment.topCenter,
-                      child: SizedBox(
-                        width: virtual.maxWidth,
-                        height: virtual.maxHeight,
-                        child: MediaQuery(
-                          data: MediaQuery.of(context).copyWith(size: virtual.biggest),
-                          child: _TallLayout(view: view, box: virtual, mixer: true),
+                    return SizedBox(
+                      width: box.maxWidth,
+                      height: box.maxHeight,
+                      child: FittedBox(
+                        fit: BoxFit.contain,
+                        alignment: Alignment.topCenter,
+                        child: SizedBox(
+                          width: virtual.maxWidth,
+                          height: virtual.maxHeight,
+                          child: MediaQuery(
+                            data: MediaQuery.of(context).copyWith(size: virtual.biggest),
+                            child: _TallLayout(view: view, box: virtual, mixer: false),
+                          ),
                         ),
                       ),
                     );
@@ -151,11 +156,11 @@ class _LooperScreenState extends State<LooperScreen> {
 // ---------------------------------------------------------------------------
 // Disposición
 
-/// En una tablet en vertical, cuánto se agranda todo: lo que haga falta para
-/// que la columna mida 600 de ancho (sin pasar del alto). 1 = nada.
+/// En una tablet en vertical, cuánto se agranda todo: la pantalla del móvil
+/// (una columna de unos 640 × 1000) estirada hasta llenarla. 1 = nada.
 double tabletScale(BoxConstraints box) {
   if (box.maxWidth < 700 || box.maxHeight < box.maxWidth) return 1;
-  final s = math.min(box.maxWidth / 600, box.maxHeight / 900);
+  final s = math.min(box.maxWidth / 640, box.maxHeight / 1000);
   return s < 1.12 ? 1 : math.min(s, 1.8);
 }
 

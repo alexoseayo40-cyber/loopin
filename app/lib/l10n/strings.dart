@@ -1012,7 +1012,7 @@ class Strings {
 
   // ---------------------------------------------------------------- informe («Copiar resultados»)
 
-  String get reportTitle => 'Loopin · Etapa 5';
+  String get reportTitle => 'Loopin · Etapa 6';
   ReportStrings get report => const ReportStrings();
   String loopStateName(LoopState st) => switch (st) {
     LoopState.empty => 'vacío',

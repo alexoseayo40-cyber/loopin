@@ -4,12 +4,15 @@ package io.github.alexoseayo40_cyber.loopin
 
 import android.Manifest
 import android.app.Activity
+import android.content.ClipData
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
+import android.net.Uri
 import android.os.Bundle
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.view.KeyEvent
 import android.view.WindowManager
@@ -21,6 +24,8 @@ import java.io.File
 class MainActivity : FlutterActivity() {
     private var pendingMicResult: MethodChannel.Result? = null
     private var pendingPickResult: MethodChannel.Result? = null
+    private var pendingSaveResult: MethodChannel.Result? = null
+    private var pendingSaveFiles: List<File> = emptyList()
 
     // Controles externos: teclas que hacen de pedal (botones de volumen, botón
     // de los cascos, pedal Bluetooth…). Dart dice cuáles quiere.
@@ -59,6 +64,15 @@ class MainActivity : FlutterActivity() {
                     // Audio importado: carpeta de las canciones y elegir una
                     "songsDir" -> result.success(songsDir().absolutePath)
                     "pickAudio" -> pickAudio(result)
+                    // Sesiones (Etapa 6): su carpeta, y exportar y compartir
+                    "sessionsDir" -> result.success(
+                        File(filesDir, "sessions").also { it.mkdirs() }.absolutePath
+                    )
+                    "exportsDir" -> result.success(
+                        exportsDir(call.argument<Boolean>("clear") ?: false).absolutePath
+                    )
+                    "shareFiles" -> shareFiles(call.argument<List<String>>("paths") ?: emptyList(), result)
+                    "saveFiles" -> saveFiles(call.argument<List<String>>("paths") ?: emptyList(), result)
                     // Ajustes pequeños (texto) que se guardan entre sesiones
                     "prefsGet" -> result.success(
                         prefs().getString(call.argument<String>("key"), null)
@@ -108,6 +122,10 @@ class MainActivity : FlutterActivity() {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == SAVE_TREE) {
+            onSaveTree(if (resultCode == Activity.RESULT_OK) data?.data else null)
+            return
+        }
         if (requestCode != PICK_AUDIO) return
         val result = pendingPickResult ?: return
         pendingPickResult = null
@@ -158,6 +176,97 @@ class MainActivity : FlutterActivity() {
                 file.delete()  // lo que se haya copiado a medias
                 val code = if (e.message == "tooBig") "tooBig" else "copy"
                 runOnUiThread { result.error(code, e.message, null) }
+            }
+        }.start()
+    }
+
+    // Lo exportado va a la caché (Android la vacía si le falta sitio); se
+    // borra lo de la vez anterior al exportar otra vez
+    private fun exportsDir(clear: Boolean): File {
+        val dir = File(cacheDir, ExportProvider.EXPORTS)
+        if (clear) dir.listFiles()?.forEach { it.delete() }
+        dir.mkdirs()
+        return dir
+    }
+
+    private fun exportFiles(paths: List<String>): List<File> {
+        val dir = File(cacheDir, ExportProvider.EXPORTS).canonicalFile
+        return paths.map { File(it).canonicalFile }.filter { it.parentFile == dir && it.isFile }
+    }
+
+    // «Compartir» de Android con los WAV (WhatsApp, Drive, correo…)
+    private fun shareFiles(paths: List<String>, result: MethodChannel.Result) {
+        val files = exportFiles(paths)
+        if (files.isEmpty()) {
+            result.success(null)
+            return
+        }
+        val uris = ArrayList(files.map { ExportProvider.uriFor(packageName, it) })
+        val intent = if (uris.size == 1) {
+            Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, uris[0])
+        } else {
+            Intent(Intent.ACTION_SEND_MULTIPLE).putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+        }
+        intent.type = "audio/wav"
+        // El permiso de leerlos viaja con el ClipData
+        intent.clipData = ClipData.newRawUri(files[0].name, uris[0]).also { clip ->
+            for (u in uris.drop(1)) clip.addItem(ClipData.Item(u))
+        }
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        try {
+            startActivity(Intent.createChooser(intent, null))
+            result.success(null)
+        } catch (e: Exception) {
+            result.error("noShare", e.message, null)
+        }
+    }
+
+    // Copia los WAV en una carpeta que elige el usuario (Descargas, una
+    // tarjeta…). Devuelve cuántos (null si cancela).
+    private fun saveFiles(paths: List<String>, result: MethodChannel.Result) {
+        val files = exportFiles(paths)
+        if (files.isEmpty()) {
+            result.success(0)
+            return
+        }
+        pendingSaveResult?.success(null)
+        pendingSaveResult = result
+        pendingSaveFiles = files
+        try {
+            startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), SAVE_TREE)
+        } catch (e: Exception) {
+            pendingSaveResult = null
+            result.error("noPicker", e.message, null)
+        }
+    }
+
+    private fun onSaveTree(tree: Uri?) {
+        val result = pendingSaveResult ?: return
+        pendingSaveResult = null
+        val files = pendingSaveFiles
+        if (tree == null) {
+            result.success(null)
+            return
+        }
+        Thread {
+            try {
+                val parent = DocumentsContract.buildDocumentUriUsingTree(
+                    tree, DocumentsContract.getTreeDocumentId(tree)
+                )
+                var n = 0
+                for (f in files) {
+                    val doc = DocumentsContract.createDocument(
+                        contentResolver, parent, "audio/wav", f.name
+                    ) ?: continue
+                    contentResolver.openOutputStream(doc).use { out ->
+                        requireNotNull(out)
+                        f.inputStream().use { it.copyTo(out, 1 shl 16) }
+                    }
+                    n++
+                }
+                runOnUiThread { result.success(n) }
+            } catch (e: Exception) {
+                runOnUiThread { result.error("save", e.message, null) }
             }
         }.start()
     }
@@ -248,6 +357,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val MIC_REQUEST = 4201
         private const val PICK_AUDIO = 4202
+        private const val SAVE_TREE = 4203
 
         // Un archivo de audio más grande no cabe (10 min de WAV de 24 bits a
         // 96 kHz en estéreo son unos 350 MB)

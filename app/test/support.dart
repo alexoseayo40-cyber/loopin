@@ -142,6 +142,45 @@ class FakeEngine implements LoopinEngine {
   @override
   void cancelTapCalibration() => calls.add('tapCancel');
 
+  // Sesiones (Etapa 6): lo que hay en cada pista (null = vacía)
+  List<Float32List?> trackData = List.filled(4, null);
+
+  /// false: las pistas no están quietas (no se pueden leer).
+  bool readable = true;
+  int reads = 0;
+  @override
+  TrackRead? readTrack(int track, {bool samples = true}) {
+    if (!readable) return null;
+    final d = trackData[track];
+    if (d == null) return const TrackRead(length: 0, hash: 0);
+    if (samples) reads++;
+    return TrackRead(length: d.length, hash: Object.hashAll(d), samples: samples ? d : null);
+  }
+
+  /// Lo último que se ha cargado y lo que pasa al cargar.
+  SessionAudio? loaded;
+  int loadResult = 0;
+  void Function()? onLoad;
+  @override
+  int loadSession(SessionAudio a) {
+    calls.add('loadSession');
+    loaded = a;
+    onLoad?.call();
+    return loadResult;
+  }
+
+  ExportRequest? exported;
+  int exportResult = 0;
+  @override
+  int exportStart(ExportRequest req) {
+    calls.add('export');
+    exported = req;
+    return exportResult;
+  }
+
+  @override
+  void exportCancel() => calls.add('exportCancel');
+
   // El resto de órdenes no importan aquí
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
@@ -160,6 +199,11 @@ EngineStatus fakeStatus(
   bool drums = false,
   bool fx = false,
   int stopping = 0,
+  int revision = 0,
+  bool settled = true,
+  double bpm = 92,
+  JobState exportState = JobState.idle,
+  double exportProgress = 0,
 }) {
   final any = st != LoopState.empty;
   final rest = st == LoopState.stopped ? LoopState.stopped : LoopState.playing;
@@ -168,7 +212,7 @@ EngineStatus fakeStatus(
     running: true,
     sampleRate: 48000,
     playing: playing,
-    bpm: 92,
+    bpm: bpm,
     beatsPerBar: 4,
     beat: 2,
     samplesPerBeat: 31304,
@@ -189,6 +233,10 @@ EngineStatus fakeStatus(
     tapSpread: 240,
     stopping: stopping,
     quantize: true,
+    loopRevision: revision,
+    loopSettled: settled,
+    exportState: exportState,
+    exportProgress: exportProgress,
     loopBarFrames: _bar,
     loopLength: st.hasLoop ? 4 * _bar : 0,
     loopPosition: st.hasLoop ? 200000 : 0,

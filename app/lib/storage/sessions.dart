@@ -236,6 +236,7 @@ class SessionLibrary {
 
   final Future<String?> Function() _folder;
   String? _dir;
+  final Set<String> _issued = {};
 
   /// La carpeta (null si no hay: no se guarda nada).
   String? get dir => _dir;
@@ -255,9 +256,11 @@ class SessionLibrary {
         '${now.year}${two(now.month)}${two(now.day)}-${two(now.hour)}${two(now.minute)}${two(now.second)}';
     var id = base;
     var k = 2;
-    while (_dir != null && Directory(_path(id)!).existsSync()) {
+    // Ni una que ya exista ni otra dada en este mismo segundo (aún sin carpeta)
+    while (_issued.contains(id) || (_dir != null && Directory(_path(id)!).existsSync())) {
       id = '$base-${k++}';
     }
+    _issued.add(id);
     return id;
   }
 

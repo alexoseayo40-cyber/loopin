@@ -90,10 +90,16 @@ class _StageScreenState extends State<StageScreen> {
                   child: Row(
                     children: [
                       _ExitButton(onExit: () => Navigator.of(context).maybePop()),
-                      const Spacer(),
-                      Text(
-                        tr.stageTempo(tr.bpmNumber(s.bpm), c.timeSignature.label),
-                        style: palette.label(size: 20, color: LoopinPalette.display),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            tr.stageTempo(tr.bpmNumber(s.bpm), c.timeSignature.label),
+                            style: palette.label(size: 20, color: LoopinPalette.display),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -131,52 +137,63 @@ class _StageScreenState extends State<StageScreen> {
                               ),
                             ),
                             padding: const EdgeInsets.all(16),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text(
-                                    look.text ?? look.title,
-                                    key: const ValueKey('stage-title'),
-                                    textAlign: TextAlign.center,
-                                    style: palette.label(
-                                      size: look.text != null ? 160 : 64,
-                                      color: color == LoopinPalette.ledOff
-                                          ? LoopinPalette.count
-                                          : color,
-                                      spacing: 3,
-                                    ),
+                            // Si no cabe (apaisado, móvil pequeño), todo se
+                            // encoge a la vez
+                            child: LayoutBuilder(
+                              builder: (context, box) => FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: SizedBox(
+                                  width: box.maxWidth,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        child: Text(
+                                          look.text ?? look.title,
+                                          maxLines: 1,
+                                          key: const ValueKey('stage-title'),
+                                          textAlign: TextAlign.center,
+                                          style: palette.label(
+                                            size: look.text != null ? 160 : 64,
+                                            color: color == LoopinPalette.ledOff
+                                                ? LoopinPalette.count
+                                                : color,
+                                            spacing: 3,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        look.subtitle,
+                                        textAlign: TextAlign.center,
+                                        maxLines: 2,
+                                        style: const TextStyle(
+                                          fontSize: 22,
+                                          height: 1.25,
+                                          color: Colors.white70,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 24),
+                                      SizedBox(
+                                        width: 320,
+                                        child: BeatBar(
+                                          signature: c.timeSignature,
+                                          beats: s.beatsPerBar,
+                                          now: now,
+                                          height: 22,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 18),
+                                      Text(
+                                        tr.stageGestures,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(fontSize: 14, color: Colors.white54),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  look.subtitle,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 2,
-                                  style: const TextStyle(
-                                    fontSize: 22,
-                                    height: 1.25,
-                                    color: Colors.white70,
-                                  ),
-                                ),
-                                const SizedBox(height: 24),
-                                SizedBox(
-                                  width: 320,
-                                  child: BeatBar(
-                                    signature: c.timeSignature,
-                                    beats: s.beatsPerBar,
-                                    now: now,
-                                    height: 22,
-                                  ),
-                                ),
-                                const SizedBox(height: 18),
-                                Text(
-                                  tr.stageGestures,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(fontSize: 14, color: Colors.white54),
-                                ),
-                              ],
+                              ),
                             ),
                           ),
                         );

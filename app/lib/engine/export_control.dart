@@ -61,8 +61,9 @@ extension ExportControl on EngineController {
     try {
       dir = await EngineController._channel.invokeMethod<String>('exportsDir', {'clear': true});
     } on Object {
-      dir = exportDirForTests;
+      dir = null;
     }
+    dir ??= exportDirForTests;
     if (dir == null) return -4;
     final base = tr.exportFileBase(sessionName);
     final s = status;

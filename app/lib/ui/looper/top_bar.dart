@@ -73,7 +73,10 @@ class TopBar extends StatelessWidget {
           // Se encoge (con «…») si no cabe
           Flexible(
             flex: 6,
-            child: Align(alignment: Alignment.centerRight, child: LatencyChip(view: view)),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: LatencyChip(view: view),
+            ),
           ),
           IconButton(
             key: const ValueKey('open-tuner'),

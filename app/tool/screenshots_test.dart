@@ -16,7 +16,11 @@ import 'package:loopin/ui/looper_screen.dart';
 import 'package:loopin/engine/songs.dart';
 import 'package:loopin/ui/settings_screen.dart';
 import 'package:loopin/ui/song_screen.dart';
+import 'package:loopin/ui/export_sheet.dart';
+import 'package:loopin/ui/sessions_screen.dart';
 import 'package:loopin/ui/songs_screen.dart';
+import 'package:loopin/ui/stage_screen.dart';
+import 'package:loopin/ui/tutorial_screen.dart';
 import 'package:loopin/ui/theme.dart';
 import 'package:loopin/ui/tuner_screen.dart';
 import 'package:loopin_engine/loopin_engine.dart';
@@ -418,4 +422,55 @@ void main() {
     ),
   );
   testWidgets('audio', (t) => shot(t, 'audio-y-latencia', const Size(393, 1700), audio: true));
+  // Etapa 6
+  testWidgets(
+    'sesiones',
+    (t) => shot(
+      t,
+      'sesiones',
+      phone,
+      state: LoopState.playing,
+      home: (c) => SessionsScreen(controller: c),
+    ),
+  );
+  testWidgets(
+    'exportar',
+    (t) => shot(
+      t,
+      'exportar',
+      phone,
+      state: LoopState.playing,
+      home: (c) => Scaffold(body: ExportSheet(controller: c)),
+    ),
+  );
+  testWidgets(
+    'modo escenario',
+    (t) => shot(
+      t,
+      'escenario',
+      phone,
+      state: LoopState.recording,
+      home: (c) => StageScreen(controller: c),
+    ),
+  );
+  testWidgets(
+    'modo escenario apaisado',
+    (t) => shot(
+      t,
+      'escenario-apaisado',
+      const Size(873, 393),
+      state: LoopState.playing,
+      home: (c) => StageScreen(controller: c),
+    ),
+  );
+  testWidgets(
+    'guía',
+    (t) => shot(
+      t,
+      'guia',
+      phone,
+      state: LoopState.empty,
+      home: (c) => TutorialScreen(controller: c),
+    ),
+  );
 }
