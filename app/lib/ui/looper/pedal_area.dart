@@ -45,6 +45,16 @@ PedalLook pedalLook(
   final bar = s.loopBarFrames;
   // Tiempos que faltan mientras espera (cuenta de entrada o siguiente compás)
   final beatsLeft = s.samplesPerBeat > 0 ? (-s.loopRecorded / s.samplesPerBeat).ceil() : 0;
+  // Parando en el 1 o con fundido: el pulsador para ya
+  if (s.stopping != 0 && s.playing) {
+    return PedalLook(
+      color: LoopinPalette.stopped,
+      title: s.stopping == 1 ? tr.stoppingAtOne : tr.fadingOut,
+      subtitle: tr.tapToStopNow,
+      progress: selected.hasLoop ? selected.progress : 0,
+      icon: Icons.stop,
+    );
+  }
   switch (s.loopState) {
     case LoopState.empty:
       return PedalLook(

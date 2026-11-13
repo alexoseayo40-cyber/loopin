@@ -42,6 +42,20 @@ namespace loopin {
 // Invariante: el buffer de una pista vacía es todo ceros (salvo mientras se
 // está borrando en segundo plano). Así, si se deja de grabar antes de llenar la
 // pista, el resto es silencio sin tener que escribirlo.
+//
+// Reverse y media velocidad (Etapa 5): cada pista lee su buffer en una
+// posición q contada en medias muestras, que avanza dq por muestra de salida:
+// +2 normal, +1 a media velocidad (entre dos muestras se toma la media), −2 al
+// revés y −1 las dos cosas. Sin efectos, q sale de la rejilla (2 × posición en
+// el loop). Al poner un efecto se sigue desde donde suena; al quitarlos todos
+// la pista vuelve a su sitio en la rejilla. Cada cambio lleva un fundido
+// cruzado de 5 ms. Un overdub sobre una pista con efecto se escribe donde se
+// está oyendo (al revés o, a media velocidad, dos muestras de entrada por cada
+// una del buffer).
+//
+// Cambios al compás: con quantize, silenciar, reverse y media velocidad se
+// aplican en el siguiente primer tiempo (el silencio, justo en el 1; quitarlo,
+// 5 ms antes para que la rampa de volumen acabe en el 1).
 class Looper {
  public:
   static constexpr int32_t kTracks = 4;
@@ -93,7 +107,25 @@ class Looper {
   void setLatency(int32_t frames);
   void setVolume(float volume);  // volumen general de los loops
   void setTrackVolume(int32_t track, float volume);
-  void setTrackMuted(int32_t track, bool muted);
+  // Silenciar, reverse y media velocidad: al momento o, con quantize, en el
+  // siguiente 1. Reverse y media velocidad solo en pistas con loop que no se
+  // estén grabando (ni con un overdub en marcha).
+  void setTrackMuted(int32_t track, bool muted, int64_t now);
+  void setTrackReverse(int32_t track, bool on, int64_t now);
+  void setTrackHalf(int32_t track, bool on, int64_t now);
+  void setQuantize(bool on) { quantize_ = on; }
+  bool quantize() const { return quantize_; }
+  // Termina el overdub en marcha (para parar con fundido o en el 1)
+  void finishOverdub(int64_t now) {
+    if (state_ == State::kOverdubbing) endOverdub(now);
+  }
+  // El doble toque pide parar: EngineCore decide cómo (al momento, en el 1 o
+  // con fundido). Devuelve true una vez por petición.
+  bool takeStopRequest() {
+    const bool r = stopRequest_;
+    stopRequest_ = false;
+    return r;
+  }
   // Volumen de lo que ya suena mientras se graba (1 = normal, 0 = silencio).
   // Con el altavoz y el micrófono del móvil, lo que suena vuelve a entrar por
   // el micrófono y se grabaría otra vez encima.
@@ -104,21 +136,26 @@ class Looper {
   // Una muestra de salida. Llamar después de transport.tick() de esa muestra.
   inline float render(int64_t n) {
     if (n >= nextEvent_) fireEvent(n);
+    if (n >= nextTrackChange_) applyTrackChanges(n);
     if (state_ == State::kStopped || baseLen_ == 0) return 0.0f;
     float out = 0.0f;
     for (int32_t i = 0; i < kTracks; ++i) {
       Track& t = tracks_[static_cast<size_t>(i)];
       if (t.len == 0) continue;
-      const size_t p = static_cast<size_t>(t.playPos);
-      float s = t.data[p];
-      for (const Layer& l : layers_)
-        if (l.track == i && l.audible()) s += l.data[p];
-      if (++t.playPos >= t.len) t.playPos = 0;
-      // El volumen cambia poco a poco (unos 5 ms) para que no haga «clic»
+      float s = read(i, t.q);
+      if (t.xfade > 0) {
+        // Fundido cruzado con la lectura de antes del cambio
+        const float w = float(t.xfade) / float(xfadeLen_);
+        s = s * (1.0f - w) + read(i, t.oq) * w;
+        t.oq = step(t.oq, t.odq, t.len);
+        --t.xfade;
+      }
+      t.q = step(t.q, t.dq, t.len);
+      // El volumen cambia en una rampa de 5 ms para que no haga «clic»
       const float target = t.muted ? 0.0f : t.volume;
       if (t.gain != target) {
-        t.gain += (target - t.gain) * kGainSmoothing;
-        if (t.gain - target < 1e-4f && target - t.gain < 1e-4f) t.gain = target;
+        if (t.gain < target) t.gain = std::min(target, t.gain + gainStep_);
+        else t.gain = std::max(target, t.gain - gainStep_);
       }
       out += s * t.gain;
     }
@@ -173,10 +210,19 @@ class Looper {
 
   State trackState(int32_t track) const;
   int64_t trackLength(int32_t track) const { return tr(track).len; }
-  int64_t trackPosition(int32_t track) const { return tr(track).playPos; }
+  // Posición del buffer que suena (al revés, va hacia atrás)
+  int64_t trackPosition(int32_t track) const { return tr(track).q >> 1; }
   int32_t trackLayers(int32_t track) const { return tr(track).layers; }
   float trackVolume(int32_t track) const { return tr(track).volume; }
-  bool trackMuted(int32_t track) const { return tr(track).muted; }
+  // Lo pedido (puede estar esperando al siguiente 1: ver trackPending)
+  bool trackMuted(int32_t track) const { return tr(track).wantMuted; }
+  bool trackReverse(int32_t track) const { return tr(track).wantReverse; }
+  bool trackHalf(int32_t track) const { return tr(track).wantHalf; }
+  // Cambios que esperan al siguiente 1: bit 0 silencio, bit 1 reverse, bit 2
+  // media velocidad
+  int32_t trackPending(int32_t track) const;
+  // Paso de lectura aplicado (+2, +1, −2 o −1 medias muestras por muestra)
+  int32_t trackStep(int32_t track) const { return tr(track).dq; }
 
   // De la pista seleccionada (lo que mira el botón principal)
   int64_t length() const { return trackLength(selected_); }
@@ -184,8 +230,6 @@ class Looper {
   int32_t layerCount() const { return trackLayers(selected_); }
 
  private:
-  static constexpr float kGainSmoothing = 0.004f;
-
   // Módulo siempre positivo
   static int64_t wrap(int64_t a, int64_t m) {
     const int64_t r = a % m;
@@ -196,11 +240,22 @@ class Looper {
     std::vector<float> data;
     int64_t len = 0;      // 0 = vacía
     int64_t origin = 0;   // índice de salida de su posición 0
-    int64_t playPos = 0;
+    // Lectura: posición en medias muestras [0, 2·len) y paso por muestra
+    int64_t q = 0;
+    int32_t dq = 2;
+    // Fundido cruzado tras un cambio de lectura: la de antes sigue sonando
+    // xfade muestras más, cada vez más baja
+    int64_t oq = 0;
+    int32_t odq = 2;
+    int32_t xfade = 0;
     int32_t layers = 0;   // capas que suenan (la primera grabación cuenta 1)
     float volume = 1.0f;
-    bool muted = false;
+    bool muted = false;   // aplicado
     float gain = 1.0f;    // volumen aplicado (sigue a volume / muted)
+    bool reverse = false, half = false;  // aplicados
+    // Lo pedido y cuándo se aplica (kNever = ya aplicado)
+    bool wantMuted = false, wantReverse = false, wantHalf = false;
+    int64_t muteAt = kNever, fxAt = kNever;
     // Ventana de la primera grabación de la pista (índices de salida)
     bool winOpen = false;
     int64_t winStart = 0, winEnd = 0;
@@ -216,9 +271,12 @@ class Looper {
     int32_t track = 0;   // pista a la que pertenece
     int64_t extent = 0;  // posiciones [0, extent) que pueden no ser 0
     int64_t cursor = 0;  // avance del trabajo de fondo
-    // Ventana de grabación (índices de salida) y origen del loop en ella
+    // Ventana de grabación (índices de salida). La muestra de salida n se
+    // escribe donde la pista se oye en n: q = q0 + dq · (n − winStart)
     bool winOpen = false;
-    int64_t winStart = 0, winEnd = 0, winOrigin = 0;
+    int64_t winStart = 0, winEnd = 0;
+    int64_t q0 = 0;
+    int32_t dq = 2;
     bool audible() const {
       return st == St::kRecording || st == St::kLive || st == St::kMerging;
     }
@@ -251,6 +309,41 @@ class Looper {
   }
 
   void fireEvent(int64_t n);
+  // Lectura de la pista i en la posición q (medias muestras): pista + capas
+  inline float read(int32_t i, int64_t q) const {
+    const Track& t = tracks_[static_cast<size_t>(i)];
+    const size_t p = static_cast<size_t>(q >> 1);
+    float s = t.data[p];
+    for (const Layer& l : layers_)
+      if (l.track == i && l.audible()) s += l.data[p];
+    if ((q & 1) == 0) return s;
+    // Entre dos muestras (media velocidad): la media
+    const size_t p2 = p + 1 >= static_cast<size_t>(t.len) ? 0 : p + 1;
+    float s2 = t.data[p2];
+    for (const Layer& l : layers_)
+      if (l.track == i && l.audible()) s2 += l.data[p2];
+    return 0.5f * (s + s2);
+  }
+  static inline int64_t step(int64_t q, int32_t dq, int64_t len) {
+    q += dq;
+    if (q >= 2 * len) q -= 2 * len;
+    else if (q < 0) q += 2 * len;
+    return q;
+  }
+  static int32_t stepFor(bool reverse, bool half) {
+    return (half ? 1 : 2) * (reverse ? -1 : 1);
+  }
+  // Posición en la rejilla (sin efectos) de la pista en la muestra n
+  int64_t gridQ(const Track& t, int64_t n) const { return 2 * wrap(n - t.origin, t.len); }
+  // Dónde leerá la pista en la muestra n ≥ ahora (con el cambio pendiente)
+  void readAt(const Track& t, int64_t now, int64_t n, int64_t* q, int32_t* dq) const;
+  // Aplica en la muestra n lo que toque (silencio y efectos pendientes)
+  void applyTrackChanges(int64_t n);
+  void applyFx(Track& t, int64_t n);
+  void rescheduleTrackChanges();
+  // Muestra en la que se aplica un cambio pedido ahora (el siguiente 1)
+  int64_t changeAt(int64_t now) const;
+  void resetTrackFx(Track& t);
   void arm(int64_t now);
   void startFirstAt(int64_t start, int64_t now);
   bool closeFree(int64_t now);
@@ -287,6 +380,11 @@ class Looper {
   float duck_ = 1.0f;        // el aplicado (sigue a recordDuck_ poco a poco)
   int64_t duckLead_ = 1200;  // empieza a bajar 25 ms antes de grabar
   float duckStep_ = 1.0f / 600;  // por muestra: de arriba abajo en la mitad
+  float gainStep_ = 1.0f / 240;  // volumen de una pista: rampa de 5 ms
+  int32_t xfadeLen_ = 240;       // fundido cruzado al cambiar de efecto: 5 ms
+  bool quantize_ = false;        // silencio y efectos en el siguiente 1
+  int64_t nextTrackChange_ = kNever;
+  bool stopRequest_ = false;
   int32_t latency_ = 0;
   bool autoAdvance_ = false;
   bool startOnSound_ = false;

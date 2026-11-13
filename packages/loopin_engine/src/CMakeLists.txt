@@ -20,6 +20,7 @@ set(LOOPIN_CORE_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/SongReader.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/TapCalibrator.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/Transport.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/Tuner.cpp
 )
 
 # SoundTouch (LGPL) y dr_libs (dominio público), como código fuente

@@ -15,6 +15,7 @@
 #include "SpscQueue.h"
 #include "TapCalibrator.h"
 #include "Transport.h"
+#include "Tuner.h"
 
 namespace loopin {
 
@@ -67,6 +68,15 @@ struct Command {
     kSetPreviewClick,
     kSetPreviewMark,   // value = muestra del 1 (con decimales), arg = acentos
     kSetPreviewBeat,   // value = muestras por tiempo (con decimales), arg = tiempos
+    // Etapa 5: directo y práctica
+    kSetTrackReverse,  // arg = pista, value = 1/0
+    kSetTrackHalf,     // arg = pista, value = 1/0
+    kSetQuantize,      // silencio y efectos de pista en el siguiente 1
+    kStop,             // parar según el modo (value = 1: al momento, siempre)
+    kSetStopMode,      // StopMode
+    kSetFadeSeconds,
+    kSetTrainer,       // value = BPM que sube, arg = cada cuántos compases (0 = apagado)
+    kSetTrainerTop,    // value = hasta qué tempo
   };
   Type type = Type::kPlay;
   double value = 0.0;
@@ -78,6 +88,13 @@ enum class ClickMode : int32_t {
   kSilent = 0,   // nunca (metrónomo solo visual)
   kCountIn = 1,  // solo en la cuenta de entrada
   kAlways = 2,
+};
+
+// Cómo para el botón de parar (y el doble toque)
+enum class StopMode : int32_t {
+  kNow = 0,   // al momento
+  kBar = 1,   // en el siguiente 1
+  kFade = 2,  // bajando poco a poco (fadeSeconds) y luego para
 };
 
 // Lo que el núcleo publica para la interfaz (atómicos, sin bloqueos).
@@ -148,6 +165,16 @@ struct CoreStatus {
   int32_t previewClick;
   int64_t previewPosition;
   int64_t previewLength;
+  // Etapa 5
+  int32_t trackReverse[Looper::kTracks];
+  int32_t trackHalf[Looper::kTracks];
+  int32_t trackPending[Looper::kTracks];  // bits: 1 silencio, 2 reverse, 4 media velocidad
+  int32_t quantize;
+  int32_t stopMode;
+  int32_t stopping;         // 0 no, 1 esperando al 1, 2 bajando
+  int32_t trainerBars;      // 0 = entrenador apagado
+  double trainerStep;
+  double trainerTop;
 };
 
 class EngineCore {
@@ -171,6 +198,10 @@ class EngineCore {
   // Hilo de la interfaz: encola una orden. Devuelve false si la cola está llena.
   bool post(const Command& cmd) { return queue_.push(cmd); }
 
+  // Afinador: lo último que ha entrado (el hilo de la interfaz lo analiza)
+  TunerTap& tunerTap() { return tunerTap_; }
+  const TunerTap& tunerTap() const { return tunerTap_; }
+
   // Audio importado: los trabajos de fondo dejan aquí los clips (ver SongJobs)
   Backing& backing() { return backing_; }
   ClipBin& clipBin() { return bin_; }
@@ -193,6 +224,15 @@ class EngineCore {
  private:
   void apply(const Command& cmd);
   void publish();
+  // Parar: según el modo (al momento, en el 1, bajando) o al momento
+  void requestStop(int64_t now, bool force);
+  void stopNow(int64_t n);
+  bool stopping() const { return stopAt_ != Looper::kNever || fade_ == Fade::kFading; }
+  // Entrenador: al empezar el último tiempo de cada N compases, sube el tempo
+  // (se aplica en el 1 siguiente)
+  void trainerBeat();
+
+  enum class Fade { kNone, kFading, kTail };
 
   int32_t sampleRate_ = 48000;
   SpscQueue<Command, 128> queue_;
@@ -203,6 +243,7 @@ class EngineCore {
   Looper looper_;
   Drums drums_;
   Backing backing_;
+  TunerTap tunerTap_;
   ClipBin bin_;
   RetiredClips retired_;
   InputRing ring_;
@@ -219,6 +260,21 @@ class EngineCore {
   float monitorVolume_ = 1.0f;
   float inputGain_ = 1.0f;
   float peak_ = 0.0f;
+
+  // Parar
+  StopMode stopMode_ = StopMode::kNow;
+  int64_t stopAt_ = Looper::kNever;  // parar en esta muestra (el siguiente 1)
+  Fade fade_ = Fade::kNone;
+  float fadeSeconds_ = 4.0f;
+  float fadeGain_ = 1.0f;   // volumen de todo menos el monitor
+  float fadeMul_ = 1.0f;    // por muestra: −60 dB en fadeSeconds_
+  int32_t fadeHold_ = 0;    // tras el fundido, muestras en silencio
+  // Entrenador de tempo
+  int32_t trainerBars_ = 0;
+  double trainerStep_ = 5.0;
+  double trainerTop_ = 240.0;
+  double userBpm_ = 100.0;     // el tempo que pidió el usuario
+  bool trainerRaised_ = false; // el entrenador lo ha subido
 
   std::vector<float> inMono_;
   std::vector<float> outMono_;
@@ -284,6 +340,15 @@ class EngineCore {
   std::atomic<int32_t> aPreviewClick_{0};
   std::atomic<int64_t> aPreviewPosition_{0};
   std::atomic<int64_t> aPreviewLength_{0};
+  std::atomic<int32_t> aTrackReverse_[Looper::kTracks] = {};
+  std::atomic<int32_t> aTrackHalf_[Looper::kTracks] = {};
+  std::atomic<int32_t> aTrackPending_[Looper::kTracks] = {};
+  std::atomic<int32_t> aQuantize_{0};
+  std::atomic<int32_t> aStopMode_{0};
+  std::atomic<int32_t> aStopping_{0};
+  std::atomic<int32_t> aTrainerBars_{0};
+  std::atomic<double> aTrainerStep_{5.0};
+  std::atomic<double> aTrainerTop_{240.0};
 };
 
 }  // namespace loopin

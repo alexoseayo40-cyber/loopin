@@ -3,9 +3,11 @@
 #include "loopin_engine.h"
 
 #include <memory>
+#include <vector>
 
 #include "AudioEngine.h"
 #include "SongJobs.h"
+#include "Tuner.h"
 
 using loopin::AudioEngine;
 using loopin::Command;
@@ -145,6 +147,52 @@ void loopin_set_backing_enabled(int32_t enabled) {
 }
 void loopin_set_backing_volume(float volume) { post(Command::Type::kSetBackingVolume, volume); }
 
+void loopin_set_track_reverse(int32_t track, int32_t enabled) {
+  post(Command::Type::kSetTrackReverse, enabled ? 1.0 : 0.0, track);
+}
+void loopin_set_track_half(int32_t track, int32_t enabled) {
+  post(Command::Type::kSetTrackHalf, enabled ? 1.0 : 0.0, track);
+}
+void loopin_set_quantize(int32_t enabled) {
+  post(Command::Type::kSetQuantize, enabled ? 1.0 : 0.0);
+}
+void loopin_stop_playing(int32_t now) { post(Command::Type::kStop, now ? 1.0 : 0.0); }
+void loopin_set_stop_mode(int32_t mode) { post(Command::Type::kSetStopMode, mode); }
+void loopin_set_fade_seconds(float seconds) { post(Command::Type::kSetFadeSeconds, seconds); }
+void loopin_set_trainer(int32_t bars, double step, double top) {
+  post(Command::Type::kSetTrainerTop, top);
+  post(Command::Type::kSetTrainer, step, bars);
+}
+
+void loopin_tuner_enable(int32_t enabled) {
+  engine().core().tunerTap().setEnabled(enabled != 0);
+}
+
+int32_t loopin_tuner_read(LoopinTuner* out) {
+  if (out == nullptr) return 0;
+  // Solo se llama desde el hilo de la interfaz: el análisis y su memoria son suyos
+  static loopin::Tuner tuner;
+  static std::vector<float> buf;
+  static int64_t lastWritten = -1;
+  *out = LoopinTuner{};
+  out->level_db = -120.0f;
+  const int32_t rate = engine().core().sampleRate();
+  if (tuner.sampleRate() != rate) {
+    tuner.prepare(rate);
+    buf.assign(static_cast<size_t>(tuner.frames()), 0.0f);
+  }
+  const loopin::TunerTap& tap = engine().core().tunerTap();
+  const int64_t written = tap.written();
+  out->fresh = written != lastWritten ? 1 : 0;
+  lastWritten = written;
+  if (!tap.latest(buf.data(), tuner.frames())) return 0;
+  const loopin::TunerResult r = tuner.analyze(buf.data());
+  out->frequency = r.frequency;
+  out->clarity = r.clarity;
+  out->level_db = r.levelDb;
+  return 1;
+}
+
 void loopin_get_status(LoopinStatus* out) {
   if (out == nullptr) return;
   // Los clips que ya no suenan se borran aquí, en el hilo de la interfaz
@@ -276,6 +324,17 @@ void loopin_get_status(LoopinStatus* out) {
   out->preview_click = c.previewClick;
   out->preview_position = c.previewPosition;
   out->preview_length = c.previewLength;
+  for (int i = 0; i < LOOPIN_TRACKS; ++i) {
+    out->track_reverse[i] = c.trackReverse[i];
+    out->track_half[i] = c.trackHalf[i];
+    out->track_pending[i] = c.trackPending[i];
+  }
+  out->quantize = c.quantize;
+  out->stop_mode = c.stopMode;
+  out->stopping = c.stopping;
+  out->trainer_bars = c.trainerBars;
+  out->trainer_step = c.trainerStep;
+  out->trainer_top = c.trainerTop;
 }
 
 }  // extern "C"

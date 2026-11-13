@@ -177,7 +177,9 @@ void Looper::finishRecording(int64_t now) {
               t.data.begin() + static_cast<std::ptrdiff_t>(written), 0.0f);
   }
   t.origin = recStart_;
-  t.playPos = wrap(now - t.origin, t.len);
+  resetTrackFx(t);
+  t.q = gridQ(t, now);
+  rescheduleTrackChanges();
   t.layers = 1;
   t.gain = t.muted ? 0.0f : t.volume;
   nextEvent_ = kNever;
@@ -255,7 +257,8 @@ void Looper::startOverdub(int64_t now) {
   const int64_t inBar = wrap(now - origin_, barFrames_);
   fresh->winStart = inBar == 0 ? now : now + (barFrames_ - inBar);
   fresh->winEnd = kNever;
-  fresh->winOrigin = t.origin;
+  // Se escribe donde se oye la pista (con reverse o media velocidad, también)
+  readAt(t, now, fresh->winStart, &fresh->q0, &fresh->dq);
   state_ = State::kOverdubbing;
 }
 

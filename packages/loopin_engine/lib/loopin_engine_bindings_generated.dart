@@ -577,6 +577,99 @@ class LoopinEngineBindings {
   late final _loopin_set_backing_volume = _loopin_set_backing_volumePtr
       .asFunction<void Function(double)>();
 
+  /// Reverse y media velocidad de una pista con loop (Etapa 5).
+  void loopin_set_track_reverse(int track, int enabled) {
+    return _loopin_set_track_reverse(track, enabled);
+  }
+
+  late final _loopin_set_track_reversePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32, ffi.Int32)>>(
+        'loopin_set_track_reverse',
+      );
+  late final _loopin_set_track_reverse = _loopin_set_track_reversePtr
+      .asFunction<void Function(int, int)>();
+
+  void loopin_set_track_half(int track, int enabled) {
+    return _loopin_set_track_half(track, enabled);
+  }
+
+  late final _loopin_set_track_halfPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32, ffi.Int32)>>(
+        'loopin_set_track_half',
+      );
+  late final _loopin_set_track_half = _loopin_set_track_halfPtr
+      .asFunction<void Function(int, int)>();
+
+  void loopin_set_quantize(int enabled) {
+    return _loopin_set_quantize(enabled);
+  }
+
+  late final _loopin_set_quantizePtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+    'loopin_set_quantize',
+  );
+  late final _loopin_set_quantize = _loopin_set_quantizePtr.asFunction<void Function(int)>();
+
+  /// Parar como diga el modo (LOOPIN_STOP_*); now = 1, al momento.
+  void loopin_stop_playing(int now) {
+    return _loopin_stop_playing(now);
+  }
+
+  late final _loopin_stop_playingPtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+    'loopin_stop_playing',
+  );
+  late final _loopin_stop_playing = _loopin_stop_playingPtr.asFunction<void Function(int)>();
+
+  void loopin_set_stop_mode(int mode) {
+    return _loopin_set_stop_mode(mode);
+  }
+
+  late final _loopin_set_stop_modePtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+    'loopin_set_stop_mode',
+  );
+  late final _loopin_set_stop_mode = _loopin_set_stop_modePtr.asFunction<void Function(int)>();
+
+  void loopin_set_fade_seconds(double seconds) {
+    return _loopin_set_fade_seconds(seconds);
+  }
+
+  late final _loopin_set_fade_secondsPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Float)>>('loopin_set_fade_seconds');
+  late final _loopin_set_fade_seconds = _loopin_set_fade_secondsPtr
+      .asFunction<void Function(double)>();
+
+  /// Entrenador de tempo: sube step BPM cada bars compases, hasta top (bars = 0: apagado).
+  void loopin_set_trainer(int bars, double step, double top) {
+    return _loopin_set_trainer(bars, step, top);
+  }
+
+  late final _loopin_set_trainerPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32, ffi.Double, ffi.Double)>>(
+        'loopin_set_trainer',
+      );
+  late final _loopin_set_trainer = _loopin_set_trainerPtr
+      .asFunction<void Function(int, double, double)>();
+
+  /// Afinador
+  void loopin_tuner_enable(int enabled) {
+    return _loopin_tuner_enable(enabled);
+  }
+
+  late final _loopin_tuner_enablePtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Int32)>>(
+    'loopin_tuner_enable',
+  );
+  late final _loopin_tuner_enable = _loopin_tuner_enablePtr.asFunction<void Function(int)>();
+
+  int loopin_tuner_read(ffi.Pointer<LoopinTuner> out) {
+    return _loopin_tuner_read(out);
+  }
+
+  late final _loopin_tuner_readPtr =
+      _lookup<ffi.NativeFunction<ffi.Int32 Function(ffi.Pointer<LoopinTuner>)>>(
+        'loopin_tuner_read',
+      );
+  late final _loopin_tuner_read = _loopin_tuner_readPtr
+      .asFunction<int Function(ffi.Pointer<LoopinTuner>)>();
+
   /// Copia el estado actual en *out.
   void loopin_get_status(ffi.Pointer<LoopinStatus> out) {
     return _loopin_get_status(out);
@@ -951,6 +1044,55 @@ final class LoopinStatus extends ffi.Struct {
 
   @ffi.Int64()
   external int preview_length;
+
+  /// Etapa 5: reverse y media velocidad (lo pedido; puede esperar al 1)
+  @ffi.Array.multi([4])
+  external ffi.Array<ffi.Int32> track_reverse;
+
+  @ffi.Array.multi([4])
+  external ffi.Array<ffi.Int32> track_half;
+
+  /// LOOPIN_PENDING_* (bits)
+  @ffi.Array.multi([4])
+  external ffi.Array<ffi.Int32> track_pending;
+
+  @ffi.Int32()
+  external int quantize;
+
+  /// LOOPIN_STOP_*
+  @ffi.Int32()
+  external int stop_mode;
+
+  /// 0 no, 1 esperando al 1, 2 bajando (fundido)
+  @ffi.Int32()
+  external int stopping;
+
+  /// 0 = entrenador apagado
+  @ffi.Int32()
+  external int trainer_bars;
+
+  @ffi.Double()
+  external double trainer_step;
+
+  @ffi.Double()
+  external double trainer_top;
+}
+
+final class LoopinTuner extends ffi.Struct {
+  /// Hz (0 = no hay una nota clara)
+  @ffi.Float()
+  external double frequency;
+
+  @ffi.Float()
+  external double clarity;
+
+  /// nivel de la entrada (dBFS)
+  @ffi.Float()
+  external double level_db;
+
+  /// 1 si ha llegado audio desde la última lectura
+  @ffi.Int32()
+  external int fresh;
 }
 
 const int LOOPIN_TRACKS = 4;
@@ -1014,6 +1156,18 @@ const int LOOPIN_SONG_ERR_EMPTY = 4;
 const int LOOPIN_SONG_ERR_TEMPO = 5;
 
 const int LOOPIN_SONG_MAX_SECONDS = 600;
+
+const int LOOPIN_STOP_NOW = 0;
+
+const int LOOPIN_STOP_BAR = 1;
+
+const int LOOPIN_STOP_FADE = 2;
+
+const int LOOPIN_PENDING_MUTE = 1;
+
+const int LOOPIN_PENDING_REVERSE = 2;
+
+const int LOOPIN_PENDING_HALF = 4;
 
 const int LOOPIN_API_UNKNOWN = 0;
 

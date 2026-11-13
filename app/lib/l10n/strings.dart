@@ -224,6 +224,99 @@ class Strings {
   String muteTrack(int n) => 'Silenciar la pista $n';
   String clearTrack(int n) => 'Borrar la pista $n';
 
+  // Etapa 5: reverse y media velocidad
+  String get reverseShort => 'REV';
+  String get halfShort => '½';
+  String reverseTrack(int n, bool on) =>
+      on ? 'Pista $n al revés: quitar' : 'Poner la pista $n al revés';
+  String halfTrack(int n, bool on) =>
+      on ? 'Pista $n a media velocidad: quitar' : 'Poner la pista $n a media velocidad';
+
+  /// Para lectores de pantalla, cuando el cambio espera al siguiente 1
+  String get atNextOne => 'en el siguiente 1';
+
+  /// Debajo del anillo, si la pista va al revés o a media velocidad: «2 C · REV ½»
+  String trackRingFx(String label, {required bool reverse, required bool half}) =>
+      '$label${reverse || half ? ' ·' : ''}${reverse ? ' REV' : ''}${half ? ' ½' : ''}';
+
+  // ---------------------------------------------------------------- entrenador de tempo
+
+  String get trainer => 'Entrenador de tempo';
+  String trainerTooltip(bool on) => 'Entrenador de tempo: ${on ? 'encendido' : 'apagado'}';
+  String get trainerLine => 'Sube el tempo poco a poco mientras tocas';
+  String get trainerHelp =>
+      'Para practicar algo cada vez más rápido. Al darle a ▶ empieza en tu tempo y, cada '
+      'pocos compases, sube lo que digas, justo en el 1, hasta el tempo de arriba; ahí se '
+      'queda. Al parar vuelve a tu tempo. Funciona sin loops (con un loop el tempo es el '
+      'suyo). La batería lo sigue; una canción se calla un momento en cada subida, '
+      'mientras se vuelve a preparar.';
+  String get trainerStep => 'Sube';
+  String get trainerEvery => 'Cada';
+  String get trainerTop => 'Hasta';
+  String trainerBpm(num v) => '${v.round()} BPM';
+  String trainerBarsShort(int n) => '$n C';
+  String trainerSummary(int from, int to, int step, int bars, int steps) => steps <= 0
+      ? 'Ya estás en $to BPM o más: sube el tempo de arriba'
+      : 'De $from a $to BPM: +$step cada ${this.bars(bars)} '
+            '(${steps == 1 ? '1 subida' : '$steps subidas'})';
+
+  /// En la pantalla de tempo, en lugar del TAP: «ENTRENADOR +5 / 4 C · HASTA 132»
+  String trainerPill(int step, int bars, int top) => 'ENTRENADOR +$step / $bars C · HASTA $top';
+  String get trainerNeedsNoLoops => 'Solo sin loops: con un loop el tempo es el suyo';
+  String get trainerDecrease => 'Menos';
+  String get trainerIncrease => 'Más';
+
+  // ---------------------------------------------------------------- afinador
+
+  String get tuner => 'Afinador';
+  String get tunerHelp =>
+      'Toca una cuerda al aire, sola y dejándola sonar. Arriba sale la nota que oye y la '
+      'aguja dice cuánto le falta: a la izquierda, baja (aprieta la clavija); a la '
+      'derecha, alta (afloja). En el centro, verde, está afinada. Usa la entrada que '
+      'tengas: el micrófono del móvil o la interfaz. Con el micrófono, mejor cerca de la '
+      'guitarra y en silencio. Mientras está abierto, lo demás sigue sonando.';
+  // Con «#» y no «♯»: las tipografías de la app no tienen ese signo
+  static const _noteNames = [
+    'DO',
+    'DO#',
+    'RE',
+    'RE#',
+    'MI',
+    'FA',
+    'FA#',
+    'SOL',
+    'SOL#',
+    'LA',
+    'LA#',
+    'SI',
+  ];
+  static const _noteLetters = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+  /// Nombre de la nota (0 = Do … 11 = Si)
+  String noteName(int pitchClass) => _noteNames[pitchClass % 12];
+
+  /// En letras, con la octava: «E2»
+  String noteLetter(int pitchClass, int octave) => '${_noteLetters[pitchClass % 12]}$octave';
+  String get tunerListening => 'Toca una cuerda al aire';
+  String get tunerNoAudio => 'El audio está apagado';
+  String get tunerInTune => 'AFINADA';
+  String get tunerFlat => 'BAJA · aprieta';
+  String get tunerSharp => 'ALTA · afloja';
+  String tunerCents(double c) => '${c >= 0 ? '+' : '−'}${c.abs().round()} cents';
+  String tunerHz(double f) => '${f.toStringAsFixed(1).replaceAll('.', ',')} Hz';
+  String get tunerStandard => 'Afinación estándar';
+  String tunerSemantics(String note, double cents) =>
+      'Nota $note, ${cents.abs() <= 3 ? 'afinada' : (cents < 0 ? 'baja' : 'alta')}, '
+      '${tunerCents(cents)}';
+  String get tunerA4 => 'La de referencia';
+  String tunerA4Value(double hz) => 'La = ${hz.round()} Hz';
+  String get tunerA4Help =>
+      'La frecuencia del La de la 5.ª cuerda, una octava más arriba. Lo normal es 440 Hz; '
+      'cámbialo solo para tocar con algo afinado de otra forma (un piano, una grabación).';
+  String get tunerSpeaker => 'Lo que suena por el altavoz también llega al afinador';
+  String get tunerStopAll => 'Parar';
+  String get tunerOpen => 'Afinador';
+
   // ---------------------------------------------------------------- looper: batería
 
   String get drums => 'BATERÍA';
@@ -440,6 +533,11 @@ class Strings {
   String get stopped => 'PARADO';
   String get tapToStart => 'Toca para arrancar';
 
+  // Parar en el 1 o con fundido
+  String get stoppingAtOne => 'PARA EN EL 1';
+  String get fadingOut => 'BAJANDO…';
+  String get tapToStopNow => 'Toca para parar ya';
+
   String get audioOn => 'ENCENDER AUDIO';
 
   // ---------------------------------------------------------------- looper: abajo
@@ -495,6 +593,28 @@ class Strings {
       'Al cerrar una pista se elige sola la siguiente vacía, así cada toque graba una '
       'pista nueva sin mirar la pantalla. Con las 4 llenas, el toque graba encima de la '
       'última. Apagado, todo va a la misma pista, como en un pedal clásico.';
+
+  String get stopModeTitle => 'Al parar';
+  String get stopModeLine => 'El botón de parar y el doble toque';
+  String get stopModeHelp =>
+      'Al momento: se corta todo en cuanto pulsas. En el 1: sigue sonando hasta el final '
+      'del compás y para justo en el siguiente 1, para acabar a tiempo. Fundido: todo baja '
+      'poco a poco durante 4 segundos y luego para. Mientras espera o baja, pulsar otra vez '
+      '(o tocar el pulsador) para ya. Si estás grabando una pista nueva, para siempre al '
+      'momento (como antes); un overdub se cierra al pedir parar.';
+  String stopModeName(StopMode m) => switch (m) {
+    StopMode.now => 'Al momento',
+    StopMode.bar => 'En el 1',
+    StopMode.fade => 'Fundido',
+  };
+
+  String get quantizeTitle => 'Cambios de pista en el 1';
+  String get quantizeLine => 'Silenciar, REV y ½ esperan al siguiente 1';
+  String get quantizeHelp =>
+      'Encendido, cuando silencias una pista (o le pones o quitas el reverse o la media '
+      'velocidad), el cambio espera al siguiente 1: así entra y sale a tiempo aunque '
+      'pulses un poco antes. Mientras espera, el botón lleva un punto. Apagado, cambia en '
+      'cuanto pulsas. En el modo simple, siempre en el 1.';
 
   String get recordDuckTitle => 'Al grabar con el altavoz';
   String get recordDuckLine => 'Lo que ya suena, mientras grabas';
@@ -682,7 +802,7 @@ class Strings {
 
   // ---------------------------------------------------------------- informe («Copiar resultados»)
 
-  String get reportTitle => 'Loopin · Etapa 4.5';
+  String get reportTitle => 'Loopin · Etapa 5';
   ReportStrings get report => const ReportStrings();
   String loopStateName(LoopState st) => switch (st) {
     LoopState.empty => 'vacío',
@@ -738,10 +858,24 @@ class ReportStrings {
       'Looper: $state · $mode'
       '${baseBars != null ? ' · base de ${tr.bars(baseBars)}' : ''}'
       ' · avance automático: $autoAdvance';
-  String track(int n, String state, int? bars, int layers, bool muted) =>
+  String track(
+    int n,
+    String state,
+    int? bars,
+    int layers,
+    bool muted, {
+    bool reverse = false,
+    bool half = false,
+  }) =>
       'Pista $n: $state'
       '${bars != null ? ' · ${tr.bars(bars)} · ${tr.layers(layers)}' : ''}'
-      '${muted ? ' · en silencio' : ''}';
+      '${muted ? ' · en silencio' : ''}'
+      '${reverse ? ' · al revés' : ''}'
+      '${half ? ' · a media velocidad' : ''}';
+  String live(String stop, bool quantize, String? trainer, double a4) =>
+      'Al parar: $stop · cambios de pista en el 1: ${quantize ? 'sí' : 'no'} · '
+      'entrenador: ${trainer ?? 'apagado'} · afinador: La = ${a4.round()} Hz';
+  String trainerSetting(int step, int bars, int top) => '+$step BPM cada $bars C hasta $top';
   String controls(String volume, String headset, String learned) =>
       'Controles externos: volumen $volume · cascos $headset · teclas aprendidas: $learned';
 }

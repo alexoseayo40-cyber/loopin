@@ -28,6 +28,12 @@ class TopBar extends StatelessWidget {
             ),
           ),
           IconButton(
+            key: const ValueKey('open-tuner'),
+            tooltip: tr.tunerOpen,
+            icon: CustomPaint(size: const Size(24, 24), painter: TuningForkPainter(p.ink)),
+            onPressed: view.onTuner,
+          ),
+          IconButton(
             tooltip: tr.settings,
             icon: Icon(Icons.tune, color: p.ink),
             onPressed: view.onSettings,
@@ -88,4 +94,33 @@ class LatencyChip extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Icono del afinador: un diapasón.
+class TuningForkPainter extends CustomPainter {
+  TuningForkPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * 0.11
+      ..strokeCap = StrokeCap.round;
+    // Las dos púas y la curva de abajo
+    final fork = Path()
+      ..moveTo(w * 0.32, h * 0.1)
+      ..lineTo(w * 0.32, h * 0.5)
+      ..arcToPoint(Offset(w * 0.68, h * 0.5), radius: Radius.circular(w * 0.18), clockwise: false)
+      ..lineTo(w * 0.68, h * 0.1);
+    canvas.drawPath(fork, paint);
+    // El mango
+    canvas.drawLine(Offset(w * 0.5, h * 0.68), Offset(w * 0.5, h * 0.92), paint);
+  }
+
+  @override
+  bool shouldRepaint(TuningForkPainter old) => old.color != color;
 }

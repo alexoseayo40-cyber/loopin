@@ -177,7 +177,7 @@ void main() {
 
     // Parar y arrancar
     await tester.tap(find.text('PARAR'));
-    expect(engine.calls.last, 'pause');
+    expect(engine.calls.last, 'stop'); // como diga «Al parar»
 
     c.stopAudio();
     c.dispose();
@@ -348,7 +348,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 16));
     expect(find.bySemanticsLabel(RegExp(r'Tiempo \d de 4')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('metronome-toggle')));
-    expect(engine.calls.last, 'pause');
+    expect(engine.calls.last, 'stop'); // como diga «Al parar»
     expect(tester.takeException(), isNull);
     c.stopAudio();
     c.dispose();

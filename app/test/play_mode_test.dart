@@ -115,6 +115,7 @@ void main() {
       ]),
     );
     expect(engine.calls, isNot(contains('pause')));
+    expect(engine.calls, isNot(contains('stop')));
     expect(prefs['playMode'], 'simple');
     expect(prefs['simpleForced'], contains('meter=7/8'));
     // Lo que eligió en el avanzado sigue guardado para cuando vuelva

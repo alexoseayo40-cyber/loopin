@@ -86,6 +86,8 @@ class Drums {
             int32_t late = 0);
   // El transporte se ha parado: la batería volverá a entrar en un 1.
   void halt();
+  // Como halt() y además corta lo que aún suena (al acabar un fundido)
+  void silence();
   // Siguiente muestra (llamar en todas, aunque el transporte esté parado: así
   // acaban de sonar los platos).
   float next();

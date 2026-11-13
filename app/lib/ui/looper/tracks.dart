@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:loopin_engine/loopin_engine.dart';
 
+import '../../engine/engine_controller.dart';
 import '../../l10n/strings.dart';
 import '../pedal_widgets.dart';
 import '../theme.dart';
@@ -103,7 +104,13 @@ class _TrackRing extends StatelessWidget {
               FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
-                  t.hasLoop ? tr.trackRingLabel(bars, t.layers) : tr.trackRingEmpty,
+                  t.hasLoop
+                      ? tr.trackRingFx(
+                          tr.trackRingLabel(bars, t.layers),
+                          reverse: t.reverse,
+                          half: t.half,
+                        )
+                      : tr.trackRingEmpty,
                   style: p.label(size: 12, color: p.dim),
                 ),
               ),
@@ -188,12 +195,43 @@ class _TrackStrip extends StatelessWidget {
               ),
             ),
           ),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip: t.muted ? tr.unmuteTrack(n) : tr.muteTrack(n),
-            onPressed: () => c.toggleTrackMuted(index),
-            icon: Icon(t.muted ? Icons.volume_off : Icons.volume_up, size: 22),
-            color: t.muted ? LoopinPalette.dub : p.ink,
+          // Reverse y media velocidad (solo en avanzado)
+          if (!c.simple) ...[
+            _FxToggle(
+              key: ValueKey('reverse-$index'),
+              text: tr.reverseShort,
+              on: t.reverse,
+              pending: t.pendingReverse,
+              enabled: c.trackFxAvailable(index),
+              tooltip: tr.reverseTrack(n, t.reverse),
+              palette: p,
+              onTap: () => c.toggleTrackReverse(index),
+            ),
+            const SizedBox(width: 4),
+            _FxToggle(
+              key: ValueKey('half-$index'),
+              text: tr.halfShort,
+              on: t.half,
+              pending: t.pendingHalf,
+              enabled: c.trackFxAvailable(index),
+              tooltip: tr.halfTrack(n, t.half),
+              palette: p,
+              onTap: () => c.toggleTrackHalf(index),
+            ),
+          ],
+          _PendingDot(
+            pending: t.pendingMute,
+            palette: p,
+            child: IconButton(
+              key: ValueKey('mute-$index'),
+              visualDensity: VisualDensity.compact,
+              tooltip:
+                  '${t.muted ? tr.unmuteTrack(n) : tr.muteTrack(n)}'
+                  '${t.pendingMute ? ', ${tr.atNextOne}' : ''}',
+              onPressed: () => c.toggleTrackMuted(index),
+              icon: Icon(t.muted ? Icons.volume_off : Icons.volume_up, size: 22),
+              color: t.muted ? LoopinPalette.dub : p.ink,
+            ),
           ),
           IconButton(
             visualDensity: VisualDensity.compact,
@@ -205,6 +243,98 @@ class _TrackStrip extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// REV o ½: encendido, relleno; si el cambio espera al siguiente 1, con un
+/// punto.
+class _FxToggle extends StatelessWidget {
+  const _FxToggle({
+    super.key,
+    required this.text,
+    required this.on,
+    required this.pending,
+    required this.enabled,
+    required this.tooltip,
+    required this.palette,
+    required this.onTap,
+  });
+
+  final String text;
+  final bool on;
+  final bool pending;
+  final bool enabled;
+  final String tooltip;
+  final LoopinPalette palette;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = palette;
+    final ink = enabled ? p.ink : p.dim.withValues(alpha: 0.4);
+    return Semantics(
+      button: true,
+      toggled: on,
+      enabled: enabled,
+      label: pending ? '$tooltip, ${tr.atNextOne}' : tooltip,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: tooltip,
+        child: _PendingDot(
+          pending: pending,
+          palette: p,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(6),
+            onTap: enabled ? onTap : null,
+            child: Container(
+              width: 34,
+              height: 30,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: on ? ink : null,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: on ? ink : p.edge, width: 1.5),
+              ),
+              child: Text(text, style: p.label(size: 13, color: on ? p.panel : ink)),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Un punto en la esquina: el cambio espera al siguiente 1.
+class _PendingDot extends StatelessWidget {
+  const _PendingDot({required this.pending, required this.palette, required this.child});
+
+  final bool pending;
+  final LoopinPalette palette;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!pending) return child;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        child,
+        Positioned(
+          right: 1,
+          top: 1,
+          child: Container(
+            key: const ValueKey('pending-dot'),
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: LoopinPalette.dub,
+              shape: BoxShape.circle,
+              border: Border.all(color: palette.panel, width: 1.5),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

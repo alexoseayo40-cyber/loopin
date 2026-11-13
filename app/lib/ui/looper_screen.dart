@@ -20,6 +20,7 @@ import 'looper/tracks.dart';
 import 'looper/view.dart';
 import 'settings_screen.dart';
 import 'theme.dart';
+import 'tuner_screen.dart';
 
 class LooperScreen extends StatefulWidget {
   const LooperScreen({super.key, required this.controller});
@@ -52,6 +53,11 @@ class _LooperScreenState extends State<LooperScreen> {
     );
   }
 
+  void _openTuner() {
+    Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => TunerScreen(controller: widget.controller)));
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = widget.controller;
@@ -76,6 +82,7 @@ class _LooperScreenState extends State<LooperScreen> {
                     palette: palette,
                     onSettings: _openSettings,
                     onLatency: _openLatency,
+                    onTuner: _openTuner,
                   );
                   // Apaisado (móvil tumbado o tablet): dos columnas
                   final wide = box.maxWidth >= 520 && box.maxWidth > box.maxHeight * 1.15;

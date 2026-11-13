@@ -8,6 +8,7 @@ import '../../l10n/strings.dart';
 import '../pedal_widgets.dart';
 import '../theme.dart';
 import 'tempo_menus.dart';
+import 'trainer_sheet.dart';
 import 'view.dart';
 
 /// Tres filas: el tempo (con − / + y TAP), arrancar/parar con las luces de
@@ -41,6 +42,7 @@ class TempoDisplay extends StatelessWidget {
             child: Row(
               children: [
                 _MetronomeButton(view: view),
+                if (!simple) ...[const SizedBox(width: 6), TrainerButton(view: view)],
                 const SizedBox(width: 10),
                 Expanded(
                   child: BeatBuilder(
@@ -106,7 +108,9 @@ class _TempoRow extends StatelessWidget {
     final free = c.loopMode == LoopMode.free;
     // En libre, mientras no haya loop no hay tempo
     final noTempo = free && !s.hasLoops;
-    final bpm = locked ? s.bpm : c.bpm;
+    // Con loop, o con el entrenador subiéndolo, el tempo es el del motor
+    final bpm = c.shownBpm;
+    final trainer = c.trainerOn && !locked;
     const amber = LoopinPalette.display;
     const dimAmber = LoopinPalette.displayDim;
     final small = view.palette.label(size: 12, color: dimAmber);
@@ -165,7 +169,40 @@ class _TempoRow extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  if (canEdit)
+                  if (trainer)
+                    // En lugar del TAP: lo que hará el entrenador (tocar lo abre)
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: InkWell(
+                        key: const ValueKey('trainer-pill'),
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () => showTrainerSheet(context, c),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            color: amber.withValues(alpha: 0.15),
+                            border: Border.all(color: amber),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.trending_up, size: 14, color: amber),
+                              const SizedBox(width: 4),
+                              Text(
+                                tr.trainerPill(
+                                  c.trainerStep.round(),
+                                  c.trainerBars,
+                                  c.trainerTop.round(),
+                                ),
+                                style: small.copyWith(color: amber),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  else if (canEdit)
                     // Que se vea que se puede marcar el tempo tocando
                     FittedBox(
                       fit: BoxFit.scaleDown,
@@ -223,9 +260,13 @@ class _MetronomeButton extends StatelessWidget {
     // En libre, sin loop no hay tempo que arrancar
     final enabled = s.running && !(c.loopMode == LoopMode.free && !s.hasLoops);
     final color = enabled ? LoopinPalette.display : LoopinPalette.displayDim;
+    // Parando (en el 1 o con fundido): pulsar otra vez para ya
+    final stopping = c.stoppingNow;
     return Semantics(
       button: true,
-      label: playing
+      label: stopping
+          ? tr.tapToStopNow
+          : playing
           ? (s.hasLoops ? tr.stopAll : tr.stopMetronome)
           : (s.hasLoops ? tr.startAll : tr.startMetronome),
       excludeSemantics: true,
@@ -244,7 +285,11 @@ class _MetronomeButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(playing ? Icons.stop : Icons.play_arrow, color: color, size: 22),
+              Icon(
+                stopping ? Icons.hourglass_bottom : (playing ? Icons.stop : Icons.play_arrow),
+                color: color,
+                size: 22,
+              ),
               const SizedBox(width: 2),
               Icon(Icons.av_timer, color: color, size: 18),
             ],

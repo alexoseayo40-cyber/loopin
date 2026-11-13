@@ -45,6 +45,9 @@ EngineStatus _later(EngineStatus s) => EngineStatus(
   cpuLoad: 0.07,
   cpuLoadPeak: 0.12,
   cpuLoadMax: 0.2,
+  quantize: s.quantize,
+  stopMode: s.stopMode,
+  stopping: s.stopping,
   tracks: [
     for (final t in s.tracks)
       TrackStatus(
@@ -53,6 +56,9 @@ EngineStatus _later(EngineStatus s) => EngineStatus(
         muted: t.muted,
         length: t.length,
         position: t.length > 0 ? (t.position + 1600) % t.length : 0,
+        reverse: t.reverse,
+        half: t.half,
+        pending: t.pending,
       ),
   ],
 );

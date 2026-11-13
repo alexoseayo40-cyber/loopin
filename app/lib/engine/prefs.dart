@@ -34,6 +34,12 @@ class Prefs {
   static const accompaniment = 'accompaniment';
   static const playMode = 'playMode';
   static const simpleForced = 'simpleForced';
+  static const quantize = 'quantize';
+  static const stopMode = 'stopMode';
+  static const trainerStep = 'trainerStep';
+  static const trainerBars = 'trainerBars';
+  static const trainerTop = 'trainerTop';
+  static const tunerA4 = 'tunerA4';
 
   Future<String?> get(String key) async {
     try {

@@ -20,6 +20,11 @@ void EngineCore::prepare(int32_t sampleRate) {
   looper_.prepare(sampleRate_, &transport_);
   drums_.prepare(sampleRate_);
   backing_.prepare(sampleRate_, bin_);
+  stopAt_ = Looper::kNever;
+  fade_ = Fade::kNone;
+  fadeGain_ = 1.0f;
+  if (trainerRaised_) transport_.setBpm(userBpm_);
+  trainerRaised_ = false;
   outPos_ = 0;
   monRead_ = 0;
   wasPlaying_ = false;
@@ -34,14 +39,41 @@ void EngineCore::apply(const Command& cmd) {
   const int64_t now = outPos_;
   switch (cmd.type) {
     case Command::Type::kPlay:
+      stopAt_ = Looper::kNever;
+      fade_ = Fade::kNone;
+      fadeGain_ = 1.0f;
       looper_.startAll(now);
       break;
     case Command::Type::kPause:
-      looper_.stopAll(now);
+      stopNow(now);
+      break;
+    case Command::Type::kStop:
+      requestStop(now, cmd.value != 0.0);
+      break;
+    case Command::Type::kSetStopMode:
+      stopMode_ = static_cast<StopMode>(std::clamp(static_cast<int32_t>(cmd.value), 0, 2));
+      break;
+    case Command::Type::kSetFadeSeconds:
+      fadeSeconds_ = std::clamp(static_cast<float>(cmd.value), 0.5f, 30.0f);
+      break;
+    case Command::Type::kSetTrainer:
+      trainerStep_ = std::clamp(cmd.value, 0.5, 60.0);
+      trainerBars_ = std::clamp(cmd.arg, 0, 64);
+      // Al apagarlo vuelve el tempo del usuario (en el siguiente tiempo)
+      if (trainerBars_ == 0 && trainerRaised_ && looper_.state() == Looper::State::kEmpty) {
+        transport_.setBpm(userBpm_);
+        trainerRaised_ = false;
+      }
+      break;
+    case Command::Type::kSetTrainerTop:
+      trainerTop_ = std::clamp(cmd.value, Transport::kMinBpm, Transport::kMaxBpm);
       break;
     case Command::Type::kSetBpm:
       // Con un loop grabado (o grabándose) el tempo no se puede cambiar
-      if (!looper_.locksTempo()) transport_.setBpm(cmd.value);
+      if (!looper_.locksTempo()) {
+        userBpm_ = std::clamp(cmd.value, Transport::kMinBpm, Transport::kMaxBpm);
+        transport_.setBpm(cmd.value);
+      }
       break;
     case Command::Type::kSetBeatsPerBar:
       if (!looper_.locksTempo()) transport_.setBeatsPerBar(static_cast<int32_t>(cmd.value));
@@ -119,6 +151,11 @@ void EngineCore::apply(const Command& cmd) {
       latency_.start();
       break;
     case Command::Type::kLoopPress:
+      // Mientras se espera al 1 o se baja para parar, pisar otra vez para ya
+      if (stopping()) {
+        stopNow(now);
+        break;
+      }
       looper_.press(now);
       break;
     case Command::Type::kLoopHold:
@@ -126,6 +163,7 @@ void EngineCore::apply(const Command& cmd) {
       break;
     case Command::Type::kLoopDoubleTap:
       looper_.doubleTap(now);
+      if (looper_.takeStopRequest()) requestStop(now, false);
       break;
     case Command::Type::kLoopUndo:
       looper_.undo(now);
@@ -158,7 +196,16 @@ void EngineCore::apply(const Command& cmd) {
       looper_.setTrackVolume(cmd.arg, static_cast<float>(cmd.value));
       break;
     case Command::Type::kSetTrackMuted:
-      looper_.setTrackMuted(cmd.arg, cmd.value != 0.0);
+      looper_.setTrackMuted(cmd.arg, cmd.value != 0.0, now);
+      break;
+    case Command::Type::kSetTrackReverse:
+      looper_.setTrackReverse(cmd.arg, cmd.value != 0.0, now);
+      break;
+    case Command::Type::kSetTrackHalf:
+      looper_.setTrackHalf(cmd.arg, cmd.value != 0.0, now);
+      break;
+    case Command::Type::kSetQuantize:
+      looper_.setQuantize(cmd.value != 0.0);
       break;
     case Command::Type::kClearTrack:
       looper_.clearTrack(cmd.arg, now);
@@ -166,6 +213,48 @@ void EngineCore::apply(const Command& cmd) {
     case Command::Type::kSetAutoAdvance:
       looper_.setAutoAdvance(cmd.value != 0.0);
       break;
+  }
+}
+
+void EngineCore::requestStop(int64_t now, bool force) {
+  const Looper::State st = looper_.state();
+  // Al momento si se pide, si ya se estaba parando (segunda vez), si no
+  // suena nada o si se está grabando una pista (eso tiene su propio cierre)
+  if (force || stopMode_ == StopMode::kNow || !transport_.playing() || stopping() ||
+      st == Looper::State::kArmed || st == Looper::State::kRecording) {
+    stopNow(now);
+    return;
+  }
+  looper_.finishOverdub(now);
+  if (stopMode_ == StopMode::kBar) {
+    stopAt_ = now + transport_.framesToNextBar();
+    if (stopAt_ <= now) stopNow(now);
+  } else {
+    fade_ = Fade::kFading;
+    fadeGain_ = 1.0f;
+    // −60 dB en fadeSeconds_
+    fadeMul_ = static_cast<float>(std::pow(10.0, -3.0 / (double(fadeSeconds_) * sampleRate_)));
+  }
+}
+
+void EngineCore::stopNow(int64_t n) {
+  stopAt_ = Looper::kNever;
+  if (fade_ == Fade::kFading) {
+    // Lo que aún suena (platos, la canción) sigue bajando hasta el silencio
+    fade_ = Fade::kTail;
+    fadeHold_ = sampleRate_ / 4;
+  }
+  looper_.stopAll(n);
+}
+
+void EngineCore::trainerBeat() {
+  if (trainerBars_ <= 0 || looper_.state() != Looper::State::kEmpty) return;
+  if (transport_.beat() != transport_.beatsPerBar() - 1) return;
+  if ((transport_.bar() + 1) % trainerBars_ != 0) return;
+  const double next = std::min(trainerTop_, transport_.bpm() + trainerStep_);
+  if (next > transport_.bpm() + 1e-9) {
+    transport_.setBpm(next);
+    trainerRaised_ = true;
   }
 }
 
@@ -192,6 +281,7 @@ void EngineCore::process(const float* in, int32_t inFrames, int32_t inChannels, 
     blockPeak = std::max(blockPeak, std::fabs(s));
   }
   const int64_t inStart = ring_.end() - inFrames;
+  tunerTap_.push(inMono_.data(), inFrames);
   // Caída del medidor: unos 20 dB por segundo
   const float decay = std::pow(0.1f, float(n) / float(sampleRate_));
   peak_ = std::max(peak_ * decay, blockPeak);
@@ -211,10 +301,17 @@ void EngineCore::process(const float* in, int32_t inFrames, int32_t inChannels, 
   // Mientras se mide la latencia (con el altavoz o tocando) solo suena lo
   // del medidor
   const bool measuring = latency_.active() || tap_.active();
+  // Con loops el tempo es suyo: lo que subió el entrenador se queda
+  if (trainerRaised_ && looper_.state() != Looper::State::kEmpty) {
+    trainerRaised_ = false;
+    userBpm_ = transport_.bpm();
+  }
   for (int32_t i = 0; i < n; ++i) {
+    const int64_t at = outPos_ + i;
+    if (at >= stopAt_) stopNow(at);  // parar en el 1
     // El looper va primero: si en esta muestra empieza a grabar, el clic de
     // este tiempo ya no es de la cuenta de entrada
-    const float loop = looper_.render(outPos_ + i);
+    const float loop = looper_.render(at);
     if (transport_.tick()) {
       metronome_.trigger(Metronome::accentFor(transport_.beat(), transport_.accentMask()));
       // Se decide al empezar cada clic (un clic nunca se corta a medias). En
@@ -233,9 +330,15 @@ void EngineCore::process(const float* in, int32_t inFrames, int32_t inChannels, 
       }
       backing_.beat(transport_.bar(), transport_.beat(), transport_.samplesPerBeat(),
                     transport_.beatsPerBar(), countIn);
+      trainerBeat();
     } else if (!transport_.playing()) {
       drums_.halt();
       backing_.halt();
+      // Al parar, el entrenador devuelve el tempo del usuario
+      if (trainerRaised_) {
+        transport_.setBpm(userBpm_);
+        trainerRaised_ = false;
+      }
     } else if (!wasPlaying_ && transport_.beat() == 0 &&
                (drums_.enabled() || backing_.enabled()) && transport_.framesSinceBeat() >= 1 &&
                transport_.framesSinceBeat() <= sampleRate_ / 50) {
@@ -262,11 +365,31 @@ void EngineCore::process(const float* in, int32_t inFrames, int32_t inChannels, 
     if (monRead_ < ring_.end()) mon = ring_.at(monRead_++);
     float s = 0.0f;
     if (!measuring) {
-      if (clickGate_) s += click * clickVolume_;
       if (monitorEnabled_) s += mon * monitorVolume_;
-      s += loop + drums + song;
+      s += ((clickGate_ ? click * clickVolume_ : 0.0f) + loop + drums + song) * fadeGain_;
     }
     outMono_[i] = s;
+    // Fundido al parar: −60 dB y entonces se para (y se cortan las colas de
+    // la batería). Tras parar, un momento en silencio por si algo aún suena.
+    if (fade_ != Fade::kNone) {
+      constexpr float kFloor = 0.001f;
+      if (fade_ == Fade::kFading) {
+        fadeGain_ *= fadeMul_;
+        if (fadeGain_ <= kFloor) {
+          stopNow(at + 1);
+          drums_.silence();
+        }
+      } else if (transport_.playing()) {
+        fade_ = Fade::kNone;
+        fadeGain_ = 1.0f;
+      } else if (fadeGain_ > kFloor) {
+        fadeGain_ *= fadeMul_;
+        if (fadeGain_ <= kFloor) drums_.silence();
+      } else if (--fadeHold_ <= 0) {
+        fade_ = Fade::kNone;
+        fadeGain_ = 1.0f;
+      }
+    }
   }
 
   // El medidor añade su pulso a outMono_ (con todo lo demás en silencio)
@@ -353,6 +476,18 @@ void EngineCore::publish() {
   aPreviewClick_.store(backing_.previewClick() ? 1 : 0, std::memory_order_relaxed);
   aPreviewPosition_.store(backing_.previewPosition(), std::memory_order_relaxed);
   aPreviewLength_.store(preview != nullptr ? preview->frames() : 0, std::memory_order_relaxed);
+  for (int32_t i = 0; i < Looper::kTracks; ++i) {
+    aTrackReverse_[i].store(looper_.trackReverse(i) ? 1 : 0, std::memory_order_relaxed);
+    aTrackHalf_[i].store(looper_.trackHalf(i) ? 1 : 0, std::memory_order_relaxed);
+    aTrackPending_[i].store(looper_.trackPending(i), std::memory_order_relaxed);
+  }
+  aQuantize_.store(looper_.quantize() ? 1 : 0, std::memory_order_relaxed);
+  aStopMode_.store(static_cast<int32_t>(stopMode_), std::memory_order_relaxed);
+  aStopping_.store(stopAt_ != Looper::kNever ? 1 : (fade_ == Fade::kFading ? 2 : 0),
+                   std::memory_order_relaxed);
+  aTrainerBars_.store(trainerBars_, std::memory_order_relaxed);
+  aTrainerStep_.store(trainerStep_, std::memory_order_relaxed);
+  aTrainerTop_.store(trainerTop_, std::memory_order_relaxed);
   aTapState_.store(static_cast<int32_t>(tap_.state()), std::memory_order_release);
 
   // El estado va el último: quien lo lea como «hecho» ve ya el resultado.
@@ -423,6 +558,17 @@ CoreStatus EngineCore::status() const {
   s.previewClick = aPreviewClick_.load(std::memory_order_relaxed);
   s.previewPosition = aPreviewPosition_.load(std::memory_order_relaxed);
   s.previewLength = aPreviewLength_.load(std::memory_order_relaxed);
+  for (int32_t i = 0; i < Looper::kTracks; ++i) {
+    s.trackReverse[i] = aTrackReverse_[i].load(std::memory_order_relaxed);
+    s.trackHalf[i] = aTrackHalf_[i].load(std::memory_order_relaxed);
+    s.trackPending[i] = aTrackPending_[i].load(std::memory_order_relaxed);
+  }
+  s.quantize = aQuantize_.load(std::memory_order_relaxed);
+  s.stopMode = aStopMode_.load(std::memory_order_relaxed);
+  s.stopping = aStopping_.load(std::memory_order_relaxed);
+  s.trainerBars = aTrainerBars_.load(std::memory_order_relaxed);
+  s.trainerStep = aTrainerStep_.load(std::memory_order_relaxed);
+  s.trainerTop = aTrainerTop_.load(std::memory_order_relaxed);
   return s;
 }
 

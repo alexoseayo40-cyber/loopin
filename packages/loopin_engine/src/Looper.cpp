@@ -26,6 +26,8 @@ void Looper::prepare(int32_t sampleRate, Transport* transport, int32_t maxSecond
   duckLead_ = sampleRate / 40;
   duckStep_ = 2.0f / float(duckLead_);
   duck_ = 1.0f;
+  xfadeLen_ = std::max(1, sampleRate / 200);
+  gainStep_ = 1.0f / float(xfadeLen_);
 
   if (!keep) {
     capacity_ = capacity;
@@ -33,10 +35,12 @@ void Looper::prepare(int32_t sampleRate, Transport* transport, int32_t maxSecond
       t.data.assign(static_cast<size_t>(capacity_), 0.0f);
       t.len = 0;
       t.origin = 0;
-      t.playPos = 0;
       t.layers = 0;
       t.winOpen = false;
       t.clearing = false;
+      resetTrackFx(t);
+      t.muted = t.wantMuted;
+      t.muteAt = kNever;
       t.gain = t.muted ? 0.0f : t.volume;
     }
     for (Layer& l : layers_) {
@@ -75,12 +79,22 @@ void Looper::prepare(int32_t sampleRate, Transport* transport, int32_t maxSecond
     for (Track& t : tracks_) {
       t.winOpen = false;
       if (t.clearing) finishClear(t);
+      // Lo pendiente se aplica ya (está todo parado)
+      t.muted = t.wantMuted;
+      t.muteAt = kNever;
+      t.reverse = t.wantReverse;
+      t.half = t.wantHalf;
+      t.dq = stepFor(t.reverse, t.half);
+      t.fxAt = kNever;
+      t.xfade = 0;
       t.gain = t.muted ? 0.0f : t.volume;
     }
     state_ = anyContent() ? State::kStopped : State::kEmpty;
     if (state_ == State::kEmpty) baseLen_ = 0;
   }
   nextEvent_ = kNever;
+  nextTrackChange_ = kNever;
+  stopRequest_ = false;
   stopAfterRec_ = false;
   userClosed_ = false;
   capN_ = -latency_;
@@ -102,9 +116,137 @@ void Looper::setTrackVolume(int32_t track, float volume) {
   tr(track).volume = std::clamp(volume, 0.0f, 2.0f);
 }
 
-void Looper::setTrackMuted(int32_t track, bool muted) {
+// ---------------------------------------------------------------- silencio y efectos
+
+int64_t Looper::changeAt(int64_t now) const {
+  if (!quantize_ || transport_ == nullptr || !transport_->playing() || state_ == State::kStopped)
+    return now;
+  return now + transport_->framesToNextBar();
+}
+
+void Looper::setTrackMuted(int32_t track, bool muted, int64_t now) {
   if (track < 0 || track >= kTracks) return;
-  tr(track).muted = muted;
+  Track& t = tr(track);
+  t.wantMuted = muted;
+  if (muted == t.muted) {
+    t.muteAt = kNever;  // lo pedido ya está (se anula lo pendiente)
+  } else {
+    int64_t at = changeAt(now);
+    // Al quitar el silencio, la rampa empieza antes para acabar justo en el 1
+    if (!muted && at > now) {
+      const int64_t ramp = int64_t(std::ceil(std::max(1.0f, t.volume) / gainStep_));
+      at = std::max(now, at - ramp);
+    }
+    if (at <= now) {
+      t.muted = muted;
+      t.muteAt = kNever;
+    } else {
+      t.muteAt = at;
+    }
+  }
+  rescheduleTrackChanges();
+}
+
+void Looper::setTrackReverse(int32_t track, bool on, int64_t now) {
+  if (track < 0 || track >= kTracks) return;
+  Track& t = tr(track);
+  if (t.len == 0 || (busy() && active_ == track)) return;
+  t.wantReverse = on;
+  if (t.wantReverse == t.reverse && t.wantHalf == t.half) {
+    t.fxAt = kNever;
+  } else if (const int64_t at = changeAt(now); at <= now) {
+    applyFx(t, now);
+  } else {
+    t.fxAt = at;
+  }
+  rescheduleTrackChanges();
+}
+
+void Looper::setTrackHalf(int32_t track, bool on, int64_t now) {
+  if (track < 0 || track >= kTracks) return;
+  Track& t = tr(track);
+  if (t.len == 0 || (busy() && active_ == track)) return;
+  t.wantHalf = on;
+  if (t.wantReverse == t.reverse && t.wantHalf == t.half) {
+    t.fxAt = kNever;
+  } else if (const int64_t at = changeAt(now); at <= now) {
+    applyFx(t, now);
+  } else {
+    t.fxAt = at;
+  }
+  rescheduleTrackChanges();
+}
+
+int32_t Looper::trackPending(int32_t track) const {
+  const Track& t = tr(track);
+  int32_t bits = 0;
+  if (t.muteAt != kNever) bits |= 1;
+  if (t.fxAt != kNever && t.wantReverse != t.reverse) bits |= 2;
+  if (t.fxAt != kNever && t.wantHalf != t.half) bits |= 4;
+  return bits;
+}
+
+// Con efecto, se sigue desde donde suena; sin ninguno, la pista vuelve a su
+// sitio en la rejilla. La lectura de antes se apaga en un fundido cruzado.
+void Looper::applyFx(Track& t, int64_t n) {
+  t.fxAt = kNever;
+  if (t.wantReverse == t.reverse && t.wantHalf == t.half) return;
+  t.oq = t.q;
+  t.odq = t.dq;
+  t.xfade = xfadeLen_;
+  t.reverse = t.wantReverse;
+  t.half = t.wantHalf;
+  t.dq = stepFor(t.reverse, t.half);
+  if (!t.reverse && !t.half) {
+    t.q = gridQ(t, n);
+  } else if (!t.half) {
+    t.q &= ~int64_t(1);  // a velocidad normal, siempre en una muestra entera
+  }
+}
+
+void Looper::applyTrackChanges(int64_t n) {
+  for (Track& t : tracks_) {
+    if (t.muteAt <= n) {
+      t.muted = t.wantMuted;
+      t.muteAt = kNever;
+    }
+    if (t.fxAt <= n) applyFx(t, n);
+  }
+  rescheduleTrackChanges();
+}
+
+void Looper::rescheduleTrackChanges() {
+  nextTrackChange_ = kNever;
+  for (const Track& t : tracks_) nextTrackChange_ = std::min({nextTrackChange_, t.muteAt, t.fxAt});
+}
+
+void Looper::readAt(const Track& t, int64_t now, int64_t n, int64_t* q, int32_t* dq) const {
+  int64_t pos = t.q;
+  int32_t d = t.dq;
+  int64_t from = now;
+  if (t.fxAt <= n) {
+    pos = wrap(pos + int64_t(d) * (t.fxAt - from), 2 * t.len);
+    d = stepFor(t.wantReverse, t.wantHalf);
+    if (!t.wantReverse && !t.wantHalf) {
+      pos = gridQ(t, t.fxAt);
+    } else if (!t.wantHalf) {
+      pos &= ~int64_t(1);
+    }
+    from = t.fxAt;
+  }
+  *q = wrap(pos + int64_t(d) * (n - from), 2 * t.len);
+  *dq = d;
+}
+
+void Looper::resetTrackFx(Track& t) {
+  t.q = 0;
+  t.dq = 2;
+  t.oq = 0;
+  t.odq = 2;
+  t.xfade = 0;
+  t.reverse = t.half = false;
+  t.wantReverse = t.wantHalf = false;
+  t.fxAt = kNever;
 }
 
 bool Looper::anyContent() const {
@@ -308,7 +450,9 @@ void Looper::startAll(int64_t now) {
     for (Track& t : tracks_) {
       if (t.len == 0) continue;
       t.origin += shift;
-      t.playPos = wrap(now - t.origin, t.len);
+      // Con efecto, también desde su sitio en la rejilla (y en su sentido)
+      t.q = gridQ(t, now);
+      t.xfade = 0;
     }
     state_ = State::kPlaying;
   }
@@ -388,10 +532,10 @@ void Looper::doubleTap(int64_t now) {
       break;
     case State::kPlaying:    // el toque empezó a grabar → fuera y parar
       if (busy()) undo(now);
-      stopAll(now);
+      stopRequest_ = true;   // EngineCore para (al momento, en el 1 o con fundido)
       break;
-    case State::kOverdubbing:
-      stopAll(now);
+    case State::kOverdubbing:  // el toque acabó el overdub → parar
+      stopRequest_ = true;
       break;
     case State::kStopped:    // el toque ya arrancó todo
       break;
@@ -407,7 +551,8 @@ bool Looper::shiftAudio(int64_t frames, int64_t now) {
   for (Track& t : tracks_) {
     if (t.len == 0) continue;
     t.origin -= frames;
-    t.playPos = wrap(now - t.origin, t.len);
+    // Sin efecto, de la rejilla; con efecto, lo que sonaría frames después
+    t.q = !t.reverse && !t.half ? gridQ(t, now) : wrap(t.q + int64_t(t.dq) * frames, 2 * t.len);
   }
   return true;
 }

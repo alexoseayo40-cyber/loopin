@@ -97,6 +97,16 @@ extern "C" {
 // Duración máxima de una canción (o de lo que dure estirada)
 #define LOOPIN_SONG_MAX_SECONDS 600
 
+// Cómo para el botón de parar (loopin_stop_playing) y el doble toque
+#define LOOPIN_STOP_NOW 0   // al momento
+#define LOOPIN_STOP_BAR 1   // en el siguiente 1
+#define LOOPIN_STOP_FADE 2  // bajando poco a poco y luego para
+
+// Cambios de una pista que esperan al siguiente 1 (track_pending, bits)
+#define LOOPIN_PENDING_MUTE 1
+#define LOOPIN_PENDING_REVERSE 2
+#define LOOPIN_PENDING_HALF 4
+
 // API de audio que Oboe ha elegido
 #define LOOPIN_API_UNKNOWN 0
 #define LOOPIN_API_OPENSLES 1
@@ -224,7 +234,28 @@ typedef struct {
   int32_t preview_click;
   int64_t preview_position;
   int64_t preview_length;
+
+  // Etapa 5: reverse y media velocidad (lo pedido; puede esperar al 1)
+  int32_t track_reverse[LOOPIN_TRACKS];
+  int32_t track_half[LOOPIN_TRACKS];
+  int32_t track_pending[LOOPIN_TRACKS];  // LOOPIN_PENDING_* (bits)
+  int32_t quantize;           // 1 = silencio y efectos en el siguiente 1
+  // Parar
+  int32_t stop_mode;          // LOOPIN_STOP_*
+  int32_t stopping;           // 0 no, 1 esperando al 1, 2 bajando (fundido)
+  // Entrenador de tempo (sube trainer_step BPM cada trainer_bars compases)
+  int32_t trainer_bars;       // 0 = apagado
+  double trainer_step;
+  double trainer_top;
 } LoopinStatus;
+
+// Afinador: lo último que ha entrado, analizado al pedirlo
+typedef struct {
+  float frequency;            // Hz (0 = no hay una nota clara)
+  float clarity;              // 0..1
+  float level_db;             // nivel de la entrada (dBFS)
+  int32_t fresh;              // 1 si ha llegado audio desde la última lectura
+} LoopinTuner;
 
 // Abre los streams de entrada y salida y empieza a procesar audio.
 // Devuelve 0 si todo va bien o un código de error de Oboe (negativo).
@@ -357,6 +388,28 @@ FFI_PLUGIN_EXPORT void loopin_backing_unload(void);
 // Encendida, suena mientras corre el transporte (entra siempre en un 1).
 FFI_PLUGIN_EXPORT void loopin_set_backing_enabled(int32_t enabled);
 FFI_PLUGIN_EXPORT void loopin_set_backing_volume(float volume);
+
+// --- Etapa 5: directo y práctica ---
+
+// Reverse y media velocidad de una pista con loop (no mientras se graba en
+// ella). Al ponerlos sigue desde donde suena; al quitarlos todos, vuelve a su
+// sitio. Con loopin_set_quantize, en el siguiente 1 (también el silencio).
+FFI_PLUGIN_EXPORT void loopin_set_track_reverse(int32_t track, int32_t enabled);
+FFI_PLUGIN_EXPORT void loopin_set_track_half(int32_t track, int32_t enabled);
+FFI_PLUGIN_EXPORT void loopin_set_quantize(int32_t enabled);
+// Parar como diga el modo (LOOPIN_STOP_*). Pedirlo otra vez mientras se para,
+// o now = 1, para al momento. loopin_pause para siempre al momento.
+FFI_PLUGIN_EXPORT void loopin_stop_playing(int32_t now);
+FFI_PLUGIN_EXPORT void loopin_set_stop_mode(int32_t mode);
+FFI_PLUGIN_EXPORT void loopin_set_fade_seconds(float seconds);
+// Entrenador (sin loops): sube step BPM cada bars compases, hasta top. Al
+// parar, vuelve el tempo de loopin_set_bpm. bars = 0 lo apaga.
+FFI_PLUGIN_EXPORT void loopin_set_trainer(int32_t bars, double step, double top);
+// Afinador: encendido, la entrada se copia para analizarla. loopin_tuner_read
+// analiza lo último (unos 70 ms) en el hilo que lo llama (~0,5 ms) y devuelve
+// 1 si había audio suficiente.
+FFI_PLUGIN_EXPORT void loopin_tuner_enable(int32_t enabled);
+FFI_PLUGIN_EXPORT int32_t loopin_tuner_read(LoopinTuner* out);
 
 // Copia el estado actual en *out.
 FFI_PLUGIN_EXPORT void loopin_get_status(LoopinStatus* out);

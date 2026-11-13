@@ -136,6 +136,18 @@ enum SongError {
 /// Duración máxima de una canción (o de lo que dure estirada), en segundos.
 const int kSongMaxSeconds = 600;
 
+/// Cómo para el botón de parar y el doble toque (mismo orden que LOOPIN_STOP_*).
+enum StopMode {
+  /// Al momento.
+  now,
+
+  /// En el siguiente 1.
+  bar,
+
+  /// Bajando poco a poco y luego para.
+  fade,
+}
+
 class TrackStatus {
   const TrackStatus({
     this.state = LoopState.empty,
@@ -144,13 +156,27 @@ class TrackStatus {
     this.volume = 1,
     this.length = 0,
     this.position = 0,
+    this.reverse = false,
+    this.half = false,
+    this.pending = 0,
   });
 
   final LoopState state;
 
   /// Capas que suenan (la primera grabación cuenta como 1).
   final int layers;
+
+  /// Silencio, reverse y media velocidad: lo pedido (puede estar esperando
+  /// al siguiente 1: ver [pendingMute]…).
   final bool muted;
+  final bool reverse;
+  final bool half;
+
+  /// Bits de lo que espera al siguiente 1 (LOOPIN_PENDING_*).
+  final int pending;
+  bool get pendingMute => pending & 1 != 0;
+  bool get pendingReverse => pending & 2 != 0;
+  bool get pendingHalf => pending & 4 != 0;
   final double volume;
 
   /// Longitud en muestras: 1, 2 o 4 veces la base (0 = vacía).
@@ -161,6 +187,28 @@ class TrackStatus {
 
   /// Por dónde va, de 0 a 1.
   double get progress => length > 0 ? position / length : 0;
+}
+
+/// Lo que ha oído el afinador.
+class TunerReading {
+  const TunerReading({
+    required this.frequency,
+    required this.clarity,
+    required this.levelDb,
+    this.fresh = true,
+  });
+
+  /// Hz (0 = no hay una nota clara).
+  final double frequency;
+
+  /// 0..1: lo clara que es la nota.
+  final double clarity;
+
+  /// Nivel de la entrada (dBFS).
+  final double levelDb;
+
+  /// Ha llegado audio desde la última lectura.
+  final bool fresh;
 }
 
 /// Copia inmutable del estado del motor en un instante.
@@ -258,6 +306,12 @@ class EngineStatus {
     this.previewClick = false,
     this.previewPosition = 0,
     this.previewLength = 0,
+    this.quantize = false,
+    this.stopMode = StopMode.now,
+    this.stopping = 0,
+    this.trainerBars = 0,
+    this.trainerStep = 5,
+    this.trainerTop = 240,
   });
 
   final bool running;
@@ -431,6 +485,21 @@ class EngineStatus {
   final int previewPosition;
   final int previewLength;
 
+  // Etapa 5
+  /// Silencio y efectos de las pistas en el siguiente 1.
+  final bool quantize;
+  final StopMode stopMode;
+
+  /// 0 no, 1 esperando al 1 para parar, 2 bajando (fundido).
+  final int stopping;
+
+  /// Entrenador de tempo: cada cuántos compases sube (0 = apagado), cuánto
+  /// y hasta dónde.
+  final int trainerBars;
+  final double trainerStep;
+  final double trainerTop;
+  bool get trainerOn => trainerBars > 0;
+
   /// La canción cargada está estirada al tempo y compás de ahora.
   bool get backingFits =>
       backingId != 0 &&
@@ -558,6 +627,41 @@ class LoopinEngine {
   void setDrumStyle(DrumStyle style, {required bool beatIsEighth}) =>
       _b.loopin_set_drum_style(style.index, beatIsEighth ? 1 : 0);
   void setDrumVolume(double v) => _b.loopin_set_drum_volume(v);
+
+  // Directo y práctica (Etapa 5)
+  void setTrackReverse(int track, bool on) => _b.loopin_set_track_reverse(track, on ? 1 : 0);
+  void setTrackHalf(int track, bool on) => _b.loopin_set_track_half(track, on ? 1 : 0);
+
+  /// Silencio y efectos de las pistas en el siguiente 1.
+  void setQuantize(bool on) => _b.loopin_set_quantize(on ? 1 : 0);
+
+  /// Parar como diga [setStopMode]; [now], al momento.
+  void stopPlaying({bool now = false}) => _b.loopin_stop_playing(now ? 1 : 0);
+  void setStopMode(StopMode mode) => _b.loopin_set_stop_mode(mode.index);
+  void setFadeSeconds(double seconds) => _b.loopin_set_fade_seconds(seconds);
+
+  /// Entrenador de tempo: sube [step] BPM cada [bars] compases, hasta [top]
+  /// (bars = 0: apagado). Al parar vuelve el tempo de [setBpm].
+  void setTrainer({required int bars, required double step, required double top}) =>
+      _b.loopin_set_trainer(bars, step, top);
+
+  /// Afinador: encendido, la entrada se copia para analizarla.
+  void setTunerEnabled(bool on) => _b.loopin_tuner_enable(on ? 1 : 0);
+
+  /// Analiza lo último que ha entrado (unos 70 ms). null si aún no hay audio.
+  TunerReading? tunerRead() {
+    final ok = _b.loopin_tuner_read(_tuner);
+    if (ok == 0) return null;
+    final t = _tuner.ref;
+    return TunerReading(
+      frequency: t.frequency,
+      clarity: t.clarity,
+      levelDb: t.level_db,
+      fresh: t.fresh != 0,
+    );
+  }
+
+  final Pointer<LoopinTuner> _tuner = calloc<LoopinTuner>();
 
   // Audio importado
   /// Abre una canción para prepararla (en segundo plano: ver
@@ -688,6 +792,9 @@ class LoopinEngine {
             volume: s.track_volume[i],
             length: s.track_length[i],
             position: s.track_position[i],
+            reverse: s.track_reverse[i] != 0,
+            half: s.track_half[i] != 0,
+            pending: s.track_pending[i],
           ),
       ],
       beatFrames: s.beat_frames,
@@ -731,6 +838,12 @@ class LoopinEngine {
       previewClick: s.preview_click != 0,
       previewPosition: s.preview_position,
       previewLength: s.preview_length,
+      quantize: s.quantize != 0,
+      stopMode: StopMode.values[s.stop_mode.clamp(0, StopMode.values.length - 1)],
+      stopping: s.stopping,
+      trainerBars: s.trainer_bars,
+      trainerStep: s.trainer_step,
+      trainerTop: s.trainer_top,
     );
   }
 }

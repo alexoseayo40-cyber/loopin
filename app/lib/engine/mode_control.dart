@@ -56,6 +56,11 @@ extension PlayModeControl on EngineController {
       setRecordDuck(RecordDuck.silent);
     }
     _applyPreset(); // el micrófono, el recomendado
+    // Directo y práctica: sin efectos de pista ni entrenador; parar al
+    // momento y cambios al compás (lo elegido en el avanzado se guarda aparte)
+    _clearTrackFx();
+    _liveSettings.trainerOn = false;
+    _applyLive();
     _saveForced();
   }
 
@@ -92,6 +97,7 @@ extension PlayModeControl on EngineController {
     final duck = parse(RecordDuck.values, SimpleForced.recordDuck);
     if (duck != null && recordDuck == RecordDuck.silent) setRecordDuck(duck);
     _applyPreset(); // el micrófono, el que eligió
+    _applyLive(); // cómo parar y los cambios al compás, los que eligió
   }
 
   void _saveForced() => _prefs.set(Prefs.simpleForced, _forced.encode());

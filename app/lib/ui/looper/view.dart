@@ -19,12 +19,14 @@ class LooperView {
     required this.palette,
     required this.onSettings,
     required this.onLatency,
+    required this.onTuner,
   });
 
   final EngineController controller;
   final LoopinPalette palette;
   final VoidCallback onSettings;
   final VoidCallback onLatency;
+  final VoidCallback onTuner;
 
   /// El último estado del motor.
   EngineStatus get s => controller.status;

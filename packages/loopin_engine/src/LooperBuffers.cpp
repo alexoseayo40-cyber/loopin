@@ -59,8 +59,9 @@ void Looper::dropTrack(int32_t track) {
   if (t.len > 0) startClear(t, t.len);
   t.len = 0;
   t.layers = 0;
-  t.playPos = 0;
   t.winOpen = false;
+  resetTrackFx(t);
+  rescheduleTrackChanges();
   if (last_ == Last::kTrack && lastTrack_ == track) last_ = Last::kNone;
 }
 
@@ -130,7 +131,9 @@ void Looper::capture(const InputRing& in, int64_t now) {
     }
     for (Layer& l : layers_) {
       if (l.winOpen && n >= l.winStart && n < l.winEnd) {
-        l.data[static_cast<size_t>(wrap(n - l.winOrigin, l.extent))] += x;
+        // Donde se oía la pista en n (al revés o a media velocidad, también)
+        const int64_t q = wrap(l.q0 + int64_t(l.dq) * (n - l.winStart), 2 * l.extent);
+        l.data[static_cast<size_t>(q >> 1)] += (l.dq == 2 || l.dq == -2) ? x : 0.5f * x;
       }
     }
   }

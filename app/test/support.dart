@@ -111,6 +111,30 @@ class FakeEngine implements LoopinEngine {
   void setPreviewGrid(double mark, double beat, int beatsPerBar, int accentMask) =>
       calls.add('grid ${mark.round()} ${beat.toStringAsFixed(1)} $beatsPerBar');
 
+  // Etapa 5
+  @override
+  void setTrackReverse(int track, bool on) => calls.add('reverse $track $on');
+  @override
+  void setTrackHalf(int track, bool on) => calls.add('half $track $on');
+  @override
+  void setQuantize(bool on) => calls.add('quantize $on');
+  @override
+  void stopPlaying({bool now = false}) => calls.add(now ? 'stopNow' : 'stop');
+  @override
+  void setStopMode(StopMode mode) => calls.add('stopMode ${mode.name}');
+  @override
+  void setFadeSeconds(double seconds) => calls.add('fade $seconds');
+  @override
+  void setTrainer({required int bars, required double step, required double top}) =>
+      calls.add('trainer $bars ${step.round()} ${top.round()}');
+  @override
+  void setTunerEnabled(bool on) => calls.add('tuner $on');
+
+  /// Lo que devuelve el afinador.
+  TunerReading? tuner;
+  @override
+  TunerReading? tunerRead() => tuner;
+
   @override
   void startTapCalibration() => calls.add('tapStart');
   @override
@@ -132,6 +156,8 @@ EngineStatus fakeStatus(
   LatencyState tapState = LatencyState.idle,
   int tapClicks = 0,
   bool drums = false,
+  bool fx = false,
+  int stopping = 0,
 }) {
   final any = st != LoopState.empty;
   final rest = st == LoopState.stopped ? LoopState.stopped : LoopState.playing;
@@ -159,6 +185,8 @@ EngineStatus fakeStatus(
     tapHits: tapClicks > 4 ? tapClicks - 4 : 0,
     tapFrames: 5760,
     tapSpread: 240,
+    stopping: stopping,
+    quantize: true,
     loopBarFrames: _bar,
     loopLength: st.hasLoop ? 4 * _bar : 0,
     loopPosition: st.hasLoop ? 200000 : 0,
@@ -176,17 +204,23 @@ EngineStatus fakeStatus(
     baseLength: any ? 4 * _bar : 0,
     basePosition: any ? 200000 : 0,
     tracks: [
+      // Con [fx], la pista 1 al revés y la 2 a media velocidad, con el
+      // reverse esperando al siguiente 1
       TrackStatus(
         state: any ? rest : LoopState.empty,
         layers: any ? 1 : 0,
         length: any ? 4 * _bar : 0,
         position: any ? 200000 : 0,
+        reverse: fx && any,
       ),
       TrackStatus(
         state: st,
         layers: st.hasLoop ? 2 : 0,
         length: st.hasLoop ? 4 * _bar : 0,
         position: st.hasLoop ? 200000 : 0,
+        half: fx && st.hasLoop,
+        reverse: fx && st.hasLoop,
+        pending: fx && st.hasLoop ? 2 : 0,
       ),
       TrackStatus(
         state: any ? rest : LoopState.empty,

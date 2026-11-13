@@ -370,6 +370,8 @@ int main() {
   runDrumTests();
   std::printf("\n=== Audio importado ===\n");
   runSongTests();
+  std::printf("\n=== Directo y práctica ===\n");
+  runLiveTests();
   if (gFailures == 0) {
     std::printf("\nTodo OK\n");
     return 0;

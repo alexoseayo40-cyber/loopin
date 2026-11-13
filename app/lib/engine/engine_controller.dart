@@ -15,6 +15,10 @@
 //   song_editor.dart        preparar una canción (tempo y dónde cae el 1)
 //   play_mode.dart          modo simple y avanzado (qué tiene cada uno)
 //   mode_control.dart       pasar de un modo a otro (parte de este archivo)
+//   live_settings.dart      ajustes de directo y práctica (Etapa 5)
+//   live_control.dart       reverse, media velocidad, cambios al compás,
+//                           parar, entrenador y afinador (parte de este archivo)
+//   tuner.dart              afinador: nota, cents y filtro
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -29,6 +33,7 @@ import 'latency_routes.dart';
 import 'meter.dart';
 import 'pedal_keys.dart';
 import 'drums.dart';
+import 'live_settings.dart';
 import 'play_mode.dart';
 import 'prefs.dart';
 import 'song_backing.dart';
@@ -36,6 +41,7 @@ import 'songs.dart';
 import 'status_change.dart';
 
 export 'latency_routes.dart' show LatencySource;
+export 'live_settings.dart' show LiveSettings, kTrainerBarOptions;
 export 'meter.dart';
 export 'pedal_keys.dart' show LearnedKey, PedalAction;
 export 'play_mode.dart' show PlayMode;
@@ -43,6 +49,7 @@ export 'report.dart';
 export 'song_backing.dart' show BackingPhase;
 export 'songs.dart' show Song, ImportError, ImportException;
 
+part 'live_control.dart';
 part 'mode_control.dart';
 
 /// Qué hacen las pistas que ya suenan mientras se graba otra (o un overdub),
@@ -95,6 +102,10 @@ class EngineController extends ChangeNotifier {
 
   /// Lo que el simple cambió al entrar, para devolverlo al volver al avanzado.
   SimpleForced _forced = SimpleForced();
+
+  /// Directo y práctica: cómo parar, cambios al compás, entrenador, afinador
+  /// (ver live_control.dart).
+  final LiveSettings _liveSettings = LiveSettings();
 
   // Lo que el usuario ha pedido (se reaplica si el audio se reinicia)
   double bpm = 92;
@@ -266,6 +277,7 @@ class EngineController extends ChangeNotifier {
     for (var i = 0; i < kTrackCount; i++) {
       _engine.setTrackVolume(i, trackVolumes[i]);
     }
+    _applyLive();
   }
 
   static double _dbToGain(double db) => math.pow(10, db / 20).toDouble();
@@ -336,6 +348,8 @@ class EngineController extends ChangeNotifier {
   /// Con un loop grabado (o grabándose) el tempo y el compás no se tocan.
   bool get tempoLocked => status.loopState != LoopState.empty;
 
+  /// Arranca o para. Para como diga [stopMode] (al momento, en el 1 o con
+  /// fundido); pulsar otra vez mientras se para, para ya.
   void togglePlay() {
     if (!status.running) return;
     _wantPlaying = !status.playing;
@@ -343,7 +357,7 @@ class EngineController extends ChangeNotifier {
       _xrunsAtPlay = status.xrunCount < 0 ? 0 : status.xrunCount;
       _engine.play();
     } else {
-      _engine.pause();
+      _engine.stopPlaying();
     }
     notifyListeners();
   }
@@ -1023,6 +1037,7 @@ class EngineController extends ChangeNotifier {
       chassis: Chassis.values.firstWhere((c) => c.name == chassis, orElse: () => Chassis.classic),
     );
 
+    await _liveSettings.load(_prefs);
     await _keys.load();
     await _routes.load();
     await _backing.load();
@@ -1050,6 +1065,7 @@ class EngineController extends ChangeNotifier {
     _poll?.cancel();
     _holdTimer?.cancel();
     _secondaryTimer?.cancel();
+    _engine.setTunerEnabled(false);
     _engine.stop();
     super.dispose();
   }

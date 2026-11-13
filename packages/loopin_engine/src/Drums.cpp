@@ -226,6 +226,11 @@ void Drums::halt() {
   eventCount_ = eventIdx_ = 0;
 }
 
+void Drums::silence() {
+  halt();
+  for (Voice& v : voices_) v = Voice{};
+}
+
 DrumStyle Drums::resolve(int32_t beatsPerBar, uint32_t accentMask) const {
   if (style_ == DrumStyle::kBasic) return style_;
   const Pattern& p = patterns_[static_cast<size_t>(style_)];

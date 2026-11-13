@@ -97,7 +97,15 @@ extension EngineReport on EngineController {
                 : null,
             s.tracks[i].layers,
             s.tracks[i].muted,
+            reverse: s.tracks[i].reverse,
+            half: s.tracks[i].half,
           ),
+      r.live(
+        tr.stopModeName(stopMode).toLowerCase(),
+        quantize,
+        trainerOn ? r.trainerSetting(trainerStep.round(), trainerBars, trainerTop.round()) : null,
+        tunerA4,
+      ),
       r.controls(
         tr.yesNo(volumeKeys),
         tr.yesNo(headsetKey),

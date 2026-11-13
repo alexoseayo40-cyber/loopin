@@ -1,6 +1,7 @@
 // Loopin — ajustes: modo, apariencia, looper y controles externos
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:flutter/material.dart';
+import 'package:loopin_engine/loopin_engine.dart' show StopMode;
 
 import '../engine/engine_controller.dart';
 import '../l10n/strings.dart';
@@ -45,7 +46,19 @@ class SettingsScreen extends StatelessWidget {
                       value: c.autoAdvance,
                       onChanged: c.setAutoAdvance,
                     ),
-                    if (!c.simple) _RecordDuckSection(controller: c),
+                    if (!c.simple) ...[
+                      _RecordDuckSection(controller: c),
+                      _StopModeSection(controller: c),
+                      OptionTile.toggle(
+                        key: const ValueKey('quantize'),
+                        leading: const Icon(Icons.timer_outlined),
+                        title: tr.quantizeTitle,
+                        subtitle: tr.quantizeLine,
+                        help: tr.quantizeHelp,
+                        value: c.quantizeSetting,
+                        onChanged: c.setQuantize,
+                      ),
+                    ],
                     _Header(tr.externalControls, help: tr.externalControlsHelp),
                     _ControlsSection(controller: c),
                     _Header(tr.audio),
@@ -286,6 +299,42 @@ class _RecordDuckSection extends StatelessWidget {
             showSelectedIcon: false,
             selected: {c.recordDuck},
             onSelectionChanged: (v) => c.setRecordDuck(v.first),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Al parar: al momento, en el 1 o con fundido.
+class _StopModeSection extends StatelessWidget {
+  const _StopModeSection({required this.controller});
+
+  final EngineController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = controller;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OptionTile(
+          leading: const Icon(Icons.stop_circle_outlined),
+          title: tr.stopModeTitle,
+          subtitle: Text(tr.stopModeLine),
+          help: tr.stopModeHelp,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: SegmentedButton<StopMode>(
+            key: const ValueKey('stop-mode'),
+            segments: [
+              for (final m in StopMode.values)
+                ButtonSegment(value: m, label: Text(tr.stopModeName(m))),
+            ],
+            showSelectedIcon: false,
+            selected: {c.stopModeSetting},
+            onSelectionChanged: (v) => c.setStopMode(v.first),
           ),
         ),
       ],

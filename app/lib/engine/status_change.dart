@@ -68,6 +68,13 @@ bool layoutChanged(EngineStatus a, EngineStatus b) {
       a.activeTrack != b.activeTrack ||
       a.autoAdvance != b.autoAdvance ||
       a.baseLength != b.baseLength ||
+      // Directo y práctica
+      a.quantize != b.quantize ||
+      a.stopMode != b.stopMode ||
+      a.stopping != b.stopping ||
+      a.trainerBars != b.trainerBars ||
+      a.trainerStep != b.trainerStep ||
+      a.trainerTop != b.trainerTop ||
       a.tracks.length != b.tracks.length) {
     return true;
   }
@@ -77,7 +84,10 @@ bool layoutChanged(EngineStatus a, EngineStatus b) {
         x.layers != y.layers ||
         x.muted != y.muted ||
         x.volume != y.volume ||
-        x.length != y.length) {
+        x.length != y.length ||
+        x.reverse != y.reverse ||
+        x.half != y.half ||
+        x.pending != y.pending) {
       return true;
     }
   }

@@ -18,6 +18,7 @@ import 'package:loopin/ui/settings_screen.dart';
 import 'package:loopin/ui/song_screen.dart';
 import 'package:loopin/ui/songs_screen.dart';
 import 'package:loopin/ui/theme.dart';
+import 'package:loopin/ui/tuner_screen.dart';
 import 'package:loopin_engine/loopin_engine.dart';
 
 import '../test/support.dart';
@@ -112,10 +113,21 @@ void main() {
     bool song = false,
     PlayMode mode = PlayMode.advanced,
     Widget Function(EngineController c)? home,
+    bool fx = false,
+    int stopping = 0,
+    TunerReading? tuner,
+    Future<void> Function(WidgetTester t, EngineController c)? after,
   }) async {
     setScreen(tester, size, pixelRatio: 2);
     final engine = FakeEngine()
-      ..next = fakeStatus(state, playing: state != LoopState.stopped, drums: drums != null);
+      ..tuner = tuner
+      ..next = fakeStatus(
+        state,
+        playing: state != LoopState.stopped,
+        drums: drums != null,
+        fx: fx,
+        stopping: stopping,
+      );
     if (song || home != null) engine.next = _songStatus(engine.next, playing: song);
     final c = EngineController(engine: engine, songs: SongLibrary.memory(_songs))
       ..setPlayMode(mode);
@@ -142,6 +154,7 @@ void main() {
       c.setDrumsOn(true);
     }
     await tester.pump(const Duration(milliseconds: 100));
+    if (after != null) await after(tester, c);
     await tester.pump(const Duration(milliseconds: 400)); // que acaben las animaciones
     await expectLater(find.byType(MaterialApp), matchesGoldenFile('screenshots/$name.png'));
     c.stopAudio();
@@ -330,6 +343,78 @@ void main() {
     (t) => shot(t, 'tablet-apaisada', const Size(1280, 800), state: LoopState.playing),
   );
   // Pantallas largas: se hacen altas para que se vea todo
-  testWidgets('ajustes', (t) => shot(t, 'ajustes', const Size(393, 1100), settings: true));
+  testWidgets('ajustes', (t) => shot(t, 'ajustes', const Size(393, 1500), settings: true));
+  // Etapa 5: directo y práctica
+  testWidgets(
+    'reverse, media velocidad y parando',
+    (t) => shot(t, 'directo', phone, state: LoopState.playing, fx: true, stopping: 2),
+  );
+  testWidgets(
+    'reverse en pequeño',
+    (t) => shot(t, 'directo-pequeno', const Size(360, 640), state: LoopState.playing, fx: true),
+  );
+  testWidgets(
+    'entrenador',
+    (t) => shot(
+      t,
+      'entrenador',
+      phone,
+      state: LoopState.empty,
+      after: (t, c) async {
+        c.setTrainerOn(true);
+        await t.pump();
+      },
+    ),
+  );
+  testWidgets(
+    'entrenador: ajustes',
+    (t) => shot(
+      t,
+      'entrenador-hoja',
+      phone,
+      state: LoopState.empty,
+      after: (t, c) async {
+        c.setTrainerOn(true);
+        await t.pump();
+        await t.tap(find.byKey(const ValueKey('trainer-button')));
+        await t.pump();
+        await t.pump(const Duration(milliseconds: 500));
+      },
+    ),
+  );
+  Widget tunerHome(EngineController c) => TunerScreen(controller: c);
+  testWidgets(
+    'afinador',
+    (t) => shot(
+      t,
+      'afinador',
+      phone,
+      state: LoopState.empty,
+      home: tunerHome,
+      tuner: const TunerReading(frequency: 81.95, clarity: 0.97, levelDb: -18),
+      after: (t, c) async {
+        for (var i = 0; i < 6; i++) {
+          await t.pump(const Duration(milliseconds: 40));
+        }
+      },
+    ),
+  );
+  testWidgets(
+    'afinador: afinada',
+    (t) => shot(
+      t,
+      'afinador-afinada',
+      const Size(360, 640),
+      state: LoopState.empty,
+      home: tunerHome,
+      mode: PlayMode.simple,
+      tuner: const TunerReading(frequency: 196.1, clarity: 0.97, levelDb: -25),
+      after: (t, c) async {
+        for (var i = 0; i < 6; i++) {
+          await t.pump(const Duration(milliseconds: 40));
+        }
+      },
+    ),
+  );
   testWidgets('audio', (t) => shot(t, 'audio-y-latencia', const Size(393, 1700), audio: true));
 }
