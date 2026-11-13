@@ -19,13 +19,61 @@ class TopBar extends StatelessWidget {
       height: 44,
       child: Row(
         children: [
-          Text(tr.appName.toUpperCase(), style: p.label(size: 20, spacing: 5)),
-          const SizedBox(width: 12),
+          // El nombre lleva a las sesiones: debajo, la que está abierta
           Expanded(
+            flex: 5,
             child: Align(
-              alignment: Alignment.centerRight,
-              child: LatencyChip(view: view),
+              alignment: Alignment.centerLeft,
+              child: Semantics(
+                button: true,
+                label: tr.sessionsOpenSemantics(view.controller.sessionName),
+                excludeSemantics: true,
+                child: InkWell(
+                  key: const ValueKey('open-sessions'),
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: view.onSessions,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Si no cabe (letra grande), se encoge en vez de partirse
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            tr.appName.toUpperCase(),
+                            maxLines: 1,
+                            style: p.label(size: 18, spacing: 5),
+                          ),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                view.controller.sessionName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: p.label(size: 11, color: p.dim, spacing: 0.4),
+                              ),
+                            ),
+                            Icon(Icons.arrow_drop_down, size: 16, color: p.dim),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
+          ),
+          const SizedBox(width: 6),
+          // Se encoge (con «…») si no cabe
+          Flexible(
+            flex: 6,
+            child: Align(alignment: Alignment.centerRight, child: LatencyChip(view: view)),
           ),
           IconButton(
             key: const ValueKey('open-tuner'),

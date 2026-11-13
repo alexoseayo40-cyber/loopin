@@ -679,6 +679,66 @@ class LoopinEngineBindings {
   late final _loopin_tuner_read = _loopin_tuner_readPtr
       .asFunction<int Function(ffi.Pointer<LoopinTuner>)>();
 
+  /// Copia lo que suena de una pista en out si cabe en max_frames (out puede
+  /// ser NULL). Devuelve su longitud (0 = vacía) o -1 si no están quietas.
+  int loopin_track_read(
+    int track,
+    ffi.Pointer<ffi.Float> out,
+    int max_frames,
+    ffi.Pointer<ffi.Uint64> hash,
+  ) {
+    return _loopin_track_read(track, out, max_frames, hash);
+  }
+
+  late final _loopin_track_readPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Int64 Function(ffi.Int32, ffi.Pointer<ffi.Float>, ffi.Int64, ffi.Pointer<ffi.Uint64>)
+        >
+      >('loopin_track_read');
+  late final _loopin_track_read = _loopin_track_readPtr
+      .asFunction<int Function(int, ffi.Pointer<ffi.Float>, int, ffi.Pointer<ffi.Uint64>)>();
+
+  /// Carga una sesión (sin loops). Devuelve 0 o LOOPIN_SESSION_*.
+  int loopin_session_load(
+    ffi.Pointer<LoopinSession> s,
+    ffi.Pointer<ffi.Pointer<ffi.Float>> data,
+  ) {
+    return _loopin_session_load(s, data);
+  }
+
+  late final _loopin_session_loadPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Int32 Function(ffi.Pointer<LoopinSession>, ffi.Pointer<ffi.Pointer<ffi.Float>>)
+        >
+      >('loopin_session_load');
+  late final _loopin_session_load = _loopin_session_loadPtr
+      .asFunction<
+        int Function(ffi.Pointer<LoopinSession>, ffi.Pointer<ffi.Pointer<ffi.Float>>)
+      >();
+
+  /// Exporta en segundo plano lo que suena ahora.
+  int loopin_export_start(ffi.Pointer<LoopinExport> e) {
+    return _loopin_export_start(e);
+  }
+
+  late final _loopin_export_startPtr =
+      _lookup<ffi.NativeFunction<ffi.Int32 Function(ffi.Pointer<LoopinExport>)>>(
+        'loopin_export_start',
+      );
+  late final _loopin_export_start = _loopin_export_startPtr
+      .asFunction<int Function(ffi.Pointer<LoopinExport>)>();
+
+  void loopin_export_cancel() {
+    return _loopin_export_cancel();
+  }
+
+  late final _loopin_export_cancelPtr = _lookup<ffi.NativeFunction<ffi.Void Function()>>(
+    'loopin_export_cancel',
+  );
+  late final _loopin_export_cancel = _loopin_export_cancelPtr.asFunction<void Function()>();
+
   /// Copia el estado actual en *out.
   void loopin_get_status(ffi.Pointer<LoopinStatus> out) {
     return _loopin_get_status(out);
@@ -1089,6 +1149,93 @@ final class LoopinStatus extends ffi.Struct {
   /// Afinador: nota de referencia que suena (0 = ninguna)
   @ffi.Double()
   external double tone_hz;
+
+  /// 1 = las pistas están quietas (se pueden leer)
+  @ffi.Int32()
+  external int loop_settled;
+
+  /// cambia con cada orden que puede tocar las pistas
+  @ffi.Int64()
+  external int loop_revision;
+
+  /// dónde empieza cada pista en el ciclo
+  @ffi.Array.multi([4])
+  external ffi.Array<ffi.Int64> track_offset;
+
+  /// LOOPIN_JOB_*
+  @ffi.Int32()
+  external int export_state;
+
+  /// 0..1000
+  @ffi.Int32()
+  external int export_progress;
+
+  /// LOOPIN_EXPORT_ERR_*
+  @ffi.Int32()
+  external int export_error;
+
+  /// duración de lo exportado (muestras)
+  @ffi.Int64()
+  external int export_frames;
+}
+
+/// Una sesión guardada (para loopin_session_load)
+final class LoopinSession extends ffi.Struct {
+  @ffi.Double()
+  external double bpm;
+
+  @ffi.Int32()
+  external int beats_per_bar;
+
+  @ffi.Int32()
+  external int accent_mask;
+
+  /// a la que se grabaron los datos
+  @ffi.Int32()
+  external int sample_rate;
+
+  /// pista elegida
+  @ffi.Int32()
+  external int selected;
+
+  /// muestras por compás (a esa frecuencia)
+  @ffi.Int64()
+  external int bar_frames;
+
+  @ffi.Int64()
+  external int base_length;
+
+  /// 0 = vacía
+  @ffi.Array.multi([4])
+  external ffi.Array<ffi.Int64> track_length;
+
+  @ffi.Array.multi([4])
+  external ffi.Array<ffi.Int64> track_offset;
+
+  @ffi.Array.multi([4])
+  external ffi.Array<ffi.Int32> track_layers;
+}
+
+/// Qué exportar (loopin_export_start). Rutas en UTF-8; NULL = ese no.
+final class LoopinExport extends ffi.Struct {
+  /// vueltas del ciclo entero (la pista más larga)
+  @ffi.Int32()
+  external int loops;
+
+  @ffi.Int32()
+  external int with_drums;
+
+  @ffi.Int32()
+  external int with_song;
+
+  external ffi.Pointer<ffi.Char> mix_path;
+
+  @ffi.Array.multi([4])
+  external ffi.Array<ffi.Pointer<ffi.Char>> track_path;
+
+  external ffi.Pointer<ffi.Char> drums_path;
+
+  external ffi.Pointer<ffi.Char> song_path;
 }
 
 final class LoopinTuner extends ffi.Struct {

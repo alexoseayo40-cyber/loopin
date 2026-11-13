@@ -20,6 +20,8 @@ class LooperView {
     required this.onSettings,
     required this.onLatency,
     required this.onTuner,
+    this.onSessions,
+    this.onStage,
   });
 
   final EngineController controller;
@@ -27,6 +29,10 @@ class LooperView {
   final VoidCallback onSettings;
   final VoidCallback onLatency;
   final VoidCallback onTuner;
+
+  /// Sesiones (el nombre de arriba) y modo escenario.
+  final VoidCallback? onSessions;
+  final VoidCallback? onStage;
 
   /// El último estado del motor.
   EngineStatus get s => controller.status;

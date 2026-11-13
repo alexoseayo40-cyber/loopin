@@ -563,10 +563,204 @@ class Strings {
   String get start => 'ARRANCAR';
   String get clearAll => 'Borrar todas las pistas';
   String get clearAllTitle => '¿Borrar las 4 pistas?';
-  String get clearAllBody => 'Se pierde todo lo grabado. No se puede deshacer.';
+  String clearAllBody(String session) =>
+      'Se pierde lo grabado en «$session». No se puede deshacer.\n\n'
+      'Si quieres guardarlo, empieza una sesión nueva: esta se queda en Sesiones.';
   String get clearAllConfirm => 'Borrar todo';
+  String get clearAllNewSession => 'Sesión nueva';
+  String get stageOpen => 'Modo escenario (toda la pantalla es el pulsador)';
   String get inputLevel => 'Nivel de entrada';
   String get monitor => 'ESCUCHARME';
+
+  // ---------------------------------------------------------------- sesiones (Etapa 6)
+
+  static const _months = [
+    'ene',
+    'feb',
+    'mar',
+    'abr',
+    'may',
+    'jun',
+    'jul',
+    'ago',
+    'sep',
+    'oct',
+    'nov',
+    'dic',
+  ];
+  String _two(int n) => n.toString().padLeft(2, '0');
+
+  /// «Sesión 13 nov · 18:50»
+  String sessionDefaultName(DateTime d) =>
+      'Sesión ${d.day} ${_months[d.month - 1]} · ${_two(d.hour)}:${_two(d.minute)}';
+  String sessionCopyName(String name) => '$name (copia)';
+
+  /// «hoy 18:50», «ayer 09:12», «13 nov», «13 nov 2025»
+  String sessionWhen(DateTime d, DateTime now) {
+    final day = DateTime(d.year, d.month, d.day);
+    final today = DateTime(now.year, now.month, now.day);
+    final diff = today.difference(day).inDays;
+    final time = '${_two(d.hour)}:${_two(d.minute)}';
+    if (diff == 0) return 'hoy $time';
+    if (diff == 1) return 'ayer $time';
+    return d.year == now.year
+        ? '${d.day} ${_months[d.month - 1]}'
+        : '${d.day} ${_months[d.month - 1]} ${d.year}';
+  }
+
+  String sessionsOpenSemantics(String name) => 'Sesiones. Abierta: $name';
+  String get sessionsTitle => 'Sesiones';
+  String get sessionsHow => 'Se guardan solas';
+  String get sessionsHelp =>
+      'Todo lo que grabas se guarda solo, con su tempo, su compás, el volumen, '
+      'el silencio y REV/½ de cada pista, la batería y la canción. Al abrir la '
+      'app sigue la última.\n\n'
+      '«Sesión nueva» deja esta guardada y empieza otra vacía. Para probar '
+      'cosas sin perder lo que tienes, «Duplicar» guarda una copia antes.\n\n'
+      'Una sesión sin pistas no se guarda.';
+  String get sessionOpenNow => 'ABIERTA';
+  String get sessionsSaved => 'Guardadas';
+  String get sessionsEmpty => 'Aún no hay otras. Al empezar una nueva, esta se queda aquí.';
+  String get sessionEmptyNow => 'Sin pistas todavía: se guardará al grabar.';
+
+  /// «92 BPM · 4/4 · 3 pistas · 8 C»
+  String sessionSummary(({String bpm, String meter, int tracks, int bars}) f) =>
+      '${f.bpm} BPM · ${f.meter} · ${f.tracks} ${f.tracks == 1 ? 'pista' : 'pistas'}'
+      '${f.bars > 0 ? ' · ${f.bars} C' : ''}';
+  String get sessionNew => 'Sesión nueva';
+  String get sessionOpen => 'Abrir';
+  String get sessionRename => 'Cambiar el nombre';
+  String get sessionRenameSave => 'Guardar';
+  String get sessionNameLabel => 'Nombre';
+  String get sessionDuplicate => 'Duplicar';
+  String sessionDuplicated(String name) => 'Copia guardada: «$name»';
+  String get sessionDuplicateEmpty => 'No hay nada que copiar todavía.';
+  String get sessionDelete => 'Borrar';
+  String get sessionOptions => 'Opciones de la sesión';
+  String sessionDeleteTitle(String name) => '¿Borrar «$name»?';
+  String get sessionDeleteBody => 'Se borran sus pistas. No se puede deshacer.';
+  String get sessionDeleteOpenBody =>
+      'Es la que está abierta: se borran sus pistas y empieza una vacía. '
+      'No se puede deshacer.';
+  String get sessionBusy => 'Acaba de grabar para cambiar de sesión.';
+  String get sessionOpenFailed => 'No se ha podido abrir la sesión.';
+
+  // ---------------------------------------------------------------- exportar
+
+  String get exportButton => 'Exportar';
+  String exportTitle(String session) => 'Exportar «$session»';
+  String get exportWhat => 'Archivos WAV';
+  String get exportHelp =>
+      'Sale lo que suena ahora: cada pista con su volumen, su silencio y REV/½, '
+      'más la batería y la canción si están encendidas (se pueden quitar). El '
+      'clic no sale.\n\n'
+      '«Cada pista por separado» hace un archivo por pista (también las que están '
+      'en silencio), y otro para la batería y la canción: todos empiezan a la vez '
+      'y duran lo mismo, para llevarlos a un programa de música (DAW).\n\n'
+      'Una vuelta es lo que dura la pista más larga. Si la mezcla pasa del '
+      'máximo, todo se baja lo mismo para que no se sature.';
+  String get exportMix => 'La mezcla (lo que suena)';
+  String get exportStems => 'Cada pista por separado';
+  String get exportWithDrums => 'Con la batería';
+  String get exportWithSong => 'Con la canción';
+  String get exportLoops => 'Vueltas';
+
+  /// «2 vueltas · 34 s»
+  String exportLength(int loops, double seconds) {
+    final s = seconds.round();
+    final time = s >= 60 ? '${s ~/ 60} min ${_two(s % 60)} s' : '$s s';
+    return '$loops ${loops == 1 ? 'vuelta' : 'vueltas'} · $time';
+  }
+
+  String get exportStart => 'Exportar';
+  String exporting(double progress) => 'Exportando… ${percent(progress)}';
+  String exportDone(int files) => files == 1 ? 'Listo: 1 archivo.' : 'Listo: $files archivos.';
+  String get exportShare => 'Compartir';
+  String get exportSave => 'Guardar en una carpeta';
+  String exportSaved(int files) => files == 1 ? 'Guardado 1 archivo' : 'Guardados $files archivos';
+  String get exportSaveFailed => 'No se ha podido guardar ahí.';
+  String get exportAgain => 'Otra vez';
+  String exportStartError(int code) => switch (code) {
+    -1 => 'Acaba de grabar (o espera un momento) para exportar.',
+    -2 => 'No hay pistas que exportar.',
+    -3 => 'Ya se está exportando.',
+    _ => 'No se puede exportar ahora.',
+  };
+  String exportError(ExportError e) => switch (e) {
+    ExportError.write => 'No se ha podido escribir el archivo (¿falta sitio?).',
+    ExportError.memory => 'No hay memoria suficiente. Prueba con menos vueltas.',
+    ExportError.nothing => 'No hay pistas que exportar.',
+    _ => 'No se ha podido exportar.',
+  };
+
+  /// Nombre de los archivos: el de la sesión sin lo que no vale en un archivo.
+  String exportFileBase(String session) {
+    final clean = session
+        .replaceAll(RegExp(r'[\\/:*?"<>|·]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    return clean.isEmpty ? 'Loopin' : clean;
+  }
+
+  String exportFileName(String base, String part) => '$base - $part.wav';
+  String exportTrack(int n) => 'pista $n';
+  String get exportDrums => 'batería';
+  String get exportSong => 'canción';
+
+  // ---------------------------------------------------------------- modo escenario
+
+  /// «92 BPM · 4/4»
+  String stageTempo(String bpm, String meter) => '$bpm BPM · $meter';
+  String get stageGestures => 'Pisa en cualquier sitio · Mantén: deshacer · Doble: parar';
+  String get stageExitHold => 'Mantén para salir';
+  String get stageExit => 'Salir del modo escenario';
+
+  // ---------------------------------------------------------------- guía de la primera vez
+
+  String get helpSection => 'Ayuda';
+  String get tutorialOpen => 'Ver la guía';
+  String get tutorialOpenLine => 'El pulsador, el tempo, la latencia y las sesiones';
+  String get tutorialSkip => 'Saltar';
+  String get tutorialNext => 'Siguiente';
+  String get tutorialStart => 'Empezar';
+  String get tutorialWelcome => 'Bienvenido a Loopin';
+  String get tutorialWelcomeBody =>
+      'Graba un trozo, se repite, y tocas encima. Hasta 4 pistas, siempre al compás. '
+      'Primero, ¿cómo lo quieres?';
+  String tutorialModeLine(PlayMode m) => switch (m) {
+    PlayMode.simple => 'Looper y metrónomo, con el pulsador grande. Para empezar.',
+    PlayMode.advanced => 'Todo: batería, tus canciones, modo libre, REV y ½…',
+  };
+  String get tutorialModeLater => 'Se cambia cuando quieras en Ajustes › Modo.';
+  String get tutorialPedal => 'El pulsador';
+  String get tutorialPedalBody =>
+      'Es un pedal: hace su trabajo al pisar, no al soltar. Funciona con el dedo, '
+      'con un pedal Bluetooth o con el botón de los cascos.';
+  String get tutorialTap =>
+      'Toca: graba. Otra vez: cierra el loop y suena. Con loop, graba encima.';
+  String get tutorialHold => 'Mantén: deshace lo último.';
+  String get tutorialDouble => 'Doble toque: para o arranca todo.';
+  String get tutorialTempo => 'El tempo';
+  String get tutorialTempoBody =>
+      'Pon el tempo con − y +, o toca «TAP» al ritmo de lo que vas a tocar.';
+  String get tutorialCount => 'Antes de la primera pista suena un compás de cuenta.';
+  String get tutorialLights =>
+      'Las luces marcan cada tiempo (roja la del 1): no hace falta oír el clic.';
+  String get tutorialLatency => 'La latencia';
+  String get tutorialLatencyBody =>
+      'El sonido tarda un poco en entrar y salir del móvil. Loopin lo descuenta '
+      'para que lo grabado caiga justo en el tiempo, pero antes tiene que medirlo: '
+      'se hace una vez y se guarda.';
+  String get tutorialMeasureNow => 'Medir ahora';
+  String get tutorialMeasureLater =>
+      'Más tarde: el aviso de arriba («LATENCIA SIN MEDIR») lleva ahí.';
+  String get tutorialSaved => 'Todo se guarda solo';
+  String get tutorialSavedBody => 'No hay que darle a guardar: al abrir la app sigue lo último.';
+  String get tutorialSessions =>
+      'El nombre de arriba abre tus sesiones: empieza otra, vuelve a una de antes o cámbiale el nombre.';
+  String get tutorialExport => 'Exporta a WAV la mezcla o cada pista y compártelas.';
+  String get tutorialStage =>
+      'Modo escenario (el botón de abajo): toda la pantalla es el pulsador, para tocar en directo.';
 
   // ---------------------------------------------------------------- ajustes
 

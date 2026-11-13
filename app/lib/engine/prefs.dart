@@ -40,6 +40,8 @@ class Prefs {
   static const trainerBars = 'trainerBars';
   static const trainerTop = 'trainerTop';
   static const tunerA4 = 'tunerA4';
+  static const sessionId = 'sessionId';
+  static const tutorialDone = 'tutorialDone';
 
   Future<String?> get(String key) async {
     try {

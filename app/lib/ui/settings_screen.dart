@@ -7,6 +7,7 @@ import '../engine/engine_controller.dart';
 import '../l10n/strings.dart';
 import 'audio_settings_screen.dart';
 import 'help.dart';
+import 'tutorial_screen.dart';
 import 'theme.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -67,6 +68,26 @@ class SettingsScreen extends StatelessWidget {
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute<void>(builder: (_) => AudioSettingsScreen(controller: c)),
+                      ),
+                    ),
+                    _Header(tr.helpSection),
+                    ListTile(
+                      key: const ValueKey('open-tutorial'),
+                      leading: const Icon(Icons.school_outlined),
+                      title: Text(tr.tutorialOpen),
+                      subtitle: Text(tr.tutorialOpenLine),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => TutorialScreen(
+                            controller: c,
+                            onMeasure: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => AudioSettingsScreen(controller: c),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ],

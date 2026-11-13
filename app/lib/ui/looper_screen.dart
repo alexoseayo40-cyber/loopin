@@ -18,14 +18,20 @@ import 'looper/tempo_display.dart';
 import 'looper/top_bar.dart';
 import 'looper/tracks.dart';
 import 'looper/view.dart';
+import 'sessions_screen.dart';
 import 'settings_screen.dart';
+import 'stage_screen.dart';
 import 'theme.dart';
 import 'tuner_screen.dart';
+import 'tutorial_screen.dart';
 
 class LooperScreen extends StatefulWidget {
-  const LooperScreen({super.key, required this.controller});
+  const LooperScreen({super.key, required this.controller, this.tutorial = false});
 
   final EngineController controller;
+
+  /// Enseñar la guía la primera vez (en la app; los tests no la quieren).
+  final bool tutorial;
 
   @override
   State<LooperScreen> createState() => _LooperScreenState();
@@ -35,10 +41,30 @@ class _LooperScreenState extends State<LooperScreen> {
   @override
   void initState() {
     super.initState();
-    // El audio se enciende al abrir la app (pide el permiso del micro)
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!widget.controller.wantRunning) widget.controller.startAudio();
+    // El audio se enciende al abrir la app (pide el permiso del micro). La
+    // primera vez, antes, la guía.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final c = widget.controller;
+      if (widget.tutorial && await c.needsTutorial() && mounted) {
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => TutorialScreen(controller: c, onMeasure: _openLatency),
+          ),
+        );
+      }
+      if (!c.wantRunning) c.startAudio();
     });
+  }
+
+  void _openSessions() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => SessionsScreen(controller: widget.controller)));
+  }
+
+  void _openStage() {
+    Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => StageScreen(controller: widget.controller)));
   }
 
   void _openSettings() {
@@ -83,14 +109,35 @@ class _LooperScreenState extends State<LooperScreen> {
                     onSettings: _openSettings,
                     onLatency: _openLatency,
                     onTuner: _openTuner,
+                    onSessions: _openSessions,
+                    onStage: _openStage,
                   );
                   // Apaisado (móvil tumbado o tablet): dos columnas
                   final wide = box.maxWidth >= 520 && box.maxWidth > box.maxHeight * 1.15;
                   // Con sitio de sobra (tablet) se ven los controles de las 4 pistas
                   final roomy = math.min(box.maxWidth, box.maxHeight) >= 560;
-                  return wide
-                      ? _WideLayout(view: view, box: box, mixer: roomy)
-                      : _TallLayout(view: view, box: box, mixer: roomy);
+                  if (wide) return _WideLayout(view: view, box: box, mixer: roomy);
+                  // Tablet en vertical: la misma pantalla, más grande (letra y
+                  // piezas), como si midiera 600 de ancho
+                  final scale = tabletScale(box);
+                  if (scale > 1) {
+                    final virtual = BoxConstraints.tight(
+                      Size(box.maxWidth / scale, box.maxHeight / scale),
+                    );
+                    return FittedBox(
+                      fit: BoxFit.contain,
+                      alignment: Alignment.topCenter,
+                      child: SizedBox(
+                        width: virtual.maxWidth,
+                        height: virtual.maxHeight,
+                        child: MediaQuery(
+                          data: MediaQuery.of(context).copyWith(size: virtual.biggest),
+                          child: _TallLayout(view: view, box: virtual, mixer: true),
+                        ),
+                      ),
+                    );
+                  }
+                  return _TallLayout(view: view, box: box, mixer: roomy);
                 },
               );
             },
@@ -103,6 +150,14 @@ class _LooperScreenState extends State<LooperScreen> {
 
 // ---------------------------------------------------------------------------
 // Disposición
+
+/// En una tablet en vertical, cuánto se agranda todo: lo que haga falta para
+/// que la columna mida 600 de ancho (sin pasar del alto). 1 = nada.
+double tabletScale(BoxConstraints box) {
+  if (box.maxWidth < 700 || box.maxHeight < box.maxWidth) return 1;
+  final s = math.min(box.maxWidth / 600, box.maxHeight / 900);
+  return s < 1.12 ? 1 : math.min(s, 1.8);
+}
 
 /// Lo que no está en simple (la fila de acompañamiento con su hueco, 52 o 46):
 /// medido en los tests.

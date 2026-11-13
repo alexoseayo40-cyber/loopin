@@ -19,8 +19,14 @@
 //   live_control.dart       reverse, media velocidad, cambios al compás,
 //                           parar, entrenador y afinador (parte de este archivo)
 //   tuner.dart              afinador: nota, cents y filtro
+//   session_control.dart    sesiones: se guardan solas y se abren (parte de
+//                           este archivo; en disco: storage/sessions.dart)
+//   export_control.dart     exportar a WAV y compartir (parte de este archivo)
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter/services.dart';
@@ -39,6 +45,7 @@ import 'prefs.dart';
 import 'song_backing.dart';
 import 'songs.dart';
 import 'status_change.dart';
+import '../storage/sessions.dart';
 
 export 'latency_routes.dart' show LatencySource;
 export 'live_settings.dart' show LiveSettings, kTrainerBarOptions;
@@ -48,9 +55,12 @@ export 'play_mode.dart' show PlayMode;
 export 'report.dart';
 export 'song_backing.dart' show BackingPhase;
 export 'songs.dart' show Song, ImportError, ImportException;
+export '../storage/sessions.dart' show Session, SessionTrack, SessionLibrary;
 
+part 'export_control.dart';
 part 'live_control.dart';
 part 'mode_control.dart';
+part 'session_control.dart';
 
 /// Qué hacen las pistas que ya suenan mientras se graba otra (o un overdub),
 /// con el altavoz y el micrófono del móvil.
@@ -69,8 +79,13 @@ enum RecordDuck {
 }
 
 class EngineController extends ChangeNotifier {
-  EngineController({LoopinEngine? engine, SongLibrary? songs})
-    : _engine = engine ?? LoopinEngine.instance {
+  EngineController({
+    LoopinEngine? engine,
+    SongLibrary? songs,
+    SessionLibrary? sessions,
+    this.exportDirForTests,
+  }) : _engine = engine ?? LoopinEngine.instance,
+       _library = sessions ?? SessionLibrary() {
     _lifecycle = AppLifecycleListener(onHide: _onHide, onShow: _onShow);
     _routes = LatencyRoutes(apply: _engine.setLatencyCompensation, prefs: _prefs);
     _keys = PedalKeys(onAction: _onPedalKey, onChanged: notifyListeners, prefs: _prefs);
@@ -79,6 +94,13 @@ class EngineController extends ChangeNotifier {
   }
 
   final LoopinEngine _engine;
+
+  /// Las sesiones guardadas (ver session_control.dart).
+  final SessionLibrary _library;
+  final _SessionState _sessions = _SessionState();
+
+  /// Carpeta de lo exportado sin Android (los tests).
+  final String? exportDirForTests;
   final Prefs _prefs = const Prefs();
   static const _channel = MethodChannel('loopin/permissions');
   late final AppLifecycleListener _lifecycle;
@@ -256,6 +278,7 @@ class EngineController extends ChangeNotifier {
       return false;
     }
     _routes.reset(); // la latencia se elige en cuanto se sepa la ruta
+    _sessions.restorePending = true; // si el motor no tiene las pistas, vuelven
     _appliedDuck = -1; // y lo de silenciar al grabar, también
     _applySettings();
     if (_wantPlaying) {
@@ -315,6 +338,7 @@ class EngineController extends ChangeNotifier {
       if (prev.latencyState == LatencyState.running && status.latencyState == LatencyState.done) {
         _routes.saveMeasured(_currentRouteKey, status.latencyFrames);
       }
+      _sessionTick();
     }
     // Si se desconecta algo (auriculares, interfaz USB), se reabre solo.
     if (_wantRunning && !status.running && !_restarting) {
@@ -336,6 +360,8 @@ class EngineController extends ChangeNotifier {
   }
 
   void _onHide() {
+    // Lo que no esté guardado, ya (por si Android cierra la app)
+    _saveOnHide();
     // La versión 1 solo suena en primer plano
     if (_wantRunning) {
       stopAudio();
@@ -468,7 +494,7 @@ class EngineController extends ChangeNotifier {
   /// luego resulta ser un doble toque o se mantiene, el motor corrige lo que
   /// hizo este toque.
   void pedalDown() {
-    if (!status.running) return;
+    if (!status.running || _sessions.loading) return;
     final now = DateTime.now();
     final last = _lastPedalDown;
     _holdTimer?.cancel();
@@ -1001,6 +1027,8 @@ class EngineController extends ChangeNotifier {
       playMode = known.first;
     } else if (await _prefs.get(Prefs.loopMode) != null) {
       playMode = PlayMode.advanced;
+    } else {
+      _freshInstall = true; // la primera vez: sale la guía
     }
     _forced = SimpleForced.decode(await _prefs.get(Prefs.simpleForced));
 
@@ -1052,9 +1080,20 @@ class EngineController extends ChangeNotifier {
     // En simple, lo que no se ve tiene sus valores
     if (simple) _enterSimple();
     notifyListeners();
+    await _loadSessions();
   }
 
   bool _disposed = false;
+  bool _freshInstall = false;
+
+  /// La guía de la primera vez: en las instalaciones nuevas, hasta que se
+  /// vea (o se salte).
+  Future<bool> needsTutorial() async {
+    await _prefsLoaded;
+    return _freshInstall && await _prefs.get(Prefs.tutorialDone) != '1';
+  }
+
+  void setTutorialDone() => _prefs.set(Prefs.tutorialDone, '1');
 
   // Los ajustes guardados se cargan en segundo plano: si llegan cuando ya se
   // ha cerrado, no hay a quién avisar

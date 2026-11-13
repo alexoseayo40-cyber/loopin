@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:loopin_engine/loopin_engine.dart';
 
+import '../../engine/engine_controller.dart';
 import '../../l10n/strings.dart';
 import '../theme.dart';
 import 'chassis_button.dart';
@@ -15,21 +16,29 @@ class BottomBar extends StatelessWidget {
   final bool showHint;
 
   Future<void> _confirmClear(BuildContext context) async {
-    final ok = await showDialog<bool>(
+    // Borrar las pistas de esta sesión, o dejarla guardada y empezar otra
+    final choice = await showDialog<int>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(tr.clearAllTitle),
-        content: Text(tr.clearAllBody),
+        content: Text(tr.clearAllBody(view.controller.sessionName)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr.cancel)),
+          TextButton(onPressed: () => Navigator.pop(context, 0), child: Text(tr.cancel)),
+          TextButton(
+            key: const ValueKey('clear-new-session'),
+            onPressed: () => Navigator.pop(context, 2),
+            child: Text(tr.clearAllNewSession),
+          ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
+            key: const ValueKey('clear-confirm'),
+            onPressed: () => Navigator.pop(context, 1),
             child: Text(tr.clearAllConfirm),
           ),
         ],
       ),
     );
-    if (ok == true) view.controller.clearLoop();
+    if (choice == 1) view.controller.clearLoop();
+    if (choice == 2) await view.controller.newSession();
   }
 
   @override
@@ -76,6 +85,16 @@ class BottomBar extends StatelessWidget {
               tooltip: tr.clearAll,
               onPressed: on && s.loopState != LoopState.empty ? () => _confirmClear(context) : null,
             ),
+            if (view.onStage != null) ...[
+              const SizedBox(width: 8),
+              ChassisButton(
+                key: const ValueKey('open-stage'),
+                palette: p,
+                icon: Icons.fullscreen,
+                tooltip: tr.stageOpen,
+                onPressed: on ? view.onStage : null,
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 8),

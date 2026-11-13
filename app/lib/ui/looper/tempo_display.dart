@@ -49,7 +49,7 @@ class TempoDisplay extends StatelessWidget {
                   child: BeatBuilder(
                     active: s.playing,
                     beatNow: c.beatNow,
-                    builder: (context, now) => _BeatBar(
+                    builder: (context, now) => BeatBar(
                       signature: c.timeSignature,
                       beats: s.playing ? s.beatsPerBar : c.beatsPerBar,
                       now: now,
@@ -299,8 +299,9 @@ class _MetronomeButton extends StatelessWidget {
 /// Los tiempos del compás como una fila de luces: se enciende el que suena
 /// (rojo el primero, ámbar fuerte el que empieza cada grupo) y se apaga poco a
 /// poco hasta el siguiente. Los grupos (2+2+3…) van separados.
-class _BeatBar extends StatelessWidget {
-  const _BeatBar({
+class BeatBar extends StatelessWidget {
+  const BeatBar({
+    super.key,
     required this.signature,
     required this.beats,
     required this.now,

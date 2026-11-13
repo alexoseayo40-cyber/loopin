@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
@@ -152,6 +153,96 @@ enum StopMode {
   fade,
 }
 
+/// Por qué no se ha podido exportar (mismo orden que LOOPIN_EXPORT_ERR_*,
+/// con [none] = 0).
+enum ExportError {
+  none,
+
+  /// No se ha podido escribir el archivo.
+  write,
+  memory,
+
+  /// No hay pistas.
+  nothing,
+
+  /// Las pistas no cuadran (no debería pasar).
+  load,
+}
+
+/// Lo que hay en una pista (ver [LoopinEngine.readTrack]).
+class TrackRead {
+  const TrackRead({required this.length, required this.hash, this.samples});
+
+  /// Muestras (0 = vacía).
+  final int length;
+
+  /// Huella del contenido (para saber si ha cambiado).
+  final int hash;
+
+  /// Lo que suena (con sus capas), si se ha pedido.
+  final Float32List? samples;
+}
+
+/// Una sesión para cargar en el motor (ver [LoopinEngine.loadSession]).
+class SessionAudio {
+  const SessionAudio({
+    required this.bpm,
+    required this.beatsPerBar,
+    required this.accentMask,
+    required this.sampleRate,
+    required this.barFrames,
+    required this.baseLength,
+    required this.lengths,
+    required this.offsets,
+    required this.layers,
+    required this.data,
+    this.selected = 0,
+  });
+
+  final double bpm;
+  final int beatsPerBar;
+  final int accentMask;
+
+  /// A la que se grabaron los datos (el motor los pasa a la suya).
+  final int sampleRate;
+  final int barFrames;
+  final int baseLength;
+  final List<int> lengths;
+  final List<int> offsets;
+  final List<int> layers;
+
+  /// Una por pista (null = vacía).
+  final List<Float32List?> data;
+  final int selected;
+}
+
+/// Errores de [LoopinEngine.loadSession].
+const int kSessionNotReady = -1;
+const int kSessionBad = -2;
+const int kSessionTooLong = -3;
+
+/// Qué exportar (ver [LoopinEngine.exportStart]). null = ese archivo no.
+class ExportRequest {
+  const ExportRequest({
+    this.loops = 1,
+    this.withDrums = false,
+    this.withSong = false,
+    this.mixPath,
+    this.trackPaths = const [null, null, null, null],
+    this.drumsPath,
+    this.songPath,
+  });
+
+  /// Vueltas del ciclo entero (la pista más larga).
+  final int loops;
+  final bool withDrums;
+  final bool withSong;
+  final String? mixPath;
+  final List<String?> trackPaths;
+  final String? drumsPath;
+  final String? songPath;
+}
+
 class TrackStatus {
   const TrackStatus({
     this.state = LoopState.empty,
@@ -163,9 +254,13 @@ class TrackStatus {
     this.reverse = false,
     this.half = false,
     this.pending = 0,
+    this.offset = 0,
   });
 
   final LoopState state;
+
+  /// Dónde empieza respecto al ciclo base (muestras; para guardarla).
+  final int offset;
 
   /// Capas que suenan (la primera grabación cuenta como 1).
   final int layers;
@@ -317,7 +412,28 @@ class EngineStatus {
     this.trainerStep = 5,
     this.trainerTop = 240,
     this.toneHz = 0,
+    this.loopSettled = true,
+    this.loopRevision = 0,
+    this.exportState = JobState.idle,
+    this.exportProgress = 0,
+    this.exportError = ExportError.none,
+    this.exportFrames = 0,
   });
+
+  // Etapa 6
+  /// Las pistas están quietas: no se graba ni se borra (se pueden guardar).
+  final bool loopSettled;
+
+  /// Cambia con cada orden que puede tocar lo grabado.
+  final int loopRevision;
+
+  /// Exportar: en marcha, hecho… El progreso va de 0 a 1.
+  final JobState exportState;
+  final double exportProgress;
+  final ExportError exportError;
+
+  /// Duración de lo exportado, en muestras.
+  final int exportFrames;
 
   final bool running;
   final bool disconnected;
@@ -736,6 +852,108 @@ class LoopinEngine {
   void setBackingEnabled(bool on) => _b.loopin_set_backing_enabled(on ? 1 : 0);
   void setBackingVolume(double v) => _b.loopin_set_backing_volume(v);
 
+  // Sesiones y exportar (Etapa 6)
+
+  /// Lo que hay en una pista: su longitud, su huella y, con [samples], lo
+  /// que suena. null si las pistas no están quietas (se graba, se borra…).
+  TrackRead? readTrack(int track, {bool samples = true}) {
+    final hash = calloc<Uint64>();
+    try {
+      final len = _b.loopin_track_read(track, nullptr, 0, hash);
+      if (len < 0) return null;
+      if (!samples || len == 0) return TrackRead(length: len, hash: hash.value);
+      final p = calloc<Float>(len);
+      try {
+        final n = _b.loopin_track_read(track, p, len, nullptr);
+        if (n != len) return null;
+        return TrackRead(
+          length: len,
+          hash: hash.value,
+          samples: Float32List.fromList(p.asTypedList(len)),
+        );
+      } finally {
+        calloc.free(p);
+      }
+    } finally {
+      calloc.free(hash);
+    }
+  }
+
+  /// Carga una sesión (sin loops: borrarlas antes y esperar a que las pistas
+  /// estén quietas). Devuelve 0 o [kSessionNotReady]…
+  int loadSession(SessionAudio a) {
+    final spec = calloc<LoopinSession>();
+    final ptrs = calloc<Pointer<Float>>(kTrackCount);
+    final owned = <Pointer<Float>>[];
+    try {
+      final r = spec.ref;
+      r.bpm = a.bpm;
+      r.beats_per_bar = a.beatsPerBar;
+      r.accent_mask = a.accentMask;
+      r.sample_rate = a.sampleRate;
+      r.selected = a.selected;
+      r.bar_frames = a.barFrames;
+      r.base_length = a.baseLength;
+      for (var i = 0; i < kTrackCount; i++) {
+        final d = i < a.data.length ? a.data[i] : null;
+        final len = d == null ? 0 : math.min(d.length, a.lengths[i]);
+        r.track_length[i] = len;
+        r.track_offset[i] = a.offsets[i];
+        r.track_layers[i] = a.layers[i];
+        if (d == null || len == 0) {
+          ptrs[i] = nullptr;
+          continue;
+        }
+        final p = calloc<Float>(len);
+        owned.add(p);
+        p.asTypedList(len).setAll(0, d.sublist(0, len));
+        ptrs[i] = p;
+      }
+      return _b.loopin_session_load(spec, ptrs);
+    } finally {
+      for (final p in owned) {
+        calloc.free(p);
+      }
+      calloc.free(ptrs);
+      calloc.free(spec);
+    }
+  }
+
+  /// Exporta lo que suena en segundo plano (ver [EngineStatus.exportState]).
+  /// 0 si ha empezado; -1 si las pistas no están quietas, -2 si no hay
+  /// pistas, -3 si ya hay otra en marcha.
+  int exportStart(ExportRequest req) {
+    final e = calloc<LoopinExport>();
+    final strings = <Pointer<Utf8>>[];
+    Pointer<Char> str(String? v) {
+      if (v == null) return nullptr;
+      final p = v.toNativeUtf8();
+      strings.add(p);
+      return p.cast();
+    }
+
+    try {
+      final r = e.ref;
+      r.loops = req.loops;
+      r.with_drums = req.withDrums ? 1 : 0;
+      r.with_song = req.withSong ? 1 : 0;
+      r.mix_path = str(req.mixPath);
+      for (var i = 0; i < kTrackCount; i++) {
+        r.track_path[i] = str(i < req.trackPaths.length ? req.trackPaths[i] : null);
+      }
+      r.drums_path = str(req.drumsPath);
+      r.song_path = str(req.songPath);
+      return _b.loopin_export_start(e);
+    } finally {
+      for (final p in strings) {
+        calloc.free(p);
+      }
+      calloc.free(e);
+    }
+  }
+
+  void exportCancel() => _b.loopin_export_cancel();
+
   EngineStatus status() {
     _b.loopin_get_status(_status);
     final s = _status.ref;
@@ -806,6 +1024,7 @@ class LoopinEngine {
             reverse: s.track_reverse[i] != 0,
             half: s.track_half[i] != 0,
             pending: s.track_pending[i],
+            offset: s.track_offset[i],
           ),
       ],
       beatFrames: s.beat_frames,
@@ -856,6 +1075,12 @@ class LoopinEngine {
       trainerStep: s.trainer_step,
       trainerTop: s.trainer_top,
       toneHz: s.tone_hz,
+      loopSettled: s.loop_settled != 0,
+      loopRevision: s.loop_revision,
+      exportState: JobState.values[s.export_state.clamp(0, 3)],
+      exportProgress: s.export_progress / 1000,
+      exportError: ExportError.values[s.export_error.clamp(0, ExportError.values.length - 1)],
+      exportFrames: s.export_frames,
     );
   }
 }

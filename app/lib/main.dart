@@ -45,7 +45,7 @@ class _LoopinAppState extends State<LoopinApp> {
         theme: buildLoopinTheme(look.chassis, Brightness.light),
         darkTheme: buildLoopinTheme(look.chassis, Brightness.dark),
         themeMode: look.mode,
-        home: LooperScreen(controller: _controller),
+        home: LooperScreen(controller: _controller, tutorial: true),
       ),
     );
   }
