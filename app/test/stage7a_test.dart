@@ -220,4 +220,39 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     c.dispose();
   });
+
+  testWidgets('con letra grande el pulsador se encoge y la barra de abajo se ve entera', (
+    tester,
+  ) async {
+    // 443,6 × 930: el móvil de Alex sin las barras del sistema
+    for (final size in const [Size(443.6, 930), Size(393, 817), Size(412, 760)]) {
+      for (final mode in PlayMode.values) {
+        final pedals = <double>[];
+        for (final scale in [1.0, 1.3]) {
+          setScreen(tester, size);
+          tester.platformDispatcher.textScaleFactorTestValue = scale;
+          final c = EngineController(
+            engine: FakeEngine()..next = fakeStatus(LoopState.playing, drums: true),
+          )..setPlayMode(mode);
+          await c.startAudio();
+          await tester.pumpWidget(_app(LooperScreen(controller: c)));
+          await tester.pump(const Duration(milliseconds: 100));
+          await tester.pump(); // tras medir, el pulsador se ajusta
+          final why = '$size ${mode.name} ×$scale';
+          final scroll = tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+          expect(scroll.maxScrollExtent, lessThan(0.5), reason: why);
+          expect(tester.takeException(), isNull, reason: why);
+          pedals.add(tester.getSize(find.byType(Footswitch)).width);
+          await tester.pumpWidget(const SizedBox());
+          c.stopAudio();
+          await tester.pump(const Duration(milliseconds: 400));
+          c.dispose();
+        }
+        // Con letra grande, más pequeño, pero no menos de 100
+        expect(pedals[1], lessThanOrEqualTo(pedals[0]));
+        expect(pedals[1], greaterThanOrEqualTo(100));
+      }
+    }
+    tester.platformDispatcher.clearTextScaleFactorTestValue();
+  });
 }

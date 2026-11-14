@@ -163,12 +163,12 @@ class _PlayModeSection extends StatelessWidget {
             segments: [
               ButtonSegment(
                 value: PlayMode.simple,
-                label: Text(tr.playModeName(PlayMode.simple)),
+                label: _OneLine(tr.playModeName(PlayMode.simple)),
                 icon: const Icon(Icons.radio_button_checked),
               ),
               ButtonSegment(
                 value: PlayMode.advanced,
-                label: Text(tr.playModeName(PlayMode.advanced)),
+                label: _OneLine(tr.playModeName(PlayMode.advanced)),
                 icon: const Icon(Icons.tune),
               ),
             ],
@@ -207,17 +207,17 @@ class _AppearanceSection extends StatelessWidget {
             segments: [
               ButtonSegment(
                 value: ThemeMode.system,
-                label: Text(tr.themeSystem),
+                label: _OneLine(tr.themeSystem),
                 icon: const Icon(Icons.brightness_auto),
               ),
               ButtonSegment(
                 value: ThemeMode.light,
-                label: Text(tr.themeLight),
+                label: _OneLine(tr.themeLight),
                 icon: const Icon(Icons.light_mode),
               ),
               ButtonSegment(
                 value: ThemeMode.dark,
-                label: Text(tr.themeDark),
+                label: _OneLine(tr.themeDark),
                 icon: const Icon(Icons.dark_mode),
               ),
             ],
@@ -300,7 +300,16 @@ class _ChassisSwatch extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              Text(tr.chassisName(chassis), style: Theme.of(context).textTheme.labelMedium),
+              // Con letra grande se encoge (no se parte: «Clásic-o»)
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  tr.chassisName(chassis),
+                  maxLines: 1,
+                  softWrap: false,
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+              ),
             ],
           ),
         ),
@@ -334,7 +343,7 @@ class _RecordDuckSection extends StatelessWidget {
           child: SegmentedButton<RecordDuck>(
             segments: [
               for (final d in RecordDuck.values)
-                ButtonSegment(value: d, label: Text(tr.recordDuckName(d))),
+                ButtonSegment(value: d, label: _OneLine(tr.recordDuckName(d))),
             ],
             showSelectedIcon: false,
             selected: {c.recordDuck},
@@ -370,7 +379,7 @@ class _StopModeSection extends StatelessWidget {
             key: const ValueKey('stop-mode'),
             segments: [
               for (final m in StopMode.values)
-                ButtonSegment(value: m, label: Text(tr.stopModeName(m))),
+                ButtonSegment(value: m, label: _OneLine(tr.stopModeName(m))),
             ],
             showSelectedIcon: false,
             selected: {c.stopMode},
@@ -474,4 +483,16 @@ class _LearnTile extends StatelessWidget {
             ),
     );
   }
+}
+
+/// La etiqueta de un botón de varias opciones: en una línea; con letra grande
+/// se encoge en vez de partirse («Al / momento»).
+class _OneLine extends StatelessWidget {
+  const _OneLine(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) =>
+      FittedBox(fit: BoxFit.scaleDown, child: Text(text, maxLines: 1, softWrap: false));
 }

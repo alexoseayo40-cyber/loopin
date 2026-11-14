@@ -220,7 +220,7 @@ const _simpleSaves = 52.0;
 const _simpleSavesCompact = 46.0;
 
 /// En vertical: todo en una columna, con el pulsador abajo, a mano.
-class _TallLayout extends StatelessWidget {
+class _TallLayout extends StatefulWidget {
   const _TallLayout({required this.view, required this.box, required this.mixer});
 
   final LooperView view;
@@ -228,7 +228,38 @@ class _TallLayout extends StatelessWidget {
   final bool mixer;
 
   @override
+  State<_TallLayout> createState() => _TallLayoutState();
+}
+
+class _TallLayoutState extends State<_TallLayout> {
+  // El tamaño del pulsador sale de lo que ocupa lo demás, medido con la letra
+  // normal. Con la letra del sistema más grande (o un ancho que no se midió)
+  // lo demás ocupa más y la columna se desplazaría: la barra de abajo
+  // quedaría fuera. Después de cada dibujo se mira cuánto sobra y el
+  // pulsador se encoge eso mismo (no baja de su mínimo: entonces sí se
+  // desplaza). Se recalcula si cambia el tamaño, la letra o el modo.
+  final _scroll = ScrollController();
+  double _shrink = 0;
+  Object? _shrinkFor;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _fit(double pedal, double minPedal) {
+    if (!mounted || !_scroll.hasClients) return;
+    final over = _scroll.position.maxScrollExtent;
+    if (over < 0.5 || pedal <= minPedal + 0.5) return;
+    setState(() => _shrink += math.min(over, pedal - minPedal));
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final view = widget.view;
+    final box = widget.box;
+    final mixer = widget.mixer;
     // En una tablet la columna no ocupa todo el ancho
     final width = math.min(box.maxWidth, 720.0);
     // Pantallas bajas: todo más apretado; en las muy bajas, más aún (y el
@@ -244,15 +275,27 @@ class _TallLayout extends StatelessWidget {
     // para darle el resto
     final fixed =
         (tight ? 543.0 : (compact ? 568.0 : 694.0)) + (mixer ? 3 * 52.0 : 0) - simpleSaves;
-    final pedal = (math.min(
-      width * (simple ? 0.7 : 0.62),
-      box.maxHeight - fixed,
-    )).clamp(tight ? 100.0 : 132.0, (mixer ? 420.0 : 340.0) + (simple ? 60 : 0));
+    // Al encogerse para que quepa (letra grande), puede bajar hasta 100
+    const minPedal = 100.0;
+    final key = (box.biggest, MediaQuery.textScalerOf(context).scale(100), simple, mixer);
+    if (key != _shrinkFor) {
+      _shrinkFor = key;
+      _shrink = 0;
+    }
+    final pedal = math.max(
+      minPedal,
+      math
+              .min(width * (simple ? 0.7 : 0.62), box.maxHeight - fixed)
+              .clamp(tight ? 100.0 : 132.0, (mixer ? 420.0 : 340.0) + (simple ? 60 : 0)) -
+          _shrink,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) => _fit(pedal, minPedal));
     return Center(
       child: SizedBox(
         width: width,
-        // Si no cabe todo (móvil pequeño o letra grande) se desplaza
+        // Si no cabe todo ni con el pulsador en su mínimo, se desplaza
         child: SingleChildScrollView(
+          controller: _scroll,
           padding: EdgeInsets.fromLTRB(16, 4, 16, compact ? 8 : 12),
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: box.maxHeight - (compact ? 12 : 16)),

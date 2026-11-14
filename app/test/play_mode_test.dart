@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:loopin/engine/engine_controller.dart';
 import 'package:loopin/engine/play_mode.dart';
+import 'package:loopin/l10n/strings.dart';
 import 'package:loopin/ui/audio_settings_screen.dart';
 import 'package:loopin/ui/looper/accompaniment_row.dart';
 import 'package:loopin/ui/looper/tempo_display.dart';
@@ -305,7 +306,7 @@ void main() {
     expect(find.text('Avance automático'), findsOneWidget);
     // Cómo parar y los cambios en el 1, también en simple
     expect(find.text('Al parar'), findsOneWidget);
-    expect(find.text('Cambios de pista en el 1'), findsOneWidget);
+    expect(find.text(tr.quantizeTitle), findsOneWidget);
 
     await tester.tap(find.text('Avanzado'));
     await tester.pump();

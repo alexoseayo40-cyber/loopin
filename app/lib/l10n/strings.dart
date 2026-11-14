@@ -869,7 +869,8 @@ class Strings {
       'Truco: graba encima con ½ puesto y luego quítalo: lo que tocaste suena el '
       'doble de rápido y una octava más agudo.\n\n'
       'Al apagarlo, se quitan de las pistas que los tengan.';
-  String get quantizeTitle => 'Cambios de pista en el 1';
+  // «el\u00A01»: con letra grande, el 1 no se queda solo en otra línea
+  String get quantizeTitle => 'Cambios de pista en el\u00A01';
   String get quantizeLine => 'Silenciar, REV y ½ esperan al siguiente 1';
   String get quantizeLineSimple => 'Silenciar una pista espera al siguiente 1';
   String get quantizeHelp =>
