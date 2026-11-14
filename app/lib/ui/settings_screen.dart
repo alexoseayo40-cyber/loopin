@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:loopin_engine/loopin_engine.dart' show StopMode;
 
 import '../engine/engine_controller.dart';
+import '../l10n/language.dart';
 import '../l10n/strings.dart';
 import 'about_screen.dart';
 import 'audio_settings_screen.dart';
@@ -40,6 +41,7 @@ class SettingsScreen extends StatelessWidget {
                     _PlayModeSection(controller: c),
                     _Header(tr.appearance),
                     _AppearanceSection(controller: c),
+                    const _LanguageTile(),
                     _Header(tr.looper),
                     OptionTile.toggle(
                       title: tr.autoAdvance,
@@ -243,6 +245,61 @@ class _AppearanceSection extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// El idioma: el del móvil o uno de los 6. Cada idioma va con su nombre en
+/// ese idioma, para encontrar el tuyo aunque la app esté en otro.
+class _LanguageTile extends StatelessWidget {
+  const _LanguageTile();
+
+  @override
+  Widget build(BuildContext context) {
+    final setting = AppLanguage.setting;
+    return ListTile(
+      key: const ValueKey('language'),
+      leading: const Icon(Icons.translate),
+      title: Text(tr.language),
+      subtitle: Text(
+        setting.isEmpty
+            ? tr.languageSystemLine(AppLanguage.system)
+            : (kLanguageNames[setting] ?? setting),
+      ),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () async {
+        final chosen = await showDialog<String>(
+          context: context,
+          builder: (context) => SimpleDialog(
+            title: Text(tr.language),
+            children: [
+              for (final code in ['', ...kLanguages])
+                SimpleDialogOption(
+                  key: ValueKey('language-${code.isEmpty ? 'system' : code}'),
+                  onPressed: () => Navigator.of(context).pop(code),
+                  child: Row(
+                    children: [
+                      Icon(
+                        code == setting ? Icons.radio_button_checked : Icons.radio_button_off,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Text(
+                          code.isEmpty
+                              ? tr.languageSystemLine(AppLanguage.system)
+                              : kLanguageNames[code]!,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        );
+        if (chosen != null && chosen != setting) await AppLanguage.choose(chosen);
+      },
     );
   }
 }

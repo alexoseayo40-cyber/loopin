@@ -2,13 +2,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:loopin_engine/loopin_engine.dart';
 
-import '../l10n/strings.dart';
+import '../l10n/language.dart';
 import 'engine_controller.dart';
 
 extension EngineReport on EngineController {
   /// Resumen del móvil, la ruta de audio, la latencia, la carga y el looper.
   String report() {
     final s = status;
+    // En español si la app está en español; si no, en inglés (ver report_strings.dart)
+    final tr = reportStrings;
     final r = tr.report;
     String ms(double v) => tr.ms(v);
     final api = switch (s.audioApi) {
@@ -63,7 +65,7 @@ extension EngineReport on EngineController {
       ),
       r.playMode(tr.playModeName(playMode).toLowerCase()),
       r.looper(
-        tr.loopStateName(s.loopState),
+        r.loopStateName(s.loopState),
         tr.loopModeName(loopMode),
         s.hasLoops ? s.baseBars : null,
         tr.yesNo(autoAdvance),
@@ -91,7 +93,7 @@ extension EngineReport on EngineController {
         if (s.tracks[i].state != LoopState.empty)
           r.track(
             i + 1,
-            tr.loopStateName(s.tracks[i].state),
+            r.loopStateName(s.tracks[i].state),
             s.tracks[i].hasLoop && s.loopBarFrames > 0
                 ? (s.tracks[i].length / s.loopBarFrames).round()
                 : null,
@@ -110,7 +112,7 @@ extension EngineReport on EngineController {
         tr.yesNo(volumeKeys),
         tr.yesNo(headsetKey),
         learnedKeys.isEmpty
-            ? tr.none
+            ? r.none
             : learnedKeys.map((k) => tr.keyName(k.code, k.name)).join(', '),
       ),
     ].join('\n');

@@ -22,6 +22,7 @@
 - **Sesiones que se guardan solas**, **exportar a WAV** (la mezcla o cada pista para tu programa de grabación) y **modo escenario**.
 - **Modo simple** (lo justo, con el pulsador más grande) y **avanzado**. Tema claro y oscuro, 4 colores, vertical, apaisado y tablet.
 - **Manos libres:** botones de volumen, botón de los cascos o un pedal Bluetooth.
+- **En español, inglés, francés, alemán, italiano y portugués**, según el idioma del móvil o el que elijas en Ajustes.
 
 ## Instalar
 
@@ -49,7 +50,7 @@ En la app, ve a **Ajustes › Audio y latencia** y toca **Copiar resultados** (o
 
 ## Compilar y colaborar
 
-Cómo compilar la app y pasar los tests: [docs/BUILDING.md](docs/BUILDING.md). Cómo funciona el motor de audio: [docs/MOTOR.md](docs/MOTOR.md).
+Cómo compilar la app y pasar los tests: [docs/BUILDING.md](docs/BUILDING.md). Cómo funciona el motor de audio: [docs/MOTOR.md](docs/MOTOR.md). Para traducir la app o corregir una traducción: [docs/TRANSLATING.md](docs/TRANSLATING.md) (en inglés).
 
 ## Licencia
 

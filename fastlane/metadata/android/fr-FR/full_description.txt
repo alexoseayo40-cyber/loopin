@@ -1,0 +1,36 @@
+Loopin est un looper de guitare pour votre téléphone : enregistrez une base, jouez par-dessus et ajoutez des pistes qui restent toujours en mesure. Pour travailler et jouer n’importe où, avec le micro du téléphone ou une interface audio USB.
+
+UN BOUTON QUI FAIT PÉDALE
+• Appui : enregistrer, fermer la boucle ou enregistrer par-dessus
+• Maintien : annuler la dernière action
+• Double appui : arrêter et lancer
+• Aussi avec les boutons de volume, le bouton du casque ou une pédale Bluetooth
+• Mode scène : tout l’écran devient le bouton
+
+TOUJOURS EN MESURE
+• 4 pistes de 1, 2 ou 4 fois la longueur de la base
+• Métronome de 40 à 240 BPM avec tap tempo et 10 mesures (4/4, 3/4, 6/8, 7/8…)
+• Enregistrement synchronisé, manuel ou libre (le tempo vient de ce que vous jouez)
+• « Démarrer en jouant » : l’enregistrement commence à votre première note
+• Compense le retard du téléphone : mesuré tout seul en quelques secondes
+
+POUR TRAVAILLER
+• Batterie avec 10 styles : rock, pop, blues, funk, reggae, valse…
+• Vos morceaux (WAV, MP3, FLAC) au tempo voulu, sans changer la hauteur
+• Entraîneur de tempo : monte les BPM petit à petit
+• Accordeur chromatique avec notes de référence pour accorder à l’oreille
+
+VOS SESSIONS EN SÉCURITÉ
+• Tout est sauvegardé tout seul, comme une appli de notes
+• Exportez en WAV le mixage ou chaque piste séparément pour votre logiciel d’enregistrement
+
+SIMPLE OU AVANCÉ
+Le mode simple garde l’essentiel (looper, métronome et accordeur) avec un bouton plus grand. Le mode avancé a tout.
+
+DANS VOTRE LANGUE
+Français, anglais, espagnol, allemand, italien et portugais.
+
+LIBRE ET SANS PISTAGE
+Logiciel libre (GPLv3). Sans publicité, sans compte et sans internet : l’appli n’a même pas l’autorisation de s’y connecter. Elle ne demande que le micro, pour vous enregistrer.
+
+Conseil : avec le haut-parleur du téléphone, le clic et la batterie passent dans l’enregistrement. Avec un casque filaire, c’est mieux ; les casques Bluetooth ont trop de retard pour vous écouter en direct.

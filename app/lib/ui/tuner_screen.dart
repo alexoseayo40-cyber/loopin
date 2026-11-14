@@ -136,16 +136,20 @@ class _TunerDisplayPanel extends StatelessWidget {
             // Las 6 cuerdas de la afinación estándar (se enciende la que suena)
             Text(tr.tunerStandard.toUpperCase(), style: label.copyWith(fontSize: 11)),
             const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                for (var i = 0; i < kStandardStrings.length; i++)
-                  _StringChip(
-                    text: tr.noteName(kStandardStrings[i] % 12),
-                    on: note?.standardString == i,
-                    inTune: note?.inTune ?? false,
-                  ),
-              ],
+            // Con letra grande (o «SOL» y «FÁ» en un móvil estrecho), se encoge
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < kStandardStrings.length; i++)
+                    _StringChip(
+                      text: tr.noteName(kStandardStrings[i] % 12),
+                      on: note?.standardString == i,
+                      inTune: note?.inTune ?? false,
+                    ),
+                ],
+              ),
             ),
             const SizedBox(height: 8),
             SizedBox(

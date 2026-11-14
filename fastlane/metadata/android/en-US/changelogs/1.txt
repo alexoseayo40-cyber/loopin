@@ -1,0 +1,1 @@
+First release. 4-track looper with a pedal-style button (tap, hold, double tap) and stage mode; metronome with tap tempo and 10 time signatures; synced, manual or free recording and start-on-play; latency compensation; drums with 10 styles; your own songs at any tempo; tuner; tempo trainer; sessions that save themselves and WAV export; simple and advanced modes. In 6 languages.

@@ -1,0 +1,36 @@
+Loopin ist ein Gitarren-Looper fürs Handy: Nimm eine Grundlage auf, spiel dazu und füge Spuren hinzu, die immer im Takt bleiben. Zum Üben und Spielen überall, mit dem Mikrofon des Handys oder einem USB-Audiointerface.
+
+EIN TASTER WIE EIN PEDAL
+• Tippen: aufnehmen, Loop schließen oder Overdub
+• Halten: das Letzte rückgängig machen
+• Doppeltippen: stoppen und starten
+• Auch mit den Lautstärketasten, der Kopfhörertaste oder einem Bluetooth-Pedal
+• Bühnenmodus: Der ganze Bildschirm ist der Taster
+
+IMMER IM TAKT
+• 4 Spuren, 1-, 2- oder 4-mal so lang wie die Grundlage
+• Metronom von 40 bis 240 BPM mit Tap-Tempo und 10 Taktarten (4/4, 3/4, 6/8, 7/8…)
+• Synchrone, manuelle oder freie Aufnahme (das Tempo kommt aus deinem Spiel)
+• „Start beim Spielen“: Die Aufnahme beginnt mit deinem ersten Ton
+• Gleicht die Verzögerung des Handys aus: in wenigen Sekunden automatisch gemessen
+
+ZUM ÜBEN
+• Schlagzeug mit 10 Stilen: Rock, Pop, Blues, Funk, Reggae, Walzer…
+• Deine eigenen Songs (WAV, MP3, FLAC) in jedem Tempo, ohne die Tonhöhe zu ändern
+• Tempo-Trainer: erhöht die BPM Schritt für Schritt
+• Chromatisches Stimmgerät mit Referenztönen zum Stimmen nach Gehör
+
+DEINE SESSIONS SIND SICHER
+• Alles speichert sich selbst, wie eine Notizen-App
+• Exportiere den Mix oder jede Spur einzeln als WAV für dein Aufnahmeprogramm
+
+EINFACH ODER ERWEITERT
+Der einfache Modus zeigt nur das Nötige (Looper, Metronom und Stimmgerät) mit einem größeren Taster. Der erweiterte Modus hat alles.
+
+IN DEINER SPRACHE
+Deutsch, Englisch, Spanisch, Französisch, Italienisch und Portugiesisch.
+
+FREI UND OHNE TRACKING
+Freie Software (GPLv3). Keine Werbung, keine Konten und kein Internet: Die App hat nicht einmal die Berechtigung dafür. Sie fragt nur nach dem Mikrofon, um dich aufzunehmen.
+
+Tipp: Über den Lautsprecher des Handys landen Klick und Schlagzeug in der Aufnahme. Mit Kabelkopfhörern klingt es besser; Bluetooth-Kopfhörer haben zu viel Verzögerung, um dich live mitzuhören.

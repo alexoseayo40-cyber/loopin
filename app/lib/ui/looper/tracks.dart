@@ -175,7 +175,15 @@ class _TrackStrip extends StatelessWidget {
               children: [
                 Led(color: stateColor(t.state, muted: t.muted) ?? LoopinPalette.ledOff),
                 const SizedBox(width: 8),
-                Text(tr.trackLabel(n), style: p.label(size: 14)),
+                // «PISTA 1» cabe; en otros idiomas («TRACCIA 1») se encoge
+                // antes que quitarle sitio al volumen
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: MediaQuery.textScalerOf(context).scale(52)),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(tr.trackLabel(n), style: p.label(size: 14)),
+                  ),
+                ),
               ],
             ),
           ),

@@ -1,0 +1,36 @@
+Loopin es un looper de guitarra para el móvil: grabas una base, tocas encima y vas sumando pistas que siempre cuadran al compás. Para practicar y tocar en cualquier sitio, con el micrófono del móvil o con una interfaz USB.
+
+UN PULSADOR QUE HACE DE PEDAL
+• Toca: graba, cierra el loop o graba encima
+• Mantén: deshace lo último
+• Doble toque: para y arranca
+• También con los botones de volumen, el botón de los cascos o un pedal Bluetooth
+• Modo escenario: toda la pantalla es el pulsador
+
+SIEMPRE A TEMPO
+• 4 pistas que duran 1, 2 o 4 veces la base
+• Metrónomo de 40 a 240 BPM con tap tempo y 10 compases (4/4, 3/4, 6/8, 7/8…)
+• Grabación sincronizada, manual o libre (el tempo sale de lo que tocas)
+• «Empezar al tocar»: la grabación arranca con tu primera nota
+• Compensa el retardo del móvil: se mide solo en unos segundos
+
+PARA PRACTICAR
+• Batería con 10 estilos: rock, pop, blues, funk, reggae, vals…
+• Tus canciones (WAV, MP3, FLAC) al tempo que quieras, sin cambiar el tono
+• Entrenador de tempo: sube los BPM poco a poco
+• Afinador cromático con notas de referencia para afinar de oído
+
+TUS SESIONES, A SALVO
+• Todo se guarda solo, como las notas del móvil
+• Exporta a WAV la mezcla o cada pista por separado para tu programa de grabación
+
+SIMPLE O AVANZADO
+El modo simple deja lo justo (looper, metrónomo y afinador) con un pulsador más grande. El avanzado lo tiene todo.
+
+EN TU IDIOMA
+Español, inglés, francés, alemán, italiano y portugués.
+
+LIBRE Y SIN RASTREO
+Software libre (GPLv3). Sin anuncios, sin cuentas y sin internet: la app ni siquiera tiene permiso para usarlo. Solo pide el micrófono, para grabarte.
+
+Consejo: con el altavoz del móvil, el clic y la batería se cuelan en la grabación. Con cascos de cable suena mejor; los auriculares Bluetooth tienen demasiado retardo para escucharte en directo.

@@ -11,8 +11,6 @@
   <img src="docs/screenshots/escenario.png" width="200" alt="Stage mode: the whole screen is the button">
 </p>
 
-> The app is in Spanish for now. English, French, German, Italian and Portuguese are coming in 1.0.
-
 ## What it does
 
 - **4-track looper with one big pedal-style button:** tap to record or overdub, hold to undo, double tap to stop and start. It acts when you press, not when you let go. Tracks are 1, 2 or 4 times the length of the first and always stay in time.
@@ -24,6 +22,7 @@
 - **Sessions that save themselves**, **WAV export** (the mix, or every track for your DAW) and **stage mode**.
 - **Simple mode** (just the essentials, bigger button) and **advanced mode**. Light and dark themes, 4 colours, portrait, landscape and tablets.
 - **Hands-free:** volume buttons, the headset button or a Bluetooth pedal.
+- **In English, Spanish, French, German, Italian and Portuguese**, following your phone's language or the one you choose in Settings.
 
 ## Install
 
@@ -51,7 +50,7 @@ In the app, go to **Settings › Audio & latency** and tap **Copy results** (or 
 
 ## Building and contributing
 
-See [docs/BUILDING.md](docs/BUILDING.md) for how to build the app and run the tests. Notes on how the audio engine works (in Spanish): [docs/MOTOR.md](docs/MOTOR.md).
+See [docs/BUILDING.md](docs/BUILDING.md) for how to build the app and run the tests. Notes on how the audio engine works (in Spanish): [docs/MOTOR.md](docs/MOTOR.md). To translate the app or fix a translation: [docs/TRANSLATING.md](docs/TRANSLATING.md).
 
 ## Licence
 

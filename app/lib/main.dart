@@ -10,10 +10,14 @@
 import 'package:flutter/material.dart';
 
 import 'engine/engine_controller.dart';
+import 'l10n/language.dart';
 import 'ui/looper_screen.dart';
 import 'ui/theme.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Los textos del idioma del móvil (o el elegido en Ajustes), antes de nada
+  await AppLanguage.init();
   runApp(const LoopinApp());
 }
 
@@ -24,13 +28,37 @@ class LoopinApp extends StatefulWidget {
   State<LoopinApp> createState() => _LoopinAppState();
 }
 
-class _LoopinAppState extends State<LoopinApp> {
+class _LoopinAppState extends State<LoopinApp> with WidgetsBindingObserver {
   final EngineController _controller = EngineController();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    AppLanguage.current.addListener(_languageChanged);
+  }
+
+  @override
   void dispose() {
+    AppLanguage.current.removeListener(_languageChanged);
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
+  }
+
+  // Si se cambian los idiomas del móvil con la app abierta
+  @override
+  void didChangeLocales(List<Locale>? locales) => AppLanguage.systemChanged();
+
+  /// Otro idioma: se redibuja todo, también las pantallas abiertas (Ajustes),
+  /// porque los textos no dependen del árbol de widgets.
+  void _languageChanged() {
+    void rebuild(Element e) {
+      e.markNeedsBuild();
+      e.visitChildren(rebuild);
+    }
+
+    (context as Element).visitChildren(rebuild);
   }
 
   @override

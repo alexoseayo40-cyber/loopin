@@ -1,0 +1,36 @@
+Loopin is a guitar looper for your phone: record a base, play over it and keep adding tracks that always stay in time. Practise and play anywhere, with the phone's microphone or a USB audio interface.
+
+ONE BUTTON, LIKE A PEDAL
+• Tap: record, close the loop or overdub
+• Hold: undo the last thing
+• Double tap: stop and start
+• Or use the volume buttons, the headset button or a Bluetooth pedal
+• Stage mode: the whole screen is the button
+
+ALWAYS IN TIME
+• 4 tracks, each 1, 2 or 4 times the length of the first
+• Metronome from 40 to 240 BPM with tap tempo and 10 time signatures (4/4, 3/4, 6/8, 7/8…)
+• Synced, manual or free recording (the tempo comes from what you play)
+• Start on play: recording begins with your first note
+• Compensates your phone's delay: measured on its own in a few seconds
+
+BUILT FOR PRACTICE
+• Drums with 10 styles: rock, pop, blues, funk, reggae, waltz…
+• Your own songs (WAV, MP3, FLAC) at any tempo, without changing the pitch
+• Tempo trainer: raises the BPM step by step
+• Chromatic tuner with reference notes to tune by ear
+
+YOUR SESSIONS ARE SAFE
+• Everything saves itself, like a notes app
+• Export the mix or every track as WAV files for your DAW
+
+SIMPLE OR ADVANCED
+Simple mode keeps just the essentials (looper, metronome and tuner) with a bigger button. Advanced mode has everything.
+
+IN YOUR LANGUAGE
+English, Spanish, French, German, Italian and Portuguese.
+
+FREE AND PRIVATE
+Free and open source software (GPLv3). No ads, no accounts and no internet: the app doesn't even have permission to use it. It only asks for the microphone, to record you.
+
+Tip: through the phone speaker, the click and drums bleed into your recording. Wired headphones sound better; Bluetooth headphones have too much delay to monitor yourself live.

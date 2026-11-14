@@ -43,6 +43,7 @@ class Prefs {
   static const sessionId = 'sessionId';
   static const trackFx = 'trackFx';
   static const tutorialDone = 'tutorialDone';
+  static const language = 'language';
 
   Future<String?> get(String key) async {
     try {

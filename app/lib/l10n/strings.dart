@@ -1,12 +1,16 @@
 // Loopin — todos los textos de la app
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Para traducir (Etapa 7): crear `class StringsEn implements Strings` con los
-// mismos nombres (el compilador avisa si falta alguno) y elegirla en
-// [useStrings] según el idioma del móvil.
+// Los textos están en `assets/l10n/<idioma>.json` (`es.json` es la referencia;
+// cómo se escriben, en `docs/TRANSLATING.md`). Esta clase da a cada uno un
+// nombre en Dart y rellena sus parámetros, para que el resto de la app no sepa
+// nada de claves. Lo que se compone aquí (el «·», los números, el orden de las
+// piezas) no se traduce; las palabras, sí, y siempre en el JSON.
 //
 // Reglas de estilo: una línea por opción; la explicación larga va en un
 // texto `…Help`, que la app enseña plegado detrás de un «?».
+import 'dart:convert';
+
 import 'package:loopin_engine/loopin_engine.dart';
 
 import '../engine/engine_controller.dart' show RecordDuck;
@@ -16,164 +20,186 @@ import '../engine/meter.dart';
 import '../engine/pedal_keys.dart';
 import '../engine/play_mode.dart';
 import '../ui/theme.dart';
+import 'message.dart';
+import 'report_strings.dart';
+
+/// Los idiomas de la app, en el orden en que se ofrecen.
+const kLanguages = ['es', 'en', 'fr', 'de', 'it', 'pt'];
+
+/// El nombre de cada idioma en su idioma (no se traduce).
+const kLanguageNames = {
+  'es': 'Español',
+  'en': 'English',
+  'fr': 'Français',
+  'de': 'Deutsch',
+  'it': 'Italiano',
+  'pt': 'Português',
+};
 
 /// Los textos que se están usando.
 Strings get tr => _strings;
-Strings _strings = const Strings();
+Strings _strings = Strings('es', const {});
 
 /// Cambia el idioma de los textos.
 void useStrings(Strings strings) => _strings = strings;
 
-/// Textos en español.
+/// Textos en un idioma.
 class Strings {
-  const Strings();
+  Strings(this.lang, Map<String, String> texts, {this.fallback}) : _texts = texts;
+
+  /// Lee un `<idioma>.json`. Lo que falte se toma de [fallback].
+  factory Strings.fromJson(String lang, String json, {Strings? fallback}) {
+    final map = (jsonDecode(json) as Map<String, dynamic>).map((k, v) => MapEntry(k, v as String));
+    return Strings(lang, map, fallback: fallback);
+  }
+
+  /// «es», «en», «fr», «de», «it» o «pt».
+  final String lang;
+
+  /// Los textos de referencia, para lo que falte (no debería faltar nada: lo
+  /// comprueba `test/l10n_test.dart`).
+  final Strings? fallback;
+
+  final Map<String, String> _texts;
+  final _parsed = <String, Message>{};
+
+  /// Las claves de este idioma (para los tests).
+  Iterable<String> get keys => _texts.keys;
+
+  /// El texto sin rellenar (para los tests).
+  String? raw(String key) => _texts[key];
+
+  String _t(String key, [Map<String, Object?> args = const {}]) {
+    final text = _texts[key];
+    if (text == null) return fallback?._t(key, args) ?? key;
+    final msg = _parsed.putIfAbsent(key, () => Message.parse(text));
+    return msg.format(args, lang: lang);
+  }
+
+  String _e(String group, Enum value) => _t('$group.${value.name}');
+
+  /// Un número con [digits] decimales, con la coma o el punto del idioma.
+  String dec(double v, int digits) =>
+      v.toStringAsFixed(digits).replaceAll('.', _t('format.decimal'));
+
+  ReportStrings get report => ReportStrings.of(this);
 
   // ---------------------------------------------------------------- comunes
 
-  String get appName => 'Loopin';
-  String get cancel => 'Cancelar';
-  String get ok => 'Entendido';
-  String get showHelp => 'Explicación';
-  String get hideHelp => 'Ocultar la explicación';
-  String get yes => 'sí';
-  String get no => 'no';
+  String get appName => _t('appName');
+  String get cancel => _t('cancel');
+  String get ok => _t('ok');
+  String get showHelp => _t('showHelp');
+  String get hideHelp => _t('hideHelp');
+  String get yes => _t('yes');
+  String get no => _t('no');
   String yesNo(Object? v) => v == true ? yes : (v == false ? no : '—');
-  String ms(double v) => v < 0 ? '—' : '${v.toStringAsFixed(1)} ms';
-  String percent(double fraction) => '${(fraction * 100).round()} %';
+  String ms(double v) => v < 0 ? '—' : '${dec(v, 1)} ms';
+  String percent(double fraction) => _t('format.percent', {'n': (fraction * 100).round()});
 
   /// «1 compás», «4 compases»
-  String bars(int n) => '$n ${n == 1 ? 'compás' : 'compases'}';
+  String bars(int n) => _t('bars', {'n': n});
 
   /// «1 capa», «2 capas»
-  String layers(int n) => '$n ${n == 1 ? 'capa' : 'capas'}';
+  String layers(int n) => _t('layers', {'n': n});
 
   /// «1 golpe», «7 golpes»
-  String hits(int n) => '$n ${n == 1 ? 'golpe' : 'golpes'}';
+  String hits(int n) => _t('hits', {'n': n});
 
   // ---------------------------------------------------------------- motor
 
-  String presetName(InputPreset p) => switch (p) {
-    InputPreset.unprocessed => 'Sin procesar',
-    InputPreset.voicePerformance => 'Actuación en directo',
-    InputPreset.voiceRecognition => 'Reconocimiento de voz',
-    InputPreset.camcorder => 'Vídeo',
-    InputPreset.generic => 'Normal',
-  };
+  String presetName(InputPreset p) => _e('presetName', p);
 
   /// Una línea por modo del micrófono.
-  String presetLine(InputPreset p) => switch (p) {
-    InputPreset.unprocessed => 'Tal cual, sin arreglos. El mejor para guitarra.',
-    InputPreset.voicePerformance => 'Poco retardo. No todos los móviles lo tienen.',
-    InputPreset.voiceRecognition => 'Natural, sin cambios de volumen. A veces más retardo.',
-    InputPreset.camcorder => 'El de la cámara. Puede llevar filtros.',
-    InputPreset.generic => 'Sube y baja el volumen solo. Evítalo.',
-  };
+  String presetLine(InputPreset p) => _e('presetLine', p);
 
-  String get unprocessedUnsupported => 'Este móvil no lo admite: Android usa el Normal.';
-  String get recommended => 'RECOMENDADO';
+  String get unprocessedUnsupported => _t('unprocessedUnsupported');
+  String get recommended => _t('recommended');
 
-  String loopModeName(LoopMode m) => switch (m) {
-    LoopMode.sync => 'Sincronizado',
-    LoopMode.manual => 'Manual',
-    LoopMode.free => 'Libre',
-  };
-
-  String loopModeLine(LoopMode m) => switch (m) {
-    LoopMode.sync => 'Graba los compases que elijas y se cierra solo',
-    LoopMode.manual => 'Se cierra cuando vuelves a pulsar',
-    LoopMode.free => 'Sin metrónomo: el tempo sale del primer loop',
-  };
+  String loopModeName(LoopMode m) => _e('loopModeName', m);
+  String loopModeLine(LoopMode m) => _e('loopModeLine', m);
 
   /// En la pantalla de tempo
-  String loopModeShort(LoopMode m) => switch (m) {
-    LoopMode.sync => 'SYNC',
-    LoopMode.manual => 'MANUAL',
-    LoopMode.free => 'LIBRE',
-  };
+  String loopModeShort(LoopMode m) => _e('loopModeShort', m);
 
   /// Los 3 modos del clic (el motor también sabe «solo la cuenta», que la app
   /// ya no usa).
-  String clickModeName(ClickMode m) => switch (m) {
-    ClickMode.always => 'Siempre',
-    ClickMode.untilRecording => 'Hasta grabar',
-    _ => 'Apagado',
+  String _clickKey(ClickMode m) => switch (m) {
+    ClickMode.always => 'always',
+    ClickMode.untilRecording => 'untilRecording',
+    _ => 'off',
   };
+  String clickModeName(ClickMode m) => _t('clickModeName.${_clickKey(m)}');
 
   /// «Clic: siempre»
-  String clickLabel(ClickMode m) => 'Clic: ${clickModeName(m).toLowerCase()}';
+  String clickLabel(ClickMode m) => _t('clickLabel.${_clickKey(m)}');
 
   /// Al tocar el botón del clic (dice el modo al que pasa).
-  String clickSnack(ClickMode m) => switch (m) {
-    ClickMode.always => 'Clic: siempre',
-    ClickMode.untilRecording =>
-      'Clic hasta grabar: suena con el metrónomo y en la cuenta; al grabar se calla',
-    _ => 'Clic apagado: el tempo se ve en las luces y en el pulsador',
-  };
-  String get clickFree => 'En libre no suena el clic: el tempo saldrá del loop';
+  String clickSnack(ClickMode m) => _t('clickSnack.${_clickKey(m)}');
+  String get clickFree => _t('clickFree');
 
   /// Nombre de un dispositivo de audio de Android.
   String deviceName(AudioDevice d) {
     final extra = d.address.isNotEmpty ? ' (${d.address})' : '';
     return switch (d.type) {
-      15 => 'Micrófono del móvil$extra',
-      2 => 'Altavoz del móvil',
-      1 => 'Auricular de llamada',
-      3 => 'Auriculares con cable (micro)',
-      4 => 'Auriculares con cable',
-      5 || 6 => 'Entrada de línea',
-      7 || 26 || 8 || 27 => 'Bluetooth: ${d.name} (con retardo)',
-      11 || 12 => 'USB: ${d.name}',
-      22 => 'Cascos USB: ${d.name}',
-      _ => d.name.isNotEmpty ? d.name : 'Dispositivo ${d.type}',
+      15 => '${_t('device.mic')}$extra',
+      2 => _t('device.speaker'),
+      1 => _t('device.earpiece'),
+      3 => _t('device.wiredHeadset'),
+      4 => _t('device.wiredHeadphones'),
+      5 || 6 => _t('device.line'),
+      7 || 26 || 8 || 27 => _t('device.bluetooth', {'name': d.name}),
+      11 || 12 => _t('device.usb', {'name': d.name}),
+      22 => _t('device.usbHeadset', {'name': d.name}),
+      _ => d.name.isNotEmpty ? d.name : _t('device.other', {'type': d.type}),
     };
   }
 
-  String unknownDevice(int id) => 'dispositivo $id';
+  String unknownDevice(int id) => _t('unknownDevice', {'id': id});
 
   /// Mensaje para un código de error de Oboe.
   String audioError(int code) => switch (code) {
-    -899 => 'El dispositivo de audio se ha desconectado',
-    -889 => 'El dispositivo de audio no está disponible',
-    -883 => 'Formato de audio no soportado',
-    -887 => 'No hay memoria suficiente',
-    -881 => 'El servicio de audio de Android no responde',
-    _ => 'Error de audio ($code)',
+    -899 => _t('audioError.disconnected'),
+    -889 => _t('audioError.unavailable'),
+    -883 => _t('audioError.format'),
+    -887 => _t('audioError.memory'),
+    -881 => _t('audioError.service'),
+    _ => _t('audioError.other', {'code': code}),
   };
 
-  String get micDeniedForever =>
-      'Sin permiso de micrófono. Actívalo en Ajustes › Apps › Loopin › Permisos.';
-  String get micNeeded => 'Loopin necesita el micrófono para escuchar la guitarra.';
+  String get micDeniedForever => _t('micDeniedForever');
+  String get micNeeded => _t('micNeeded');
 
   // ---------------------------------------------------------------- looper: cabecera
 
-  String get settings => 'Ajustes';
-  String get latencyChipUnmeasured => 'LATENCIA SIN MEDIR';
-  String get latencyChipUnmeasuredSemantics =>
-      'Latencia sin medir: el loop puede ir desfasado. Toca para medirla';
+  String get settings => _t('settings');
+  String get latencyChipUnmeasured => _t('latencyChipUnmeasured');
+  String get latencyChipUnmeasuredSemantics => _t('latencyChipUnmeasuredSemantics');
 
   // ---------------------------------------------------------------- looper: tempo
 
-  String get tempoDown => 'Bajar el tempo';
-  String get tempoUp => 'Subir el tempo';
+  String get tempoDown => _t('tempoDown');
+  String get tempoUp => _t('tempoUp');
   String get bpmUnit => 'BPM';
   String get bpmUnitEighths => 'BPM ♪';
   String get noTempoYet => '- - -';
-  String get tapTempo => 'TAP · TOCA AL RITMO';
-  String get tempoLocked => 'FIJO MIENTRAS HAYA LOOP';
-  String get tempoFromLoop => 'LIBRE: EL TEMPO SALDRÁ DEL LOOP';
-  String get tempoFromLoopSemantics => 'Modo libre: el tempo saldrá del primer loop';
-  String bpmSemantics(int bpm, {required bool locked}) =>
-      '$bpm pulsos por minuto. '
-      '${locked ? 'Fijo mientras haya loop' : 'Toca varias veces al ritmo para marcar el tempo'}';
+  String get tapTempo => _t('tapTempo');
+  String get tempoLocked => _t('tempoLocked');
+  String get tempoFromLoop => _t('tempoFromLoop');
+  String get tempoFromLoopSemantics => _t('tempoFromLoopSemantics');
+  String bpmSemantics(int bpm, {required bool locked}) => _t('bpmSemantics', {
+    'bpm': bpm,
+    'hint': _t(locked ? 'bpmSemanticsLocked' : 'bpmSemanticsTap'),
+  });
 
-  String get stopAll => 'Parar todo';
-  String get startAll => 'Arrancar todo';
-  String get stopMetronome => 'Parar el metrónomo';
-  String get startMetronome => 'Arrancar el metrónomo';
-  String get metronomeStopped => 'Metrónomo parado';
-  String beatOf(int beat, int beats) => 'Tiempo $beat de $beats';
+  String get stopAll => _t('stopAll');
+  String get startAll => _t('startAll');
+  String get stopMetronome => _t('stopMetronome');
+  String get startMetronome => _t('startMetronome');
+  String get metronomeStopped => _t('metronomeStopped');
+  String beatOf(int beat, int beats) => _t('beatOf', {'beat': beat, 'beats': beats});
 
-  String get meter => 'Compás';
+  String get meter => _t('meter');
 
   /// En el menú: «7/8  (2+2+3)»
   String meterItem(TimeSignature ts) =>
@@ -183,200 +209,159 @@ class Strings {
   String meterChip(TimeSignature ts) =>
       ts.grouping.isEmpty ? ts.label : '${ts.label} ${ts.grouping}';
 
-  String get recordMode => 'Modo de grabación';
-  String get syncBars => 'Compases que graba';
+  String get recordMode => _t('recordMode');
+  String get syncBars => _t('syncBars');
 
   /// «4 C»
-  String barsShort(int n) => '$n C';
+  String barsShort(int n) => _t('barsShort', {'n': n});
 
-  String get startOnSound => 'Empezar al tocar';
-  String startOnSoundTooltip(bool on) => 'Empezar al tocar: ${on ? yes : no}';
-  String get startOnSoundOn =>
-      'Empezar al tocar: la pista 1 arranca con tu primera nota, sin cuenta';
-  String get startOnSoundOff => 'Empezar al tocar, apagado: la pista 1 tiene 1 compás de cuenta';
+  String get startOnSound => _t('startOnSound');
+  String startOnSoundTooltip(bool on) => _t('startOnSoundTooltip', {'state': on ? yes : no});
+  String get startOnSoundOn => _t('startOnSoundOn');
+  String get startOnSoundOff => _t('startOnSoundOff');
 
   // ---------------------------------------------------------------- looper: pistas
 
-  String trackLabel(int n) => 'PISTA $n';
-  String trackStateName(LoopState st, {bool muted = false}) => switch (st) {
-    LoopState.empty => 'vacía',
-    LoopState.armed => 'a punto de grabar',
-    LoopState.recording => 'grabando',
-    LoopState.playing => muted ? 'en silencio' : 'sonando',
-    LoopState.overdubbing => 'grabando encima',
-    LoopState.stopped => 'parada',
-  };
+  String trackLabel(int n) => _t('trackLabel', {'n': n});
+  String trackStateName(LoopState st, {bool muted = false}) =>
+      st == LoopState.playing && muted ? _t('trackState.muted') : _e('trackState', st);
 
   /// «Pista 2, sonando, 4 compases, 2 capas»
   String trackSemantics(int n, String state, {int? bars, int layers = 0}) =>
-      'Pista $n, $state'
+      '${_t('trackSemantics', {'n': n, 'state': state})}'
       '${bars != null ? ', ${this.bars(bars)}' : ''}'
       '${layers > 1 ? ', ${this.layers(layers)}' : ''}';
 
   /// Debajo del anillo: «4 C · 2» (compases y capas, si hay más de una)
-  String trackRingLabel(int bars, int layers) => '$bars C${layers > 1 ? ' · $layers' : ''}';
+  String trackRingLabel(int bars, int layers) =>
+      '${barsShort(bars)}${layers > 1 ? ' · $layers' : ''}';
   String get trackRingEmpty => '—';
 
-  String trackVolume(int n, double v) => 'Volumen de la pista $n: ${(v * 100).round()} %';
-  String unmuteTrack(int n) => 'Volver a oír la pista $n';
-  String muteTrack(int n) => 'Silenciar la pista $n';
-  String clearTrack(int n) => 'Borrar la pista $n';
+  String trackVolume(int n, double v) => _t('trackVolume', {'n': n, 'volume': percent(v)});
+  String unmuteTrack(int n) => _t('unmuteTrack', {'n': n});
+  String muteTrack(int n) => _t('muteTrack', {'n': n});
+  String clearTrack(int n) => _t('clearTrack', {'n': n});
 
   // Etapa 5: reverse y media velocidad
-  String get reverseShort => 'REV';
+  String get reverseShort => _t('reverseShort');
   String get halfShort => '½';
-  String reverseTrack(int n, bool on) =>
-      on ? 'Pista $n al revés: quitar' : 'Poner la pista $n al revés';
-  String halfTrack(int n, bool on) =>
-      on ? 'Pista $n a media velocidad: quitar' : 'Poner la pista $n a media velocidad';
+  String reverseTrack(int n, bool on) => _t(on ? 'reverseTrackOn' : 'reverseTrackOff', {'n': n});
+  String halfTrack(int n, bool on) => _t(on ? 'halfTrackOn' : 'halfTrackOff', {'n': n});
 
   /// Para lectores de pantalla, cuando el cambio espera al siguiente 1
-  String get atNextOne => 'en el siguiente 1';
+  String get atNextOne => _t('atNextOne');
 
   /// Debajo del anillo, si la pista va al revés o a media velocidad: «2 C · REV ½»
   String trackRingFx(String label, {required bool reverse, required bool half}) =>
-      '$label${reverse || half ? ' ·' : ''}${reverse ? ' REV' : ''}${half ? ' ½' : ''}';
+      '$label${reverse || half ? ' ·' : ''}${reverse ? ' $reverseShort' : ''}'
+      '${half ? ' $halfShort' : ''}';
 
   // ---------------------------------------------------------------- entrenador de tempo
 
-  String get trainer => 'Entrenador de tempo';
-  String trainerTooltip(bool on) => 'Entrenador de tempo: ${on ? 'encendido' : 'apagado'}';
-  String get trainerLine => 'Sube el tempo poco a poco mientras tocas';
-  String get trainerHelp =>
-      'Para practicar algo cada vez más rápido. Al darle a ▶ empieza en tu tempo y, cada '
-      'pocos compases, sube lo que digas, justo en el 1, hasta el tempo de arriba; ahí se '
-      'queda. Al parar vuelve a tu tempo. Funciona sin loops (con un loop el tempo es el '
-      'suyo). La batería lo sigue; una canción se calla un momento en cada subida, '
-      'mientras se vuelve a preparar.';
-  String get trainerStep => 'Sube';
-  String get trainerEvery => 'Cada';
-  String get trainerTop => 'Hasta';
-  String trainerBpm(num v) => '${v.round()} BPM';
-  String trainerBarsShort(int n) => '$n C';
+  String get trainer => _t('trainer');
+  String trainerTooltip(bool on) => _t(on ? 'trainerTooltipOn' : 'trainerTooltipOff');
+  String get trainerLine => _t('trainerLine');
+  String get trainerHelp => _t('trainerHelp');
+  String get trainerStep => _t('trainerStep');
+  String get trainerEvery => _t('trainerEvery');
+  String get trainerTop => _t('trainerTop');
+  String trainerBpm(num v) => _t('trainerBpm', {'bpm': v.round()});
+  String trainerBarsShort(int n) => barsShort(n);
   String trainerSummary(int from, int to, int step, int bars, int steps) => steps <= 0
-      ? 'Ya estás en $to BPM o más: sube el tempo de arriba'
-      : 'De $from a $to BPM: +$step cada ${this.bars(bars)} '
-            '(${steps == 1 ? '1 subida' : '$steps subidas'})';
+      ? _t('trainerSummaryDone', {'to': to})
+      : _t('trainerSummary', {
+          'from': from,
+          'to': to,
+          'step': step,
+          'bars': this.bars(bars),
+          'steps': steps,
+        });
 
   /// En la pantalla de tempo, en lugar del TAP: «ENTRENADOR +5 / 4 C · HASTA 132»
-  String trainerPill(int step, int bars, int top) => 'ENTRENADOR +$step / $bars C · HASTA $top';
-  String get trainerNeedsNoLoops => 'Solo sin loops: con un loop el tempo es el suyo';
-  String get trainerDecrease => 'Menos';
-  String get trainerIncrease => 'Más';
+  String trainerPill(int step, int bars, int top) =>
+      _t('trainerPill', {'step': step, 'bars': barsShort(bars), 'top': top});
+  String get trainerNeedsNoLoops => _t('trainerNeedsNoLoops');
+  String get trainerDecrease => _t('trainerDecrease');
+  String get trainerIncrease => _t('trainerIncrease');
 
   // ---------------------------------------------------------------- afinador
 
-  String get tuner => 'Afinador';
-  String get tunerHelp =>
-      'Toca una cuerda al aire, sola y dejándola sonar. Arriba sale la nota que oye y la '
-      'aguja dice cuánto le falta: a la izquierda, baja (aprieta la clavija); a la '
-      'derecha, alta (afloja). En el centro, verde, está afinada. Usa la entrada que '
-      'tengas: el micrófono del móvil o la interfaz. Con el micrófono, mejor cerca de la '
-      'guitarra y en silencio. Mientras está abierto, lo demás sigue sonando.';
-  // Con «#» y no «♯»: las tipografías de la app no tienen ese signo
-  static const _noteNames = [
-    'DO',
-    'DO#',
-    'RE',
-    'RE#',
-    'MI',
-    'FA',
-    'FA#',
-    'SOL',
-    'SOL#',
-    'LA',
-    'LA#',
-    'SI',
-  ];
-  static const _noteLetters = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  String get tuner => _t('tuner');
+  String get tunerHelp => _t('tunerHelp');
 
-  /// Nombre de la nota (0 = Do … 11 = Si)
-  String noteName(int pitchClass) => _noteNames[pitchClass % 12];
+  /// Nombre de la nota (0 = Do … 11 = Si). Con «#» y no «♯»: las tipografías
+  /// de la app no tienen ese signo.
+  String noteName(int pitchClass) => _t('note.${pitchClass % 12}');
 
-  /// En letras, con la octava: «E2»
-  String noteLetter(int pitchClass, int octave) => '${_noteLetters[pitchClass % 12]}$octave';
-  String get tunerListening => 'Toca una cuerda al aire';
-  String get tunerNoAudio => 'El audio está apagado';
-  String get tunerInTune => 'AFINADA';
-  String get tunerFlat => 'BAJA · aprieta';
-  String get tunerSharp => 'ALTA · afloja';
-  String tunerCents(double c) => '${c >= 0 ? '+' : '−'}${c.abs().round()} cents';
-  String tunerHz(double f) => '${f.toStringAsFixed(1).replaceAll('.', ',')} Hz';
-  String get tunerStandard => 'Afinación estándar';
-  String tunerSemantics(String note, double cents) =>
-      'Nota $note, ${cents.abs() <= 3 ? 'afinada' : (cents < 0 ? 'baja' : 'alta')}, '
-      '${tunerCents(cents)}';
-  String get tunerA4 => 'La de referencia';
-  String tunerA4Value(double hz) => 'La = ${hz.round()} Hz';
-  String get tunerA4Help =>
-      'La frecuencia del La de la 5.ª cuerda, una octava más arriba. Lo normal es 440 Hz; '
-      'cámbialo solo para tocar con algo afinado de otra forma (un piano, una grabación).';
-  String get tunerSpeaker => 'Lo que suena por el altavoz también llega al afinador';
-  String get tunerStopAll => 'Parar';
-  String get tunerOpen => 'Afinador';
-  String get referenceNotes => 'Oír una nota';
-  String get referenceNotesLine =>
-      'Para afinar de oído: toca una para que suene, otra vez para callarla';
-  String get referenceStop => 'Callar';
+  /// En letras, con la octava: «E2» (en alemán, «H2» para el si)
+  String noteLetter(int pitchClass, int octave) => '${_t('noteLetter.${pitchClass % 12}')}$octave';
+  String get tunerListening => _t('tunerListening');
+  String get tunerNoAudio => _t('tunerNoAudio');
+  String get tunerInTune => _t('tunerInTune');
+  String get tunerFlat => _t('tunerFlat');
+  String get tunerSharp => _t('tunerSharp');
+  String tunerCents(double c) =>
+      _t('tunerCents', {'cents': '${c >= 0 ? '+' : '−'}${c.abs().round()}'});
+  String tunerHz(double f) => _t('tunerHz', {'hz': dec(f, 1)});
+  String get tunerStandard => _t('tunerStandard');
+  String tunerSemantics(String note, double cents) => _t('tunerSemantics', {
+    'note': note,
+    'state': _t(
+      cents.abs() <= 3 ? 'tunerState.inTune' : (cents < 0 ? 'tunerState.flat' : 'tunerState.sharp'),
+    ),
+    'cents': tunerCents(cents),
+  });
+  String get tunerA4 => _t('tunerA4');
+  String tunerA4Value(double hz) => _t('tunerA4Value', {'hz': hz.round()});
+  String get tunerA4Help => _t('tunerA4Help');
+  String get tunerSpeaker => _t('tunerSpeaker');
+  String get tunerStopAll => _t('tunerStopAll');
+  String get tunerOpen => _t('tunerOpen');
+  String get referenceNotes => _t('referenceNotes');
+  String get referenceNotesLine => _t('referenceNotesLine');
+  String get referenceStop => _t('referenceStop');
 
   /// El botón del La de referencia: «LA 440»
-  String referenceA4(double hz) => 'LA ${hz.round()}';
+  String referenceA4(double hz) => _t('referenceA4', {'hz': hz.round()});
   String referenceNoteSemantics(String note, double hz, bool on) =>
-      '${on ? 'Callar' : 'Oír'} $note, ${tunerHz(hz)}';
+      _t(on ? 'referenceNoteOn' : 'referenceNoteOff', {'note': note, 'hz': tunerHz(hz)});
 
   // ---------------------------------------------------------------- looper: batería
 
-  String get drums => 'BATERÍA';
-  String drumStyleName(DrumStyle st) => switch (st) {
-    DrumStyle.basic => 'Básico',
-    DrumStyle.rock => 'Rock',
-    DrumStyle.pop => 'Pop',
-    DrumStyle.shuffle => 'Blues shuffle',
-    DrumStyle.funk => 'Funk',
-    DrumStyle.ballad => 'Balada',
-    DrumStyle.reggae => 'Reggae',
-    DrumStyle.waltz => 'Vals',
-    DrumStyle.sixEight => 'Balada 6/8',
-    DrumStyle.slowBlues => 'Blues lento',
-  };
-  String drumStyleChip(DrumStyle st) => switch (st) {
-    DrumStyle.shuffle => 'SHUFFLE',
-    DrumStyle.sixEight => 'BALADA',
-    DrumStyle.slowBlues => 'BLUES',
-    _ => drumStyleName(st).toUpperCase(),
-  };
+  String get drums => _t('drums');
+  String drumStyleName(DrumStyle st) => _e('drumStyle', st);
+  String drumStyleChip(DrumStyle st) => _e('drumChip', st);
 
   /// En el menú: «Rock · 4/4», «Básico · cualquier compás»
   String drumStyleItem(DrumStyle st, String? meter) =>
-      '${drumStyleName(st)} · ${meter ?? 'cualquier compás'}';
-  String get drumStyleMenu => 'Estilo de la batería';
-  String get drumsTurnOn => 'Encender la batería';
-  String get drumsTurnOff => 'Apagar la batería';
-  String drumVolume(double v) => 'Volumen de la batería: ${(v * 100).round()} %';
-  String drumsSemantics(String style, bool on, bool playing) =>
-      'Batería, $style, ${!on ? 'apagada' : (playing ? 'sonando' : 'encendida, entra en el próximo 1')}';
-  String get drumsBleed => 'Con el altavoz, el micro graba la batería';
-  String get drumsBleedHelp =>
-      'Con el altavoz y el micrófono del móvil, la batería se cuela en lo que grabas (no se '
-      'calla al grabar: la necesitas para tocar a tempo). Si luego la apagas, seguirá en los '
-      'loops. Para que no pase, usa cascos o una interfaz.';
+      _t('drumStyleItem', {'style': drumStyleName(st), 'meter': meter ?? _t('drumAnyMeter')});
+  String get drumStyleMenu => _t('drumStyleMenu');
+  String get drumsTurnOn => _t('drumsTurnOn');
+  String get drumsTurnOff => _t('drumsTurnOff');
+  String drumVolume(double v) => _t('drumVolume', {'volume': percent(v)});
+  String drumsSemantics(String style, bool on, bool playing) => _t('drumsSemantics', {
+    'style': style,
+    'state': _t(!on ? 'drumsState.off' : (playing ? 'drumsState.playing' : 'drumsState.waiting')),
+  });
+  String get drumsBleed => _t('drumsBleed');
+  String get drumsBleedHelp => _t('drumsBleedHelp');
 
   // ---------------------------------------------------------------- looper: acompañamiento
 
   /// El selector de la fila de abajo: batería o canción
-  String get accDrums => 'BATERÍA';
-  String get accSong => 'CANCIÓN';
-  String accShow(String what) => 'Enseñar: ${what.toLowerCase()}';
+  String get accDrums => _t('accDrums');
+  String get accSong => _t('accSong');
+  String accShow(String what) => _t(what == accSong ? 'accShow.song' : 'accShow.drums');
 
   // ---------------------------------------------------------------- canción (audio importado)
 
-  /// «97,3», «120», «97,34»: con los decimales que tenga (coma decimal)
+  /// «97,3», «120», «97,34»: con los decimales que tenga
   String bpmNumber(double v) {
     var t = v.toStringAsFixed(2);
     while (t.contains('.') && (t.endsWith('0') || t.endsWith('.'))) {
       t = t.substring(0, t.length - 1);
     }
-    return t.replaceAll('.', ',');
+    return t.replaceAll('.', _t('format.decimal'));
   }
 
   /// «3:45»
@@ -390,319 +375,257 @@ class Strings {
     final t = seconds < 0 ? 0.0 : seconds;
     final m = t ~/ 60;
     final rest = t - m * 60;
-    return '$m:${rest.toStringAsFixed(1).padLeft(4, '0').replaceAll('.', ',')}';
+    return '$m:${rest.toStringAsFixed(1).padLeft(4, '0').replaceAll('.', _t('format.decimal'))}';
   }
 
   // En la fila
-  String get songChoose => 'ELEGIR';
-  String get songSetup => 'PREPARAR';
-  String get songTooFar => 'LEJOS';
-  String get songFailedChip => 'ERROR';
+  String get songChoose => _t('songChoose');
+  String get songSetup => _t('songSetup');
+  String get songTooFar => _t('songTooFar');
+  String get songFailedChip => _t('songFailedChip');
   String songChip(String name) => name.toUpperCase();
-  String songSpeed(double v) => '${(v * 100).round()} %';
-  String get songMenu => 'Canciones';
-  String get songTurnOn => 'Encender la canción';
-  String get songTurnOff => 'Apagar la canción';
-  String songVolume(double v) => 'Volumen de la canción: ${(v * 100).round()} %';
-  String songSemantics(String? name, bool on, bool playing) =>
-      'Canción, ${name ?? 'ninguna'}, '
-      '${!on ? 'apagada' : (playing ? 'sonando' : 'encendida, entra en el próximo 1')}';
-  String get songBleed => 'Con el altavoz, el micro graba la canción';
-  String get songBleedHelp =>
-      'Con el altavoz y el micrófono del móvil, la canción se cuela en lo que grabas (no se '
-      'calla al grabar: la necesitas para tocar encima). Para que no pase, usa cascos o una '
-      'interfaz.';
+  String songSpeed(double v) => percent(v);
+  String get songMenu => _t('songMenu');
+  String get songTurnOn => _t('songTurnOn');
+  String get songTurnOff => _t('songTurnOff');
+  String songVolume(double v) => _t('songVolume', {'volume': percent(v)});
+  String songSemantics(String? name, bool on, bool playing) => _t('songSemantics', {
+    'name': name ?? _t('songNoName'),
+    'state': _t(!on ? 'songState.off' : (playing ? 'songState.playing' : 'songState.waiting')),
+  });
+  String get songBleed => _t('songBleed');
+  String get songBleedHelp => _t('songBleedHelp');
 
   /// En qué está la elegida (en la lista de canciones)
-  String backingPhase(BackingPhase p, {required String bpm, double progress = 0}) => switch (p) {
-    BackingPhase.noSong => 'Ninguna elegida.',
-    BackingPhase.needsSetup => 'Sin preparar: marca su tempo y dónde cae el 1.',
-    BackingPhase.preparing =>
-      'Preparándola a $bpm BPM… ${progress > 0 ? percent(progress) : ''}'.trim(),
-    BackingPhase.ready => 'Lista a $bpm BPM.',
-    BackingPhase.tooFar => 'A $bpm BPM está demasiado lejos de su tempo: va de la mitad al doble.',
-    BackingPhase.failed => 'No se ha podido preparar.',
-  };
+  String backingPhase(BackingPhase p, {required String bpm, double progress = 0}) => _t(
+    'backingPhase.${p.name}',
+    {'bpm': bpm, 'progress': progress > 0 ? percent(progress) : ''},
+  ).trim();
 
   // Lista de canciones
-  String get songsTitle => 'Canciones';
-  String get songsHow => 'Cómo funciona';
-  String get songsImport => 'Importar audio';
-  String get songsEmpty => 'Aún no hay ninguna';
-  String get songsEmptyLine => 'Importa un audio tuyo (WAV, MP3 o FLAC) para tocar encima.';
-  String get songsHelp =>
-      'Loopin estira la canción al tempo del metrónomo sin cambiar el tono, así puedes '
-      'tocarla más despacio para practicar. Para que cuadre con los loops necesita su tempo y '
-      'dónde cae un 1: se marcan una vez, al prepararla.\n'
-      'Al elegirla, el metrónomo se pone a su tempo y su compás (si no hay loops; elegirla otra '
-      'vez vuelve a su tempo). Con loops grabados se estira al tempo del loop.\n'
-      'Entra siempre en un 1 (con cuenta de entrada, al empezar a grabar) y, al acabar, vuelve '
-      'a empezar. Suena en mono y puede durar hasta 10 minutos (también estirada).';
-  String get songsCurrent => 'Elegida';
-  String songRestoreTempo(String bpm) => 'Volver a su tempo ($bpm BPM)';
-  String get songsNone => 'Sin canción';
+  String get songsTitle => _t('songsTitle');
+  String get songsHow => _t('songsHow');
+  String get songsImport => _t('songsImport');
+  String get songsEmpty => _t('songsEmpty');
+  String get songsEmptyLine => _t('songsEmptyLine');
+  String get songsHelp => _t('songsHelp');
+  String get songsCurrent => _t('songsCurrent');
+  String songRestoreTempo(String bpm) => _t('songRestoreTempo', {'bpm': bpm});
+  String get songsNone => _t('songsNone');
   String songSubtitle(String bpm, String meter, double seconds) =>
-      '$bpm BPM · $meter${seconds > 0 ? ' · ${duration(seconds)}' : ''}';
-  String get songNotReady => 'Sin preparar: tócala para marcar su tempo y el 1';
-  String get songPrepare => 'Preparar (tempo y 1)';
-  String get songDelete => 'Borrar';
-  String get songOptions => 'Opciones de la canción';
-  String songDeleteTitle(String name) => '¿Borrar «$name»?';
-  String get songDeleteBody => 'Se borra la copia de Loopin. El archivo original no se toca.';
-  String get importing => 'Copiando el audio…';
-  String importError(ImportError e) => switch (e) {
-    ImportError.tooBig => 'El archivo es demasiado grande.',
-    ImportError.copy => 'No se ha podido copiar el archivo.',
-    ImportError.noStorage => 'No hay dónde guardar el archivo.',
-  };
-  String songError(SongError e) => switch (e) {
-    SongError.none => '',
-    SongError.open => 'No se puede abrir: tiene que ser WAV, MP3 o FLAC.',
-    SongError.tooLong => 'Dura demasiado: hasta 10 minutos (también estirada).',
-    SongError.memory => 'No hay memoria para abrirla.',
-    SongError.empty => 'No suena nada.',
-    SongError.tempo => 'Demasiado lejos de su tempo: va de la mitad al doble.',
-  };
+      '${_t('songSubtitle', {'bpm': bpm, 'meter': meter})}'
+      '${seconds > 0 ? ' · ${duration(seconds)}' : ''}';
+  String get songNotReady => _t('songNotReady');
+  String get songPrepare => _t('songPrepare');
+  String get songDelete => _t('songDelete');
+  String get songOptions => _t('songOptions');
+  String songDeleteTitle(String name) => _t('songDeleteTitle', {'name': name});
+  String get songDeleteBody => _t('songDeleteBody');
+  String get importing => _t('importing');
+  String importError(ImportError e) => _e('importError', e);
+  String songError(SongError e) => e == SongError.none ? '' : _e('songError', e);
 
   // Preparar una canción
-  String get editorTitle => 'Preparar canción';
-  String editorOpening(double p) => 'Abriendo… ${p > 0 ? percent(p) : ''}'.trim();
-  String get editorName => 'Nombre';
-  String get editorPlay => 'Escuchar';
-  String get editorPause => 'Parar';
-  String get editorFromMark => 'Desde un compás antes del 1';
-  String get editorClick => 'CLIC';
-  String get editorClickTip => 'Clic en su tempo, desde el 1';
-  String get editorWaveTip => 'Toca para escuchar desde ahí';
-  String get editorMarkOne => 'MARCAR EL 1';
-  String get editorMarkLine => 'Mientras suena, justo en el primer tiempo de un compás.';
-  String get editorMarkHelp =>
-      'Toca el botón cuando oigas un 1 (el primer tiempo de un compás; vale cualquiera, no '
-      'hace falta el primero). Loopin lo pone en el golpe más claro de ahí cerca. Luego '
-      'afínalo en la vista de cerca (arrastra) o con los botones, y compruébalo con el clic '
-      'encendido: el clic fuerte tiene que caer en los unos.';
-  String get editorZoom => 'El 1, de cerca (arrastra para moverlo)';
-  String editorNudge(int ms) => 'Mover el 1 ${ms > 0 ? '+' : ''}$ms ms';
-  String get editorTempo => 'Tempo';
-  String editorBpm(String bpm) => '$bpm BPM';
-  String get editorTap => 'TAP';
-  String get editorTapTip => 'Toca al ritmo de la canción';
-  String editorGuess(String bpm) => 'Sugerido: $bpm';
-  String get editorTempoMinus => 'Bajar 0,1 BPM';
-  String get editorTempoPlus => 'Subir 0,1 BPM';
-  String get editorTempoHelp =>
-      'Escríbelo, márcalo con TAP mientras suena o, lo más exacto, marca otro 1 más '
-      'adelante: Loopin cuenta los compases que hay entre los dos y saca el tempo con '
-      'decimales. Con el clic encendido, escúchala cerca del final: si el clic se va '
-      'adelantando o retrasando, el tempo aún no es exacto.\n'
-      'Si la canción no lleva un tempo fijo (grabada sin metrónomo), no cuadrará del todo.';
-  String get editorBpmDialog => 'Tempo de la canción';
-  String get editorMeter => 'Compás';
-  String get editorSecond => 'MARCAR OTRO 1 MÁS ADELANTE';
-  String get editorSecondLine => 'Para sacar el tempo exacto (cuanto más lejos, mejor).';
-  String editorBarsBetween(int bars) => 'Entre los dos unos: ${this.bars(bars)}';
-  String get editorFewerBars => 'Un compás menos';
-  String get editorMoreBars => 'Un compás más';
-  String get editorClearSecond => 'Quitar el otro 1';
-  String get editorSave => 'GUARDAR Y USAR';
+  String get editorTitle => _t('editorTitle');
+  String editorOpening(double p) =>
+      _t('editorOpening', {'progress': p > 0 ? percent(p) : ''}).trim();
+  String get editorName => _t('editorName');
+  String get editorPlay => _t('editorPlay');
+  String get editorPause => _t('editorPause');
+  String get editorFromMark => _t('editorFromMark');
+  String get editorClick => _t('editorClick');
+  String get editorClickTip => _t('editorClickTip');
+  String get editorWaveTip => _t('editorWaveTip');
+  String get editorMarkOne => _t('editorMarkOne');
+  String get editorMarkLine => _t('editorMarkLine');
+  String get editorMarkHelp => _t('editorMarkHelp');
+  String get editorZoom => _t('editorZoom');
+  String editorNudge(int ms) => _t('editorNudge', {'ms': '${ms > 0 ? '+' : ''}$ms'});
+  String get editorTempo => _t('editorTempo');
+  String editorBpm(String bpm) => _t('editorBpm', {'bpm': bpm});
+  String get editorTap => _t('editorTap');
+  String get editorTapTip => _t('editorTapTip');
+  String editorGuess(String bpm) => _t('editorGuess', {'bpm': bpm});
+  String get editorTempoMinus => _t('editorTempoMinus');
+  String get editorTempoPlus => _t('editorTempoPlus');
+  String get editorTempoHelp => _t('editorTempoHelp');
+  String get editorBpmDialog => _t('editorBpmDialog');
+  String get editorMeter => _t('editorMeter');
+  String get editorSecond => _t('editorSecond');
+  String get editorSecondLine => _t('editorSecondLine');
+  String editorBarsBetween(int bars) => _t('editorBarsBetween', {'bars': this.bars(bars)});
+  String get editorFewerBars => _t('editorFewerBars');
+  String get editorMoreBars => _t('editorMoreBars');
+  String get editorClearSecond => _t('editorClearSecond');
+  String get editorSave => _t('editorSave');
 
   // ---------------------------------------------------------------- looper: pulsador
 
-  String get pedal => 'Botón principal';
-  String pedalSemantics(String title, String subtitle) => 'Botón principal. $title. $subtitle';
-  String get pedalTapHint => 'pulsar';
-  String get pedalHoldHint => 'deshacer lo último';
-  String get pedalDoubleAction => 'Parar o arrancar (doble toque)';
+  String get pedal => _t('pedal');
+  String pedalSemantics(String title, String subtitle) =>
+      _t('pedalSemantics', {'title': title, 'subtitle': subtitle});
+  String get pedalTapHint => _t('pedalTapHint');
+  String get pedalHoldHint => _t('pedalHoldHint');
+  String get pedalDoubleAction => _t('pedalDoubleAction');
 
-  String get ready => 'LISTO';
-  String readyOnSound(int track) =>
-      'Toca y empieza a tocar: la pista $track arranca con tu primera nota';
-  String readyFree(int track) => 'Toca para grabar la pista $track (sin metrónomo)';
-  String readyCountIn(int track) => 'Toca para grabar la pista $track, con 1 compás de cuenta';
+  String get ready => _t('ready');
+  String readyOnSound(int track) => _t('readyOnSound', {'track': track});
+  String readyFree(int track) => _t('readyFree', {'track': track});
+  String readyCountIn(int track) => _t('readyCountIn', {'track': track});
 
-  String get waiting => 'ESPERANDO';
-  String get waitingLine => 'Empieza a tocar: la grabación arranca con tu primera nota';
+  String get waiting => _t('waiting');
+  String get waitingLine => _t('waitingLine');
 
-  String get getReady => 'PREPÁRATE';
-  String trackStartsNextBar(int track) => 'La pista $track empieza en el próximo compás';
-  String get countIn => 'Cuenta de entrada';
+  String get getReady => _t('getReady');
+  String trackStartsNextBar(int track) => _t('trackStartsNextBar', {'track': track});
+  String get countIn => _t('countIn');
 
-  String recordingTitle(int track) => 'GRABANDO · PISTA $track';
-  String get recordingFree => 'Toca para cerrar: el tempo saldrá del loop';
-  String barOf(int bar, int of) => 'Compás $bar de $of';
-  String barOpen(int bar) => 'Compás $bar · toca para cerrar';
+  String recordingTitle(int track) => _t('recordingTitle', {'track': track});
+  String get recordingFree => _t('recordingFree');
+  String barOf(int bar, int of) => _t('barOf', {'bar': bar, 'of': of});
+  String barOpen(int bar) => _t('barOpen', {'bar': bar});
 
-  String get playing => 'SONANDO';
-  String overdubOn(int track) => 'Toca para grabar encima de la pista $track';
-  String recordOn(int track) => 'Toca para grabar la pista $track';
+  String get playing => _t('playing');
+  String overdubOn(int track) => _t('overdubOn', {'track': track});
+  String recordOn(int track) => _t('recordOn', {'track': track});
 
-  String overdubNextBar(int track) => 'Overdub de la pista $track en el próximo compás';
-  String overdubTitle(int track) => 'OVERDUB · PISTA $track';
-  String get tapToFinish => 'Toca para terminar';
+  String overdubNextBar(int track) => _t('overdubNextBar', {'track': track});
+  String overdubTitle(int track) => _t('overdubTitle', {'track': track});
+  String get tapToFinish => _t('tapToFinish');
 
-  String get stopped => 'PARADO';
-  String get tapToStart => 'Toca para arrancar';
+  String get stopped => _t('stopped');
+  String get tapToStart => _t('tapToStart');
 
   // Parar en el 1 o con fundido
-  String get stoppingAtOne => 'PARA EN EL 1';
-  String get fadingOut => 'BAJANDO…';
-  String get tapToStopNow => 'Toca para parar ya';
+  String get stoppingAtOne => _t('stoppingAtOne');
+  String get fadingOut => _t('fadingOut');
+  String get tapToStopNow => _t('tapToStopNow');
 
-  String get audioOn => 'ENCENDER AUDIO';
+  String get audioOn => _t('audioOn');
 
   // ---------------------------------------------------------------- looper: abajo
 
-  String get gestures => 'Toca: grabar · Mantén: deshacer · Doble toque: parar';
-  String get undo => 'DESHACER';
-  String get stop => 'PARAR';
-  String get start => 'ARRANCAR';
-  String get clearAll => 'Borrar todas las pistas';
-  String get clearAllTitle => '¿Borrar las 4 pistas?';
-  String clearAllBody(String session) =>
-      'Se pierde lo grabado en «$session». No se puede deshacer.\n\n'
-      'Si quieres guardarlo, empieza una sesión nueva: esta se queda en Sesiones.';
-  String get clearAllConfirm => 'Borrar todo';
-  String get clearAllNewSession => 'Sesión nueva';
-  String get stageOpen => 'Modo escenario (toda la pantalla es el pulsador)';
-  String get inputLevel => 'Nivel de entrada';
-  String get monitor => 'ESCUCHARME';
+  String get gestures => _t('gestures');
+  String get undo => _t('undo');
+  String get stop => _t('stop');
+  String get start => _t('start');
+  String get clearAll => _t('clearAll');
+  String get clearAllTitle => _t('clearAllTitle');
+  String clearAllBody(String session) => _t('clearAllBody', {'session': session});
+  String get clearAllConfirm => _t('clearAllConfirm');
+  String get clearAllNewSession => _t('clearAllNewSession');
+  String get stageOpen => _t('stageOpen');
+  String get inputLevel => _t('inputLevel');
+  String get monitor => _t('monitor');
 
   // ---------------------------------------------------------------- sesiones (Etapa 6)
 
-  static const _months = [
-    'ene',
-    'feb',
-    'mar',
-    'abr',
-    'may',
-    'jun',
-    'jul',
-    'ago',
-    'sep',
-    'oct',
-    'nov',
-    'dic',
-  ];
   String _two(int n) => n.toString().padLeft(2, '0');
+  String _time(DateTime d) => '${_two(d.hour)}:${_two(d.minute)}';
+  String _dayMonth(DateTime d) =>
+      _t('date.dayMonth', {'day': d.day, 'month': _t('date.month.${d.month}')});
 
   /// «Sesión 13 nov · 18:50»
   String sessionDefaultName(DateTime d) =>
-      'Sesión ${d.day} ${_months[d.month - 1]} · ${_two(d.hour)}:${_two(d.minute)}';
-  String sessionCopyName(String name) => '$name (copia)';
+      _t('sessionDefaultName', {'date': _dayMonth(d), 'time': _time(d)});
+  String sessionCopyName(String name) => _t('sessionCopyName', {'name': name});
 
   /// «hoy 18:50», «ayer 09:12», «13 nov», «13 nov 2025»
   String sessionWhen(DateTime d, DateTime now) {
     final day = DateTime(d.year, d.month, d.day);
     final today = DateTime(now.year, now.month, now.day);
     final diff = today.difference(day).inDays;
-    final time = '${_two(d.hour)}:${_two(d.minute)}';
-    if (diff == 0) return 'hoy $time';
-    if (diff == 1) return 'ayer $time';
+    if (diff == 0) return _t('date.today', {'time': _time(d)});
+    if (diff == 1) return _t('date.yesterday', {'time': _time(d)});
     return d.year == now.year
-        ? '${d.day} ${_months[d.month - 1]}'
-        : '${d.day} ${_months[d.month - 1]} ${d.year}';
+        ? _dayMonth(d)
+        : _t('date.dayMonthYear', {
+            'day': d.day,
+            'month': _t('date.month.${d.month}'),
+            'year': d.year,
+          });
   }
 
-  String sessionsOpenSemantics(String name) => 'Sesiones. Abierta: $name';
+  String sessionsOpenSemantics(String name) => _t('sessionsOpenSemantics', {'name': name});
 
   /// No se ha podido guardar la sesión (casi siempre, el móvil está lleno).
   String saveFailedLine(bool noSpace) =>
-      noSpace ? 'No se puede guardar: falta espacio en el móvil' : 'No se puede guardar la sesión';
-  String get saveFailedSemantics => 'Sin guardar';
-  String saveFailedBody(bool noSpace) => noSpace
-      ? 'El móvil está lleno y lo último que has grabado no se ha guardado. Loopin lo '
-            'vuelve a intentar solo. Libera espacio (fotos, vídeos, otras apps) o exporta '
-            'la mezcla para no perderla.'
-      : 'Lo último que has grabado no se ha guardado. Loopin lo vuelve a intentar solo. '
-            'Mientras tanto, exporta la mezcla para no perderla.';
-  String get saveFailedExitTitle => 'Sin guardar';
-  String get saveFailedExitBody =>
-      'Lo último no se ha podido guardar (falta espacio). Si sales, se perderá. '
-      'Libera espacio o exporta antes.';
-  String get saveFailedExit => 'Salir igualmente';
-  String get saveFailedStay => 'Seguir';
-  String get sessionsTitle => 'Sesiones';
-  String get sessionsHow => 'Se guardan solas';
-  String get sessionsHelp =>
-      'Todo lo que grabas se guarda solo, con su tempo, su compás, el volumen, '
-      'el silencio y REV/½ de cada pista, la batería y la canción. Al abrir la '
-      'app sigue la última.\n\n'
-      '«Sesión nueva» deja esta guardada y empieza otra vacía. Para probar '
-      'cosas sin perder lo que tienes, «Duplicar» guarda una copia antes.\n\n'
-      'Una sesión sin pistas no se guarda.';
-  String get sessionOpenNow => 'ABIERTA';
-  String get sessionsSaved => 'Guardadas';
-  String get sessionsEmpty => 'Aún no hay otras. Al empezar una nueva, esta se queda aquí.';
-  String get sessionEmptyNow => 'Sin pistas todavía: se guardará al grabar.';
+      _t(noSpace ? 'saveFailedLine.noSpace' : 'saveFailedLine.other');
+  String get saveFailedSemantics => _t('saveFailedSemantics');
+  String saveFailedBody(bool noSpace) =>
+      _t(noSpace ? 'saveFailedBody.noSpace' : 'saveFailedBody.other');
+  String get saveFailedExitTitle => _t('saveFailedExitTitle');
+  String get saveFailedExitBody => _t('saveFailedExitBody');
+  String get saveFailedExit => _t('saveFailedExit');
+  String get saveFailedStay => _t('saveFailedStay');
+  String get sessionsTitle => _t('sessionsTitle');
+  String get sessionsHow => _t('sessionsHow');
+  String get sessionsHelp => _t('sessionsHelp');
+  String get sessionOpenNow => _t('sessionOpenNow');
+  String get sessionsSaved => _t('sessionsSaved');
+  String get sessionsEmpty => _t('sessionsEmpty');
+  String get sessionEmptyNow => _t('sessionEmptyNow');
 
   /// «92 BPM · 4/4 · 3 pistas · 8 C»
   String sessionSummary(({String bpm, String meter, int tracks, int bars}) f) =>
-      '${f.bpm} BPM · ${f.meter} · ${f.tracks} ${f.tracks == 1 ? 'pista' : 'pistas'}'
-      '${f.bars > 0 ? ' · ${f.bars} C' : ''}';
-  String get sessionNew => 'Sesión nueva';
-  String get sessionOpen => 'Abrir';
-  String get sessionRename => 'Cambiar el nombre';
-  String get sessionRenameSave => 'Guardar';
-  String get sessionNameLabel => 'Nombre';
-  String get sessionDuplicate => 'Duplicar';
-  String sessionDuplicated(String name) => 'Copia guardada: «$name»';
-  String get sessionDuplicateEmpty => 'No hay nada que copiar todavía.';
-  String get sessionDelete => 'Borrar';
-  String get sessionOptions => 'Opciones de la sesión';
-  String sessionDeleteTitle(String name) => '¿Borrar «$name»?';
-  String get sessionDeleteBody => 'Se borran sus pistas. No se puede deshacer.';
-  String get sessionDeleteOpenBody =>
-      'Es la que está abierta: se borran sus pistas y empieza una vacía. '
-      'No se puede deshacer.';
-  String get sessionBusy => 'Acaba de grabar para cambiar de sesión.';
-  String get sessionOpenFailed => 'No se ha podido abrir la sesión.';
+      '${_t('sessionSummary', {'bpm': f.bpm, 'meter': f.meter, 'tracks': f.tracks})}'
+      '${f.bars > 0 ? ' · ${barsShort(f.bars)}' : ''}';
+  String get sessionNew => _t('sessionNew');
+  String get sessionOpen => _t('sessionOpen');
+  String get sessionRename => _t('sessionRename');
+  String get sessionRenameSave => _t('sessionRenameSave');
+  String get sessionNameLabel => _t('sessionNameLabel');
+  String get sessionDuplicate => _t('sessionDuplicate');
+  String sessionDuplicated(String name) => _t('sessionDuplicated', {'name': name});
+  String get sessionDuplicateEmpty => _t('sessionDuplicateEmpty');
+  String get sessionDelete => _t('sessionDelete');
+  String get sessionOptions => _t('sessionOptions');
+  String sessionDeleteTitle(String name) => _t('sessionDeleteTitle', {'name': name});
+  String get sessionDeleteBody => _t('sessionDeleteBody');
+  String get sessionDeleteOpenBody => _t('sessionDeleteOpenBody');
+  String get sessionBusy => _t('sessionBusy');
+  String get sessionOpenFailed => _t('sessionOpenFailed');
 
   // ---------------------------------------------------------------- exportar
 
-  String get exportButton => 'Exportar';
-  String exportTitle(String session) => 'Exportar «$session»';
-  String get exportWhat => 'Archivos WAV';
-  String get exportHelp =>
-      'Sale lo que suena ahora: cada pista con su volumen, su silencio y REV/½, '
-      'más la batería y la canción si están encendidas (se pueden quitar). El '
-      'clic no sale.\n\n'
-      '«Cada pista por separado» hace un archivo por pista (también las que están '
-      'en silencio), y otro para la batería y la canción: todos empiezan a la vez '
-      'y duran lo mismo, para llevarlos a un programa de música (DAW).\n\n'
-      'Una vuelta es lo que dura la pista más larga. Si la mezcla pasa del '
-      'máximo, todo se baja lo mismo para que no se sature.';
-  String get exportMix => 'La mezcla (lo que suena)';
-  String get exportStems => 'Cada pista por separado';
-  String get exportWithDrums => 'Con la batería';
-  String get exportWithSong => 'Con la canción';
-  String get exportLoops => 'Vueltas';
+  String get exportButton => _t('exportButton');
+  String exportTitle(String session) => _t('exportTitle', {'session': session});
+  String get exportWhat => _t('exportWhat');
+  String get exportHelp => _t('exportHelp');
+  String get exportMix => _t('exportMix');
+  String get exportStems => _t('exportStems');
+  String get exportWithDrums => _t('exportWithDrums');
+  String get exportWithSong => _t('exportWithSong');
+  String get exportLoops => _t('exportLoops');
 
   /// «2 vueltas · 34 s»
   String exportLength(int loops, double seconds) {
     final s = seconds.round();
-    final time = s >= 60 ? '${s ~/ 60} min ${_two(s % 60)} s' : '$s s';
-    return '$loops ${loops == 1 ? 'vuelta' : 'vueltas'} · $time';
+    final time = s >= 60
+        ? _t('exportMinutes', {'m': s ~/ 60, 's': _two(s % 60)})
+        : _t('exportSeconds', {'s': s});
+    return _t('exportLength', {'loops': loops, 'time': time});
   }
 
-  String get exportStart => 'Exportar';
-  String exporting(double progress) => 'Exportando… ${percent(progress)}';
-  String exportDone(int files) => files == 1 ? 'Listo: 1 archivo.' : 'Listo: $files archivos.';
-  String get exportShare => 'Compartir';
-  String get exportSave => 'Guardar en una carpeta';
-  String exportSaved(int files) => files == 1 ? 'Guardado 1 archivo' : 'Guardados $files archivos';
-  String get exportSaveFailed => 'No se ha podido guardar ahí.';
-  String get exportAgain => 'Otra vez';
+  String get exportStart => _t('exportStart');
+  String exporting(double progress) => _t('exporting', {'progress': percent(progress)});
+  String exportDone(int files) => _t('exportDone', {'files': files});
+  String get exportShare => _t('exportShare');
+  String get exportSave => _t('exportSave');
+  String exportSaved(int files) => _t('exportSaved', {'files': files});
+  String get exportSaveFailed => _t('exportSaveFailed');
+  String get exportAgain => _t('exportAgain');
   String exportStartError(int code) => switch (code) {
-    -1 => 'Acaba de grabar (o espera un momento) para exportar.',
-    -2 => 'No hay pistas que exportar.',
-    -3 => 'Ya se está exportando.',
-    _ => 'No se puede exportar ahora.',
+    -1 => _t('exportStartError.recording'),
+    -2 => _t('exportStartError.noTracks'),
+    -3 => _t('exportStartError.busy'),
+    _ => _t('exportStartError.other'),
   };
   String exportError(ExportError e) => switch (e) {
-    ExportError.write => 'No se ha podido escribir el archivo (¿falta sitio?).',
-    ExportError.memory => 'No hay memoria suficiente. Prueba con menos vueltas.',
-    ExportError.nothing => 'No hay pistas que exportar.',
-    _ => 'No se ha podido exportar.',
+    ExportError.write => _t('exportError.write'),
+    ExportError.memory => _t('exportError.memory'),
+    ExportError.nothing => _t('exportError.nothing'),
+    _ => _t('exportError.other'),
   };
 
   /// Nombre de los archivos: el de la sesión sin lo que no vale en un archivo.
@@ -715,430 +638,257 @@ class Strings {
   }
 
   String exportFileName(String base, String part) => '$base - $part.wav';
-  String exportTrack(int n) => 'pista $n';
-  String get exportDrums => 'batería';
-  String get exportSong => 'canción';
+  String exportTrack(int n) => _t('exportTrack', {'n': n});
+  String get exportDrums => _t('exportDrums');
+  String get exportSong => _t('exportSong');
 
   // ---------------------------------------------------------------- modo escenario
 
   /// «92 BPM · 4/4»
   String stageTempo(String bpm, String meter) => '$bpm BPM · $meter';
-  String get stageGestures => 'Pisa en cualquier sitio · Mantén: deshacer · Doble: parar';
-  String get stageExitHold => 'Mantén para salir';
-  String get stageExit => 'Salir del modo escenario';
+  String get stageGestures => _t('stageGestures');
+  String get stageExitHold => _t('stageExitHold');
+  String get stageExit => _t('stageExit');
 
   // ---------------------------------------------------------------- guía de la primera vez
 
-  String get helpSection => 'Ayuda';
+  String get helpSection => _t('helpSection');
 
   // ---------------------------------------------------------------- acerca de
 
-  String get aboutOpen => 'Acerca de Loopin';
+  String get aboutOpen => _t('aboutOpen');
   String aboutOpenLine(String version) =>
-      version.isEmpty ? 'Licencia, código y privacidad' : 'Versión $version · licencia y código';
-  String get aboutTitle => 'Acerca de';
-  String get aboutTagline => 'Looper de guitarra libre para Android';
-  String aboutVersion(String version) => 'Versión $version';
-  String get aboutLicenseTitle => 'Software libre';
-  String get aboutLicenseLine =>
-      'GPL-3.0 o posterior: puedes usarlo, estudiarlo, compartirlo y mejorarlo.';
-  String get aboutPrivacyTitle => 'Privacidad';
-  String get aboutPrivacyLine =>
-      'Sin anuncios, sin cuentas y sin internet: la app no tiene permiso para usarlo. '
-      'Solo pide el micrófono, para grabarte, y todo se queda en el móvil.';
-  String get aboutSource => 'Ver el código';
-  String get aboutSourceLine => 'En GitHub';
-  String get aboutReport => 'Informar de un problema';
-  String get aboutReportLine =>
-      'Abre GitHub. Pega lo de «Copiar resultados» (Audio y latencia): dice qué móvil y '
-      'qué audio tienes.';
-  String get aboutReportCopy => 'Copiar resultados y abrir';
-  String get aboutReportCopied => 'Resultados copiados: pégalos en la incidencia';
-  String get aboutLicenses => 'Licencias de terceros';
-  String get aboutLicensesLine =>
-      'Oboe, SoundTouch, dr_libs, las tipografías, los sonidos de la batería y Flutter';
-  String get aboutNoBrowser => 'No se ha podido abrir el navegador';
-  String get aboutLegalese => '© 2026 Alex y colaboradores · GPL-3.0 o posterior';
-  String get tutorialOpen => 'Ver la guía';
-  String get tutorialOpenLine => 'El pulsador, el tempo, la latencia y las sesiones';
-  String get tutorialSkip => 'Saltar';
-  String get tutorialNext => 'Siguiente';
-  String get tutorialStart => 'Empezar';
-  String get tutorialWelcome => 'Bienvenido a Loopin';
-  String get tutorialWelcomeBody =>
-      'Graba un trozo, se repite, y tocas encima. Hasta 4 pistas, siempre al compás. '
-      'Primero, ¿cómo lo quieres?';
-  String tutorialModeLine(PlayMode m) => switch (m) {
-    PlayMode.simple => 'Looper y metrónomo, con el pulsador grande. Para empezar.',
-    PlayMode.advanced => 'Todo: batería, tus canciones, modo libre, REV y ½…',
-  };
-  String get tutorialModeLater => 'Se cambia cuando quieras en Ajustes › Modo.';
-  String get tutorialPedal => 'El pulsador';
-  String get tutorialPedalBody =>
-      'Es un pedal: hace su trabajo al pisar, no al soltar. Funciona con el dedo, '
-      'con un pedal Bluetooth o con el botón de los cascos.';
-  String get tutorialTap =>
-      'Toca: graba. Otra vez: cierra el loop y suena. Con loop, graba encima.';
-  String get tutorialHold => 'Mantén: deshace lo último.';
-  String get tutorialDouble => 'Doble toque: para o arranca todo.';
-  String get tutorialTempo => 'El tempo';
-  String get tutorialTempoBody =>
-      'Pon el tempo con − y +, o toca «TAP» al ritmo de lo que vas a tocar.';
-  String get tutorialCount => 'Antes de la primera pista suena un compás de cuenta.';
-  String get tutorialLights =>
-      'Las luces marcan cada tiempo (roja la del 1): no hace falta oír el clic.';
-  String get tutorialLatency => 'La latencia';
-  String get tutorialLatencyBody =>
-      'El sonido tarda un poco en entrar y salir del móvil. Loopin lo descuenta '
-      'para que lo grabado caiga justo en el tiempo, pero antes tiene que medirlo: '
-      'se hace una vez y se guarda.';
-  String get tutorialMeasureNow => 'Medir ahora';
-  String get tutorialMeasureLater =>
-      'Más tarde: el aviso de arriba («LATENCIA SIN MEDIR») lleva ahí.';
-  String get tutorialSaved => 'Todo se guarda solo';
-  String get tutorialSavedBody => 'No hay que darle a guardar: al abrir la app sigue lo último.';
-  String get tutorialSessions =>
-      'El nombre de arriba abre tus sesiones: empieza otra, vuelve a una de antes o cámbiale el nombre.';
-  String get tutorialExport => 'Exporta a WAV la mezcla o cada pista y compártelas.';
-  String get tutorialStage =>
-      'Modo escenario (el botón de abajo): toda la pantalla es el pulsador, para tocar en directo.';
+      version.isEmpty ? _t('aboutOpenLineNoVersion') : _t('aboutOpenLine', {'version': version});
+  String get aboutTitle => _t('aboutTitle');
+  String get aboutTagline => _t('aboutTagline');
+  String aboutVersion(String version) => _t('aboutVersion', {'version': version});
+  String get aboutLicenseTitle => _t('aboutLicenseTitle');
+  String get aboutLicenseLine => _t('aboutLicenseLine');
+  String get aboutPrivacyTitle => _t('aboutPrivacyTitle');
+  String get aboutPrivacyLine => _t('aboutPrivacyLine');
+  String get aboutSource => _t('aboutSource');
+  String get aboutSourceLine => _t('aboutSourceLine');
+  String get aboutReport => _t('aboutReport');
+  String get aboutReportLine => _t('aboutReportLine');
+  String get aboutReportCopy => _t('aboutReportCopy');
+  String get aboutReportCopied => _t('aboutReportCopied');
+  String get aboutLicenses => _t('aboutLicenses');
+  String get aboutLicensesLine => _t('aboutLicensesLine');
+  String get aboutNoBrowser => _t('aboutNoBrowser');
+  String get aboutLegalese => _t('aboutLegalese');
+  String get tutorialOpen => _t('tutorialOpen');
+  String get tutorialOpenLine => _t('tutorialOpenLine');
+  String get tutorialSkip => _t('tutorialSkip');
+  String get tutorialNext => _t('tutorialNext');
+  String get tutorialStart => _t('tutorialStart');
+  String get tutorialWelcome => _t('tutorialWelcome');
+  String get tutorialWelcomeBody => _t('tutorialWelcomeBody');
+  String tutorialModeLine(PlayMode m) => _e('tutorialModeLine', m);
+  String get tutorialModeLater => _t('tutorialModeLater');
+  String get tutorialPedal => _t('tutorialPedal');
+  String get tutorialPedalBody => _t('tutorialPedalBody');
+  String get tutorialTap => _t('tutorialTap');
+  String get tutorialHold => _t('tutorialHold');
+  String get tutorialDouble => _t('tutorialDouble');
+  String get tutorialTempo => _t('tutorialTempo');
+  String get tutorialTempoBody => _t('tutorialTempoBody');
+  String get tutorialCount => _t('tutorialCount');
+  String get tutorialLights => _t('tutorialLights');
+  String get tutorialLatency => _t('tutorialLatency');
+  String get tutorialLatencyBody => _t('tutorialLatencyBody');
+  String get tutorialMeasureNow => _t('tutorialMeasureNow');
+  String get tutorialMeasureLater => _t('tutorialMeasureLater');
+  String get tutorialSaved => _t('tutorialSaved');
+  String get tutorialSavedBody => _t('tutorialSavedBody');
+  String get tutorialSessions => _t('tutorialSessions');
+  String get tutorialExport => _t('tutorialExport');
+  String get tutorialStage => _t('tutorialStage');
 
   // ---------------------------------------------------------------- ajustes
 
-  String get playModeTitle => 'Modo';
-  String playModeName(PlayMode m) => switch (m) {
-    PlayMode.simple => 'Simple',
-    PlayMode.advanced => 'Avanzado',
-  };
-  String playModeLine(PlayMode m) => switch (m) {
-    PlayMode.simple => 'Lo justo para grabar, tocar y practicar',
-    PlayMode.advanced => 'Todos los controles',
-  };
-  String get playModeHelp =>
-      'Simple: el pulsador más grande, 3 compases (4/4, 3/4 y 6/8), grabar sincronizado o '
-      'manual, empezar al tocar, el clic (siempre, hasta grabar o apagado), el '
-      'entrenador de tempo, el afinador y cómo parar. Avanzado: además, la batería y tus '
-      'canciones, el modo libre, todos los compases, REV y ½ en las pistas, los modos del '
-      'micrófono, qué suena al grabar con el altavoz y la latencia a mano. Al volver al '
-      'avanzado recupera lo que tenías.';
-  String get playModeBusy => 'Acaba de grabar para cambiarlo';
+  String get playModeTitle => _t('playModeTitle');
+  String playModeName(PlayMode m) => _e('playModeName', m);
+  String playModeLine(PlayMode m) => _e('playModeLine', m);
+  String get playModeHelp => _t('playModeHelp');
+  String get playModeBusy => _t('playModeBusy');
 
-  String get appearance => 'Apariencia';
-  String get themeSystem => 'Sistema';
-  String get themeLight => 'Claro';
-  String get themeDark => 'Oscuro';
-  String get pedalColor => 'Color del pedal';
-  String chassisName(Chassis c) => switch (c) {
-    Chassis.classic => 'Clásico',
-    Chassis.red => 'Rojo',
-    Chassis.green => 'Verde',
-    Chassis.blue => 'Azul',
-  };
-  String chassisSemantics(Chassis c) => 'Color ${chassisName(c)}';
+  String get appearance => _t('appearance');
+  String get themeSystem => _t('themeSystem');
+  String get themeLight => _t('themeLight');
+  String get themeDark => _t('themeDark');
+  String get pedalColor => _t('pedalColor');
+  String chassisName(Chassis c) => _e('chassis', c);
+  String chassisSemantics(Chassis c) => _t('chassisSemantics', {'name': chassisName(c)});
 
-  String get looper => 'Looper';
-  String get autoAdvance => 'Avance automático';
-  String get autoAdvanceLine => 'Cada toque graba una pista nueva';
-  String get autoAdvanceHelp =>
-      'Al cerrar una pista se elige sola la siguiente vacía, así cada toque graba una '
-      'pista nueva sin mirar la pantalla. Con las 4 llenas, el toque graba encima de la '
-      'última. Apagado, todo va a la misma pista, como en un pedal clásico.';
+  String get language => _t('language');
 
-  String get stopModeTitle => 'Al parar';
-  String get stopModeLine => 'El botón de parar y el doble toque';
-  String get stopModeHelp =>
-      'Al momento: se corta todo en cuanto pulsas. En el 1: sigue sonando hasta el final '
-      'del compás y para justo en el siguiente 1, para acabar a tiempo. Fundido: todo baja '
-      'poco a poco durante 4 segundos y luego para. Mientras espera o baja, pulsar otra vez '
-      '(o tocar el pulsador) para ya. Si estás grabando una pista nueva, para siempre al '
-      'momento; un overdub se cierra al pedir parar.';
-  String stopModeName(StopMode m) => switch (m) {
-    StopMode.now => 'Al momento',
-    StopMode.bar => 'En el 1',
-    StopMode.fade => 'Fundido',
-  };
+  /// «El del móvil: Deutsch»
+  String languageSystemLine(String code) =>
+      _t('languageSystemLine', {'name': kLanguageNames[code] ?? code});
 
-  String get trackFxTitle => 'Efectos de pista (REV y ½)';
-  String get trackFxLine => 'Botones para tocar una pista al revés o a media velocidad';
-  String get trackFxHelp =>
-      'Encendido, cada pista tiene dos botones más:\n\n'
-      '• REV: la pista suena al revés (las notas entran creciendo). Para ambientes '
-      'o un solo «hacia atrás».\n'
-      '• ½: suena a media velocidad, una octava más grave. Con un riff en las '
-      'cuerdas graves, hace de bajo.\n\n'
-      'Truco: graba encima con ½ puesto y luego quítalo: lo que tocaste suena el '
-      'doble de rápido y una octava más agudo.\n\n'
-      'Al apagarlo, se quitan de las pistas que los tengan.';
-  // «el\u00A01»: con letra grande, el 1 no se queda solo en otra línea
-  String get quantizeTitle => 'Cambios de pista en el\u00A01';
-  String get quantizeLine => 'Silenciar, REV y ½ esperan al siguiente 1';
-  String get quantizeLineSimple => 'Silenciar una pista espera al siguiente 1';
-  String get quantizeHelp =>
-      'Encendido, cuando silencias una pista (o le pones o quitas el reverse o la media '
-      'velocidad), el cambio espera al siguiente 1: así entra y sale a tiempo aunque '
-      'pulses un poco antes. Mientras espera, el botón lleva un punto. Apagado, cambia en '
-      'cuanto pulsas.';
+  String get looper => _t('looper');
+  String get autoAdvance => _t('autoAdvance');
+  String get autoAdvanceLine => _t('autoAdvanceLine');
+  String get autoAdvanceHelp => _t('autoAdvanceHelp');
 
-  String get recordDuckTitle => 'Al grabar con el altavoz';
-  String get recordDuckLine => 'Lo que ya suena, mientras grabas';
-  String get recordDuckHelp =>
-      'Con el altavoz y el micrófono del móvil, el micrófono recoge lo que suena y lo graba '
-      'otra vez en la pista nueva (o en el overdub): se duplica y se acumula. Mientras '
-      'grabas, lo que ya suena puede callarse (lo mejor) o seguir normal; vuelve al acabar '
-      'de grabar. El tempo lo sigues viendo en las luces y en el pulsador. Con cascos o '
-      'una interfaz suena siempre normal. El clic en «siempre» también se graba: mejor '
-      '«hasta grabar». La batería y la canción no se callan (hacen falta para tocar a '
-      'tempo), así que también se graban.';
-  String recordDuckName(RecordDuck d) => switch (d) {
-    RecordDuck.normal => 'Normal',
-    RecordDuck.silent => 'Silencio',
-  };
+  String get stopModeTitle => _t('stopModeTitle');
+  String get stopModeLine => _t('stopModeLine');
+  String get stopModeHelp => _t('stopModeHelp');
+  String stopModeName(StopMode m) => _e('stopModeName', m);
 
-  /// Al grabar con lo demás callado o más bajo: «Compás 2 de 4 · lo demás, en silencio»
+  String get trackFxTitle => _t('trackFxTitle');
+  String get trackFxLine => _t('trackFxLine');
+  String get trackFxHelp => _t('trackFxHelp');
+  // «el 1»: con letra grande, el 1 no se queda solo en otra línea
+  String get quantizeTitle => _t('quantizeTitle');
+  String get quantizeLine => _t('quantizeLine');
+  String get quantizeLineSimple => _t('quantizeLineSimple');
+  String get quantizeHelp => _t('quantizeHelp');
+
+  String get recordDuckTitle => _t('recordDuckTitle');
+  String get recordDuckLine => _t('recordDuckLine');
+  String get recordDuckHelp => _t('recordDuckHelp');
+  String recordDuckName(RecordDuck d) => _e('recordDuckName', d);
+
+  /// Al grabar con lo demás callado: «Compás 2 de 4 · lo demás, en silencio»
   String withDuck(String line, RecordDuck d) => switch (d) {
     RecordDuck.normal => line,
-    RecordDuck.silent => '$line · lo demás, en silencio',
+    RecordDuck.silent => _t('withDuckSilent', {'line': line}),
   };
 
-  String get externalControls => 'Controles externos';
-  String get externalControlsHelp =>
-      'Para tocar sin manos. El botón principal hace lo mismo que el pulsador grande '
-      '(toque, mantener y doble toque). El secundario cambia de pista con un toque y '
-      'deshace si lo mantienes.';
-  String get volumeKeys => 'Botones de volumen';
-  String get volumeKeysLine => 'Subir: principal · Bajar: secundario';
-  String get volumeKeysHelp =>
-      'Valen los del móvil y los del cable de los cascos. Mientras esté activado, no '
-      'cambian el volumen dentro de Loopin.';
-  String get headsetKey => 'Botón de los cascos';
-  String get headsetKeyLine => 'Hace de botón principal';
-  String get headsetKeyHelp =>
-      'El botón central de los cascos (o de un mando multimedia). Mejor solo con '
-      'toques: en muchos cascos, mantenerlo abre el asistente de voz.';
-  String pedalActionName(PedalAction a) => switch (a) {
-    PedalAction.main => 'Botón principal',
-    PedalAction.secondary => 'Botón secundario',
-  };
-  String bluetoothPedal(PedalAction a) => 'Pedal Bluetooth: ${pedalActionName(a).toLowerCase()}';
-  String get pressPedalNow => 'Pulsa ahora el botón del pedal…';
-  String get notAssigned => 'Sin asignar';
-  String get learnHelp =>
-      'Para un pedal Bluetooth o un teclado: toca «Aprender» y pulsa el botón. Vale '
-      'cualquier pedal que el móvil vea como teclado.';
-  String get learn => 'Aprender';
-  String removeKey(String key) => 'Quitar $key';
+  String get externalControls => _t('externalControls');
+  String get externalControlsHelp => _t('externalControlsHelp');
+  String get volumeKeys => _t('volumeKeys');
+  String get volumeKeysLine => _t('volumeKeysLine');
+  String get volumeKeysHelp => _t('volumeKeysHelp');
+  String get headsetKey => _t('headsetKey');
+  String get headsetKeyLine => _t('headsetKeyLine');
+  String get headsetKeyHelp => _t('headsetKeyHelp');
+  String pedalActionName(PedalAction a) => _e('pedalActionName', a);
+  String bluetoothPedal(PedalAction a) => _e('bluetoothPedal', a);
+  String get pressPedalNow => _t('pressPedalNow');
+  String get notAssigned => _t('notAssigned');
+  String get learnHelp => _t('learnHelp');
+  String get learn => _t('learn');
+  String removeKey(String key) => _t('removeKey', {'key': key});
 
   /// «PAGE_DOWN», o «tecla 93» si Android no da el nombre
-  String keyName(int code, String name) => name.isEmpty ? 'tecla $code' : shortKeyName(name);
+  String keyName(int code, String name) =>
+      name.isEmpty ? _t('keyCode', {'code': code}) : shortKeyName(name);
   String lastKey(String key, PedalAction? action) =>
-      'Última tecla: $key → ${action == null ? '—' : pedalActionName(action).toLowerCase()}';
+      _t('lastKey', {'key': key, 'action': action == null ? '—' : _e('lastKeyAction', action)});
 
-  String get audio => 'Audio';
-  String get moreInAdvanced =>
-      'Modos del micrófono, latencia a mano y detalles técnicos: en el modo avanzado '
-      '(Ajustes › Modo).';
-  String get audioAndLatency => 'Audio y latencia';
-  String get audioAndLatencyLine => 'Entrada, micrófono y latencia';
+  String get audio => _t('audio');
+  String get moreInAdvanced => _t('moreInAdvanced');
+  String get audioAndLatency => _t('audioAndLatency');
+  String get audioAndLatencyLine => _t('audioAndLatencyLine');
 
   // ---------------------------------------------------------------- audio y latencia
 
-  String get copyResults => 'Copiar resultados';
-  String get resultsCopied => 'Resultados copiados';
-  String get turnAudioOn => 'Encender audio';
-  String get turnAudioOff => 'Apagar audio';
+  String get copyResults => _t('copyResults');
+  String get resultsCopied => _t('resultsCopied');
+  String get turnAudioOn => _t('turnAudioOn');
+  String get turnAudioOff => _t('turnAudioOff');
 
-  String get input => 'Guitarra (entrada)';
-  String get inputDevice => 'Entrada';
-  String get inputAuto => 'Automática (la elige Android)';
-  String get micMode => 'Modo del micrófono';
-  String micOtherModes(int n) => 'Otros modos ($n)';
-  String get micModeHelp =>
-      'Cuánto «arregla» Android el sonido antes de que llegue a Loopin. Si dos modos te '
-      'suenan igual, quédate con el que dé menos latencia. Solo se nota al escucharte en '
-      'directo: los loops cuadran con cualquiera, porque la latencia se compensa.';
-  String presetFallback(InputPreset used) =>
-      'El modo elegido no funciona en este móvil: se usa ${presetName(used)}.';
+  String get input => _t('input');
+  String get inputDevice => _t('inputDevice');
+  String get inputAuto => _t('inputAuto');
+  String get micMode => _t('micMode');
+  String micOtherModes(int n) => _t('micOtherModes', {'n': n});
+  String get micModeHelp => _t('micModeHelp');
+  String presetFallback(InputPreset used) => _t('presetFallback', {'preset': presetName(used)});
   String nowRoute(String input, String output) => '$input → $output';
-  String gain(double db) => 'Ganancia +${db.toStringAsFixed(0)} dB';
-  String get gainLine => 'Toca fuerte: que llegue a naranja sin ponerse rojo.';
-  String get level => 'Nivel';
-  String get monitorTitle => 'Escucharme en directo';
-  String get monitorLine => 'Solo con auriculares de cable';
-  String get monitorHelp =>
-      'Por el altavoz se acopla (pitido). Con auriculares Bluetooth llega con mucho '
-      'retardo (150–300 ms) y no sirve para tocar.';
-  String get monitorVolume => 'Volumen de escucha';
+  String gain(double db) => _t('gain', {'db': db.toStringAsFixed(0)});
+  String get gainLine => _t('gainLine');
+  String get level => _t('level');
+  String get monitorTitle => _t('monitorTitle');
+  String get monitorLine => _t('monitorLine');
+  String get monitorHelp => _t('monitorHelp');
+  String get monitorVolume => _t('monitorVolume');
 
-  String get latency => 'Latencia';
-  String get latencyHelp =>
-      'Lo que tarda el sonido en salir del móvil y volver a entrar. Loopin lo descuenta al '
-      'grabar para que el loop caiga en el tiempo. Cambia según por dónde entra y sale el '
-      'sonido (altavoz, cascos, interfaz), así que se guarda una para cada caso.';
-  String route(String route) => 'Ahora: $route';
-  String latencySourceName(bool measured, bool estimated) =>
-      measured ? 'medida' : (estimated ? 'estimada por Android, sin medir' : 'sin medir');
-  String compensation(String ms, String source) => 'Compensación: $ms ($source)';
+  String get latency => _t('latency');
+  String get latencyHelp => _t('latencyHelp');
+  String route(String route) => _t('route', {'route': route});
+  String latencySourceName(bool measured, bool estimated) => _t(
+    measured
+        ? 'latencySource.measured'
+        : (estimated ? 'latencySource.estimated' : 'latencySource.none'),
+  );
+  String compensation(String ms, String source) => _t('compensation', {'ms': ms, 'source': source});
 
-  String get measureAlone => 'Medir sola';
-  String measuringClick(int n) => 'Midiendo… clic $n/5';
-  String get measureAloneLine => 'Con el altavoz, o una interfaz con un cable';
-  String get measureAloneHelp =>
-      'Loopin da 5 clics y mide cuánto tardan en volver. Altavoz: sin cascos, volumen '
-      'alto y en silencio. Interfaz: une con un cable la salida de auriculares y la '
-      'entrada.';
-  String measured(String ms) => 'Medida: $ms · guardada';
-  String get clicksNotHeard => 'No se oyeron los clics. Sube el volumen o revisa el cable.';
+  String get measureAlone => _t('measureAlone');
+  String measuringClick(int n) => _t('measuringClick', {'n': n});
+  String get measureAloneLine => _t('measureAloneLine');
+  String get measureAloneHelp => _t('measureAloneHelp');
+  String measured(String ms) => _t('measured', {'ms': ms});
+  String get clicksNotHeard => _t('clicksNotHeard');
 
-  String get measureTapping => 'Medir tocando al clic';
-  String get measureTappingLine => 'Con cascos: tocas tú al ritmo';
-  String get measureTappingHelp =>
-      'Con cascos el clic no vuelve al micrófono: tocas tú al ritmo de unos clics y se '
-      'mide cuánto tarda tu golpe en llegar.';
+  String get measureTapping => _t('measureTapping');
+  String get measureTappingLine => _t('measureTappingLine');
+  String get measureTappingHelp => _t('measureTappingHelp');
 
-  String get byHand => 'A mano';
-  String get byHandLine => 'Si el loop suena tarde, sube; si suena antes, baja.';
-  String get byHandHelp =>
-      'Para afinar a oído: graba un loop con el clic encendido dando golpes secos en los '
-      'tiempos y mueve esto hasta que el loop y el clic suenen a la vez. Lo grabado se '
-      'mueve contigo.';
-  String get minus1ms => 'Restar 1 ms';
-  String get plus1ms => 'Sumar 1 ms';
+  String get byHand => _t('byHand');
+  String get byHandLine => _t('byHandLine');
+  String get byHandHelp => _t('byHandHelp');
+  String get minus1ms => _t('minus1ms');
+  String get plus1ms => _t('plus1ms');
   String msValue(int ms) => '$ms ms';
-  String msSemantics(int ms) => '$ms milisegundos';
-  String get forgetLatency => 'Olvidar la latencia de esta ruta';
-  String get finishRecordingFirst => 'Termina de grabar antes de medir.';
+  String msSemantics(int ms) => _t('msSemantics', {'ms': ms});
+  String get forgetLatency => _t('forgetLatency');
+  String get finishRecordingFirst => _t('finishRecordingFirst');
 
-  String get technicalDetails => 'Detalles técnicos';
-  String get sharedMode => 'compartido';
-  String get exclusiveMode => 'exclusivo';
-  String get lowLatency => 'baja latencia';
-  String get noLowLatency => 'SIN baja latencia';
-  String channels(int n) => n == 1 ? 'mono' : '$n canales';
-  String detailsStream(String api, int rate, int burst) => '$api · $rate Hz · bloque $burst';
+  String get technicalDetails => _t('technicalDetails');
+  String get sharedMode => _t('sharedMode');
+  String get exclusiveMode => _t('exclusiveMode');
+  String get lowLatency => _t('lowLatency');
+  String get noLowLatency => _t('noLowLatency');
+  String channels(int n) => n == 1 ? _t('channelsMono') : _t('channels', {'n': n});
+  String detailsStream(String api, int rate, int burst) =>
+      _t('detailsStream', {'api': api, 'rate': rate, 'burst': burst});
   String detailsOutput(String mode, String low, int buffer, String ms) =>
-      'Salida: $mode · $low · buffer $buffer ($ms)';
+      _t('detailsOutput', {'mode': mode, 'low': low, 'buffer': buffer, 'ms': ms});
   String detailsInput(String mode, String low, String ch, int burst, int buffer, int maxRead) =>
-      'Entrada: $mode · $low · $ch · bloque $burst · buffer $buffer · máx. por callback $maxRead';
+      _t('detailsInput', {
+        'mode': mode,
+        'low': low,
+        'channels': ch,
+        'burst': burst,
+        'buffer': buffer,
+        'maxRead': maxRead,
+      });
   String detailsEstimate(String out, String inp, String total) =>
-      'Estimación de Android: salida $out + entrada $inp = $total';
-  String detailsXruns(int n) => 'Cortes desde que arrancó el metrónomo: ${n < 0 ? '—' : n}';
+      _t('detailsEstimate', {'out': out, 'inp': inp, 'total': total});
+  String detailsXruns(int n) => _t('detailsXruns', {'n': n < 0 ? '—' : n});
   String engineLoad(String avg, String peak, String max) =>
-      'Carga del motor: media $avg · pico $peak (máx. $max)';
-  String get engineLoadHelp =>
-      'Cuánto del tiempo de cada bloque de audio usa Loopin. Por encima del 100 % el '
-      'sonido se corta.';
+      _t('engineLoad', {'avg': avg, 'peak': peak, 'max': max});
+  String get engineLoadHelp => _t('engineLoadHelp');
 
   // ---------------------------------------------------------------- medir tocando
 
-  String get measureTappingTitle => 'Medir tocando';
-  String get tapIntro => 'Para cuando usas cascos y el clic no vuelve al micrófono.';
-  String get tapSteps =>
-      '1. Ponte los cascos y coge la guitarra.\n'
-      '2. Sonarán 16 clics. Escucha 4 y, en los 12 siguientes, da un golpe seco en cada '
-      'clic (cuerdas apagadas o golpe en la caja).\n'
-      '3. Toca como con un metrónomo: no hace falta ser perfecto.';
-  String tapListen(int click) => 'Escucha\n$click';
+  String get measureTappingTitle => _t('measureTappingTitle');
+  String get tapIntro => _t('tapIntro');
+  String get tapSteps => _t('tapSteps');
+  String tapListen(int click) => _t('tapListen', {'click': click});
   String tapCount(int n, int of) => '$n / $of';
-  String tapHits(int n) => 'Golpes que cuentan: $n';
-  String get tapGetReady => 'Prepárate…';
-  String tapResult(int ms) => 'Latencia: $ms ms · guardada';
+  String tapHits(int n) => _t('tapHits', {'n': n});
+  String get tapGetReady => _t('tapGetReady');
+  String tapResult(int ms) => _t('tapResult', {'ms': ms});
   String tapQuality(int spreadMs, int hitCount) {
-    if (spreadMs <= 10) return 'Muy regular (±$spreadMs ms, ${hits(hitCount)}). Buena medida.';
-    if (spreadMs <= 25) {
-      return 'Regular (±$spreadMs ms, ${hits(hitCount)}). Vale; si quieres afinar, repite.';
-    }
-    return 'Bastante irregular (±$spreadMs ms). Repite con golpes más secos.';
+    final args = {'spread': spreadMs, 'hits': hits(hitCount)};
+    if (spreadMs <= 10) return _t('tapQuality.good', args);
+    if (spreadMs <= 25) return _t('tapQuality.ok', args);
+    return _t('tapQuality.bad', args);
   }
 
-  String get tapFailed =>
-      'No se oyeron bastantes golpes (hacen falta 6 de 12). Sube la ganancia o golpea más '
-      'fuerte, y repite.';
-  String get tapStart => 'Empezar';
-  String get tapRepeat => 'Repetir';
-  String get tapStop => 'Parar';
-  String get tapWhat => '¿Qué se mide exactamente?';
-  String get tapHelp =>
-      'Se mide lo que tarda tu golpe en llegar respecto al clic que oyes: la latencia del '
-      'móvil más tu forma de tocar. Por eso, con esta medida, lo que grabes cae justo en '
-      'el tiempo.';
+  String get tapFailed => _t('tapFailed');
+  String get tapStart => _t('tapStart');
+  String get tapRepeat => _t('tapRepeat');
+  String get tapStop => _t('tapStop');
+  String get tapWhat => _t('tapWhat');
+  String get tapHelp => _t('tapHelp');
 
   // ---------------------------------------------------------------- informe («Copiar resultados»)
 
   /// «Loopin 1.0.0 (1)»
   String reportTitle(String version) => version.isEmpty ? 'Loopin' : 'Loopin $version';
-  ReportStrings get report => const ReportStrings();
-  String loopStateName(LoopState st) => switch (st) {
-    LoopState.empty => 'vacío',
-    LoopState.armed => 'cuenta de entrada o esperando',
-    LoopState.recording => 'grabando',
-    LoopState.playing => 'sonando',
-    LoopState.overdubbing => 'overdub',
-    LoopState.stopped => 'parado',
-  };
-  String get none => 'ninguna';
-}
-
-/// Líneas del informe de «Copiar resultados».
-class ReportStrings {
-  const ReportStrings();
-
-  String get measured => 'medida';
-  String get estimated => 'estimada por Android';
-  String get unmeasured => 'sin medir';
-  String get normalLatency => 'latencia normal';
-
-  String phone(String model, String android, String lowLatency, String proAudio) =>
-      'Móvil: $model · Android $android · baja latencia: $lowLatency · pro audio: $proAudio';
-  String route(String route) => 'Ruta: $route';
-  String mic(String preset, bool fallback, String unprocessed, double gainDb) =>
-      'Micrófono: $preset${fallback ? ' (el modo pedido falló)' : ''} · '
-      'sin procesar admitido: $unprocessed · ganancia +${gainDb.toStringAsFixed(0)} dB';
-  String stream(String api, int rate, int burst, int buffer, String bufferMs) =>
-      'API: $api · $rate Hz · bloque $burst · buffer $buffer ($bufferMs)';
-  String output(String mode, String low) => 'Salida: $mode · $low';
-  String input(String mode, String low, int burst, int buffer, int maxRead, String channels) =>
-      'Entrada: $mode · $low · bloque $burst · buffer $buffer · '
-      'máx. leído por callback $maxRead · $channels';
-  String estimate(String out, String inp) => 'Estimación de Oboe: salida $out + entrada $inp';
-  String roundTrip(String ms, int frames) => 'Ida y vuelta medida: $ms ($frames muestras)';
-  String compensation(String ms, String source) => 'Compensación al grabar: $ms ($source)';
-  String metronomeRun(int bpm, double minutes, int xruns) =>
-      'Metrónomo: $bpm BPM · ${minutes.toStringAsFixed(1)} min · cortes: $xruns';
-  String xrunsSinceOpen(int n) => 'Cortes desde que se abrió el audio: $n';
-  String metronome(String meter, String click, String onSound) =>
-      'Metrónomo: $meter · clic: $click · empezar al tocar: $onSound';
-  String drums(String style, bool on, bool playing, int volume, int loaded) =>
-      'Batería: $style · ${on ? (playing ? 'sonando' : 'encendida') : 'apagada'} · '
-      'volumen $volume % · sonidos cargados: $loaded de ${DrumSound.values.length}';
-  String song(String? name, String phase, bool on, bool playing, int volume, int count) =>
-      'Canción: ${name ?? 'ninguna'} · $phase · '
-      '${on ? (playing ? 'sonando' : 'encendida') : 'apagada'} · volumen $volume % · '
-      'en la lista: $count';
-  String recordDuck(String setting, bool speaker) =>
-      'Al grabar con el altavoz: $setting${speaker ? ' (ruta con altavoz: se aplica)' : ' (ahora no se aplica)'}';
-  String playMode(String mode) => 'Modo de la app: $mode';
-  String looper(String state, String mode, int? baseBars, String autoAdvance) =>
-      'Looper: $state · $mode'
-      '${baseBars != null ? ' · base de ${tr.bars(baseBars)}' : ''}'
-      ' · avance automático: $autoAdvance';
-  String track(
-    int n,
-    String state,
-    int? bars,
-    int layers,
-    bool muted, {
-    bool reverse = false,
-    bool half = false,
-  }) =>
-      'Pista $n: $state'
-      '${bars != null ? ' · ${tr.bars(bars)} · ${tr.layers(layers)}' : ''}'
-      '${muted ? ' · en silencio' : ''}'
-      '${reverse ? ' · al revés' : ''}'
-      '${half ? ' · a media velocidad' : ''}';
-  String live(String stop, bool quantize, String? trainer, double a4) =>
-      'Al parar: $stop · cambios de pista en el 1: ${quantize ? 'sí' : 'no'} · '
-      'entrenador: ${trainer ?? 'apagado'} · afinador: La = ${a4.round()} Hz';
-  String trainerSetting(int step, int bars, int top) => '+$step BPM cada $bars C hasta $top';
-  String controls(String volume, String headset, String learned) =>
-      'Controles externos: volumen $volume · cascos $headset · teclas aprendidas: $learned';
 }

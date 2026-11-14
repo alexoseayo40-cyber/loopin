@@ -1,0 +1,36 @@
+Loopin é um looper de guitarra para o celular: você grava uma base, toca por cima e vai somando faixas que sempre ficam no tempo. Para praticar e tocar em qualquer lugar, com o microfone do celular ou com uma interface de áudio USB.
+
+UM BOTÃO QUE FAZ AS VEZES DE PEDAL
+• Toque: grava, fecha o loop ou grava por cima
+• Segure: desfaz o último
+• Toque duplo: para e inicia
+• Também com os botões de volume, o botão dos fones ou um pedal Bluetooth
+• Modo palco: a tela toda é o botão
+
+SEMPRE NO TEMPO
+• 4 faixas com 1, 2 ou 4 vezes o tamanho da base
+• Metrônomo de 40 a 240 BPM com tap tempo e 10 compassos (4/4, 3/4, 6/8, 7/8…)
+• Gravação sincronizada, manual ou livre (o tempo vem do que você toca)
+• “Começar ao tocar”: a gravação começa com sua primeira nota
+• Compensa o atraso do celular: medido sozinho em poucos segundos
+
+PARA PRATICAR
+• Bateria com 10 estilos: rock, pop, blues, funk, reggae, valsa…
+• Suas músicas (WAV, MP3, FLAC) no tempo que quiser, sem mudar o tom
+• Treinador de tempo: sobe o BPM aos poucos
+• Afinador cromático com notas de referência para afinar de ouvido
+
+SUAS SESSÕES EM SEGURANÇA
+• Tudo é salvo sozinho, como um app de notas
+• Exporte em WAV a mixagem ou cada faixa separada para seu programa de gravação
+
+SIMPLES OU AVANÇADO
+O modo simples deixa só o essencial (looper, metrônomo e afinador) com um botão maior. O avançado tem tudo.
+
+NO SEU IDIOMA
+Português, inglês, espanhol, francês, alemão e italiano.
+
+LIVRE E SEM RASTREAMENTO
+Software livre (GPLv3). Sem anúncios, sem contas e sem internet: o app nem tem permissão para usá-la. Só pede o microfone, para gravar você.
+
+Dica: com o alto-falante do celular, o clique e a bateria vazam para a gravação. Com fones com fio soa melhor; fones Bluetooth têm atraso demais para você se ouvir ao vivo.

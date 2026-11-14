@@ -1,0 +1,36 @@
+Loopin è un looper per chitarra sul telefono: registri una base, ci suoni sopra e aggiungi tracce che restano sempre a tempo. Per esercitarti e suonare ovunque, con il microfono del telefono o con un’interfaccia audio USB.
+
+UN PULSANTE CHE FA DA PEDALE
+• Tocca: registra, chiudi il loop o sovraincidi
+• Tieni premuto: annulla l’ultima cosa
+• Doppio tocco: ferma e avvia
+• Anche con i tasti del volume, il tasto delle cuffie o un pedale Bluetooth
+• Modalità palco: tutto lo schermo è il pulsante
+
+SEMPRE A TEMPO
+• 4 tracce lunghe 1, 2 o 4 volte la base
+• Metronomo da 40 a 240 BPM con tap tempo e 10 metri (4/4, 3/4, 6/8, 7/8…)
+• Registrazione sincronizzata, manuale o libera (il tempo viene da quello che suoni)
+• «Parti suonando»: la registrazione parte con la tua prima nota
+• Compensa il ritardo del telefono: si misura da solo in pochi secondi
+
+PER ESERCITARTI
+• Batteria con 10 stili: rock, pop, blues, funk, reggae, valzer…
+• I tuoi brani (WAV, MP3, FLAC) al tempo che vuoi, senza cambiare l’intonazione
+• Trainer del tempo: alza i BPM poco a poco
+• Accordatore cromatico con note di riferimento per accordare a orecchio
+
+LE TUE SESSIONI AL SICURO
+• Tutto si salva da solo, come un’app di note
+• Esporta in WAV il mix o ogni traccia separata per il tuo programma di registrazione
+
+SEMPLICE O AVANZATA
+La modalità semplice lascia l’essenziale (looper, metronomo e accordatore) con un pulsante più grande. Quella avanzata ha tutto.
+
+NELLA TUA LINGUA
+Italiano, inglese, spagnolo, francese, tedesco e portoghese.
+
+LIBERO E SENZA TRACCIAMENTO
+Software libero (GPLv3). Niente pubblicità, niente account e niente internet: l’app non ha nemmeno il permesso di usarlo. Chiede solo il microfono, per registrarti.
+
+Consiglio: con l’altoparlante del telefono, il clic e la batteria finiscono nella registrazione. Con cuffie con filo suona meglio; le cuffie Bluetooth hanno troppo ritardo per ascoltarti dal vivo.
