@@ -91,31 +91,25 @@ class Strings {
     LoopMode.free => 'LIBRE',
   };
 
+  /// Los 3 modos del clic (el motor también sabe «solo la cuenta», que la app
+  /// ya no usa).
   String clickModeName(ClickMode m) => switch (m) {
-    ClickMode.silent => 'Solo visual',
-    ClickMode.countIn => 'Solo la cuenta',
     ClickMode.always => 'Siempre',
     ClickMode.untilRecording => 'Hasta grabar',
-  };
-
-  String clickModeLine(ClickMode m) => switch (m) {
-    ClickMode.always => 'Suena todo el rato',
-    ClickMode.untilRecording => 'Con el metrónomo solo y en la cuenta; al grabar, se calla',
-    ClickMode.countIn => 'Solo el compás antes de grabar la pista 1',
-    ClickMode.silent => 'No suena nunca: solo las luces',
+    _ => 'Apagado',
   };
 
   /// «Clic: siempre»
-  String click(ClickMode m) => 'Clic: ${clickModeName(m).toLowerCase()}';
+  String clickLabel(ClickMode m) => 'Clic: ${clickModeName(m).toLowerCase()}';
 
-  /// En el modo simple, un toque pasa de un modo del clic al siguiente.
-  String simpleClick(ClickMode m) => m == ClickMode.silent ? 'Clic: apagado' : click(m);
-  String simpleClickSnack(ClickMode m) => switch (m) {
+  /// Al tocar el botón del clic (dice el modo al que pasa).
+  String clickSnack(ClickMode m) => switch (m) {
     ClickMode.always => 'Clic: siempre',
     ClickMode.untilRecording =>
       'Clic hasta grabar: suena con el metrónomo y en la cuenta; al grabar se calla',
     _ => 'Clic apagado: el tempo se ve en las luces y en el pulsador',
   };
+  String get clickFree => 'En libre no suena el clic: el tempo saldrá del loop';
 
   /// Nombre de un dispositivo de audio de Android.
   String deviceName(AudioDevice d) {
@@ -153,9 +147,7 @@ class Strings {
   // ---------------------------------------------------------------- looper: cabecera
 
   String get settings => 'Ajustes';
-  String latencyChip(int ms) => 'LATENCIA $ms MS';
   String get latencyChipUnmeasured => 'LATENCIA SIN MEDIR';
-  String latencyChipSemantics(int ms) => 'Latencia medida: $ms milisegundos';
   String get latencyChipUnmeasuredSemantics =>
       'Latencia sin medir: el loop puede ir desfasado. Toca para medirla';
 
@@ -777,9 +769,9 @@ class Strings {
       'Simple: el pulsador más grande, 3 compases (4/4, 3/4 y 6/8), grabar sincronizado o '
       'manual, empezar al tocar, el clic (siempre, hasta grabar o apagado), el '
       'entrenador de tempo, el afinador y cómo parar. Avanzado: además, la batería y tus '
-      'canciones, el modo libre, todos los compases, el clic solo en la cuenta, REV y ½ '
-      'en las pistas, los modos del micrófono, qué suena al grabar con el altavoz y la '
-      'latencia a mano. Al volver al avanzado recupera lo que tenías.';
+      'canciones, el modo libre, todos los compases, REV y ½ en las pistas, los modos del '
+      'micrófono, qué suena al grabar con el altavoz y la latencia a mano. Al volver al '
+      'avanzado recupera lo que tenías.';
   String get playModeBusy => 'Acaba de grabar para cambiarlo';
 
   String get appearance => 'Apariencia';
@@ -842,21 +834,19 @@ class Strings {
   String get recordDuckHelp =>
       'Con el altavoz y el micrófono del móvil, el micrófono recoge lo que suena y lo graba '
       'otra vez en la pista nueva (o en el overdub): se duplica y se acumula. Mientras '
-      'grabas, lo que ya suena puede seguir normal, sonar más bajo o callarse; vuelve al '
-      'acabar de grabar. El tempo lo sigues viendo en las luces y en el pulsador. Con '
-      'cascos o una interfaz suena siempre normal. El clic en «siempre» también se graba: '
-      'mejor «solo la cuenta». La batería no se calla (hace falta para tocar a tempo), así '
-      'que también se graba.';
+      'grabas, lo que ya suena puede callarse (lo mejor) o seguir normal; vuelve al acabar '
+      'de grabar. El tempo lo sigues viendo en las luces y en el pulsador. Con cascos o '
+      'una interfaz suena siempre normal. El clic en «siempre» también se graba: mejor '
+      '«hasta grabar». La batería y la canción no se callan (hacen falta para tocar a '
+      'tempo), así que también se graban.';
   String recordDuckName(RecordDuck d) => switch (d) {
     RecordDuck.normal => 'Normal',
-    RecordDuck.low => 'Más bajo',
     RecordDuck.silent => 'Silencio',
   };
 
   /// Al grabar con lo demás callado o más bajo: «Compás 2 de 4 · lo demás, en silencio»
   String withDuck(String line, RecordDuck d) => switch (d) {
     RecordDuck.normal => line,
-    RecordDuck.low => '$line · lo demás, más bajo',
     RecordDuck.silent => '$line · lo demás, en silencio',
   };
 
@@ -911,6 +901,7 @@ class Strings {
   String get inputDevice => 'Entrada';
   String get inputAuto => 'Automática (la elige Android)';
   String get micMode => 'Modo del micrófono';
+  String micOtherModes(int n) => 'Otros modos ($n)';
   String get micModeHelp =>
       'Cuánto «arregla» Android el sonido antes de que llegue a Loopin. Si dos modos te '
       'suenan igual, quédate con el que dé menos latencia. Solo se nota al escucharte en '

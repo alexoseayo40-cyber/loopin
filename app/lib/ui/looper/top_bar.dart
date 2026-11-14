@@ -1,4 +1,4 @@
-// Loopin — cabecera del looper: nombre, latencia y ajustes
+// Loopin — cabecera del looper: nombre, aviso de latencia, afinador y ajustes
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:flutter/material.dart';
 
@@ -15,6 +15,7 @@ class TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = view.palette;
+    final latency = LatencyChip.shown(view);
     return SizedBox(
       height: 44,
       child: Row(
@@ -69,15 +70,18 @@ class TopBar extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 6),
-          // Se encoge (con «…») si no cabe
-          Flexible(
-            flex: 6,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: LatencyChip(view: view),
+          // Solo si falta medirla (medida, la cifra está en «Audio y
+          // latencia»); se encoge (con «…») si no cabe
+          if (latency) ...[
+            const SizedBox(width: 6),
+            Flexible(
+              flex: 6,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: LatencyChip(view: view),
+              ),
             ),
-          ),
+          ],
           IconButton(
             key: const ValueKey('open-tuner'),
             tooltip: tr.tunerOpen,
@@ -95,48 +99,46 @@ class TopBar extends StatelessWidget {
   }
 }
 
-/// De un vistazo: si la latencia de esta entrada y salida está medida.
+/// Aviso de que la latencia de esta entrada y salida está sin medir; lleva a
+/// medirla. Medida, no se ve (la cifra está en «Audio y latencia»).
 class LatencyChip extends StatelessWidget {
   const LatencyChip({super.key, required this.view});
 
   final LooperView view;
 
+  static bool shown(LooperView view) =>
+      view.s.running && view.controller.latencySource != LatencySource.measured;
+
   @override
   Widget build(BuildContext context) {
-    final c = view.controller;
     final p = view.palette;
-    if (!view.s.running) return const SizedBox.shrink();
-    final measured = c.latencySource == LatencySource.measured;
-    final ms = c.compensationMs.round();
+    if (!shown(view)) return const SizedBox.shrink();
     return Semantics(
       button: true,
-      label: measured ? tr.latencyChipSemantics(ms) : tr.latencyChipUnmeasuredSemantics,
+      label: tr.latencyChipUnmeasuredSemantics,
       excludeSemantics: true,
       child: InkWell(
+        key: const ValueKey('latency-chip'),
         borderRadius: BorderRadius.circular(20),
         onTap: view.onLatency,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: measured ? null : LoopinPalette.well,
+            color: LoopinPalette.well,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: measured ? p.edge : LoopinPalette.dub),
+            border: Border.all(color: LoopinPalette.dub),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                measured ? Icons.check_circle_outline : Icons.warning_amber_rounded,
-                size: 16,
-                color: measured ? p.dim : LoopinPalette.dub,
-              ),
+              const Icon(Icons.warning_amber_rounded, size: 16, color: LoopinPalette.dub),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
-                  measured ? tr.latencyChip(ms) : tr.latencyChipUnmeasured,
+                  tr.latencyChipUnmeasured,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: p.label(size: 12, color: measured ? p.dim : LoopinPalette.dub),
+                  style: p.label(size: 12, color: LoopinPalette.dub),
                 ),
               ),
             ],

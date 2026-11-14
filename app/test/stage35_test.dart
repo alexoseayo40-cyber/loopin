@@ -118,7 +118,6 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     // El móvil de prueba dice que no lo admite
     expect(c.inputPreset, InputPreset.voiceRecognition);
-    expect(find.text(tr.unprocessedUnsupported), findsOneWidget);
     expect(find.text(tr.recommended), findsOneWidget);
     final badge = find.ancestor(
       of: find.text(tr.recommended),
@@ -132,10 +131,21 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text(tr.micModeHelp), findsOneWidget);
 
+    // Los otros 4 van plegados
+    expect(find.text(tr.presetName(InputPreset.generic)), findsNothing);
+    expect(find.text(tr.micOtherModes(4)), findsOneWidget);
+    await tester.tap(find.text(tr.micOtherModes(4)));
+    await tester.pump();
+    expect(find.text(tr.unprocessedUnsupported), findsOneWidget);
+
     // Elegir otro modo
     await tester.tap(find.text(tr.presetName(InputPreset.generic)));
     await tester.pump();
     expect(c.inputPreset, InputPreset.generic);
+    // Con uno de los otros elegido, no se pliega
+    await tester.tap(find.text(tr.micOtherModes(4)));
+    await tester.pump();
+    expect(find.text(tr.presetName(InputPreset.generic)), findsOneWidget);
 
     // La carga del motor está en los detalles técnicos
     await tester.tap(find.text(tr.technicalDetails));

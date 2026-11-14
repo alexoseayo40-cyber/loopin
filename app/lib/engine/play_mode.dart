@@ -19,16 +19,14 @@ const List<String> kSimpleMeters = ['4/4', '3/4', '6/8'];
 /// El compás al que vuelve el simple si el de ahora no es suyo.
 const String kSimpleMeter = '4/4';
 
-/// Clic del modo simple, en el orden en que pasa con cada toque: siempre,
-/// hasta grabar y apagado (solo las luces).
-const List<ClickMode> kSimpleClickModes = [
-  ClickMode.always,
-  ClickMode.untilRecording,
-  ClickMode.silent,
-];
+/// Los modos del clic de la app (los dos modos), en el orden en que pasa con
+/// cada toque: siempre, hasta grabar y apagado (solo las luces). El motor
+/// también sabe «solo la cuenta», pero desde la 1.0 la app ya no lo usa:
+/// «hasta grabar» hace casi lo mismo.
+const List<ClickMode> kClickModes = [ClickMode.always, ClickMode.untilRecording, ClickMode.silent];
 
-/// El clic al que pasa el simple si el de ahora no es suyo («solo la cuenta»).
-const ClickMode kSimpleClick = ClickMode.untilRecording;
+/// A qué pasa un modo del clic que la app ya no tiene («solo la cuenta»).
+ClickMode clickModeOf(ClickMode m) => kClickModes.contains(m) ? m : ClickMode.untilRecording;
 
 /// Modos de grabación del simple (sin el libre).
 const List<LoopMode> kSimpleLoopModes = [LoopMode.sync, LoopMode.manual];
@@ -46,6 +44,8 @@ class SimpleForced {
   static const loopMode = 'loopMode';
   static const startOnSound = 'startOnSound';
   static const meter = 'meter';
+
+  /// (de versiones de antes: el clic ya es igual en los dos modos)
   static const clickMode = 'clickMode';
   static const drumsOn = 'drumsOn';
   static const backingOn = 'backingOn';

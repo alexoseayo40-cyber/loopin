@@ -46,8 +46,8 @@ void _setAllAdvanced(EngineController c) {
   c.setTimeSignature(_ts('7/8'));
   c.setLoopMode(LoopMode.free);
   c.setStartOnSound(true);
-  c.setClickMode(ClickMode.countIn);
-  c.setRecordDuck(RecordDuck.low);
+  c.setClickMode(ClickMode.always); // el clic es igual en los dos modos: se queda
+  c.setRecordDuck(RecordDuck.normal);
   c.setInputPreset(InputPreset.generic);
   c.setDrumsOn(true);
   c.setBackingOn(true);
@@ -57,7 +57,7 @@ void _setAllAdvanced(EngineController c) {
 void _expectSimpleValues(EngineController c) {
   expect(kSimpleLoopModes, contains(c.loopMode));
   expect(kSimpleMeters, contains(c.timeSignature.label));
-  expect(kSimpleClickModes, contains(c.clickMode));
+  expect(kClickModes, contains(c.clickMode));
   expect(c.drumsOn, isFalse);
   expect(c.backingOn, isFalse);
   expect(c.recordDuck, RecordDuck.silent);
@@ -101,19 +101,10 @@ void main() {
     expect(c.timeSignature.label, '4/4');
     expect(c.loopMode, LoopMode.manual); // el libre no está en simple
     expect(c.startOnSound, isTrue); // empezar al tocar sí está
-    expect(c.clickMode, ClickMode.untilRecording); // «solo la cuenta» no está
+    expect(c.clickMode, ClickMode.always); // el clic es el mismo en los dos modos
     expect(c.inputPreset, InputPreset.voiceRecognition);
     // Y el motor lo sabe (apagar la batería y la canción no para nada)
-    expect(
-      engine.calls,
-      containsAll([
-        'mode manual',
-        'meter 4 0',
-        'click untilRecording',
-        'drums false',
-        'backing false',
-      ]),
-    );
+    expect(engine.calls, containsAll(['mode manual', 'meter 4 0', 'drums false', 'backing false']));
     expect(engine.calls, isNot(contains('onSound false')));
     expect(engine.calls, isNot(contains('pause')));
     expect(engine.calls, isNot(contains('stop')));
@@ -133,9 +124,9 @@ void main() {
     expect(c.loopMode, LoopMode.free);
     expect(c.startOnSound, isTrue);
     expect(c.timeSignature.label, '7/8');
-    expect(c.clickMode, ClickMode.countIn);
+    expect(c.clickMode, ClickMode.always);
     expect(c.drumStyle, DrumStyle.funk);
-    expect(c.recordDuck, RecordDuck.low);
+    expect(c.recordDuck, RecordDuck.normal);
     expect(c.inputPreset, InputPreset.generic);
     // La batería y la canción vuelven encendidas, sin arrancar nada
     expect(c.drumsOn, isTrue);
@@ -217,8 +208,7 @@ void main() {
     expect(find.byType(BarsMenu), findsNothing);
     expect(find.byType(OnSoundToggle), findsOneWidget);
     expect(find.byKey(const ValueKey('trainer-button')), findsOneWidget);
-    expect(find.byType(ClickMenu), findsNothing);
-    expect(find.byType(SimpleClickToggle), findsOneWidget);
+    expect(find.byType(ClickToggle), findsOneWidget);
     expect(find.byType(MeterMenu), findsOneWidget);
     expect(find.byType(AccompanimentRow), findsNothing);
     expect(find.text('TAP · TOCA AL RITMO'), findsOneWidget);
@@ -239,14 +229,14 @@ void main() {
 
     // El clic: hasta grabar (de serie) → apagado → siempre → hasta grabar
     expect(c.clickMode, ClickMode.untilRecording);
-    await tester.tap(find.byKey(const ValueKey('simple-click')));
+    await tester.tap(find.byKey(const ValueKey('click-toggle')));
     await tester.pump();
     expect(c.clickMode, ClickMode.silent);
     expect(find.textContaining('Clic apagado'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('simple-click')));
+    await tester.tap(find.byKey(const ValueKey('click-toggle')));
     await tester.pump();
     expect(c.clickMode, ClickMode.always);
-    await tester.tap(find.byKey(const ValueKey('simple-click')));
+    await tester.tap(find.byKey(const ValueKey('click-toggle')));
     await tester.pump();
     expect(c.clickMode, ClickMode.untilRecording);
 
@@ -265,8 +255,7 @@ void main() {
     await tester.pump();
     expect(find.byType(ModeMenu), findsOneWidget);
     expect(find.byType(OnSoundToggle), findsOneWidget);
-    expect(find.byType(ClickMenu), findsOneWidget);
-    expect(find.byType(SimpleClickToggle), findsNothing);
+    expect(find.byType(ClickToggle), findsOneWidget);
     expect(find.byType(AccompanimentRow), findsOneWidget);
     final advancedPedal = tester.getSize(find.byType(Footswitch)).width;
     // Lo que falta en simple (la fila de acompañamiento con su hueco) es justo
@@ -371,5 +360,28 @@ void main() {
     expect(back[SimpleForced.loopMode], 'free');
     expect(SimpleForced.decode(null).isEmpty, isTrue);
     expect(SimpleForced.decode('').isEmpty, isTrue);
+  });
+
+  testWidgets('«solo la cuenta» y «más bajo» de antes de la 1.0 pasan a los de ahora', (
+    tester,
+  ) async {
+    final prefs = <String, String>{
+      'playMode': 'simple',
+      'clickMode': 'countIn',
+      'recordDuck': 'low',
+      // Lo que apuntaba el simple de antes: el clic ya no se devuelve
+      'simpleForced': 'clickMode=countIn',
+    };
+    final engine = FakeEngine()..next = fakeStatus(LoopState.empty, playing: false);
+    final c = await _open(tester, engine, prefs);
+    expect(c.clickMode, ClickMode.untilRecording);
+    expect(engine.calls, contains('click untilRecording'));
+    expect(c.recordDuck, RecordDuck.silent);
+    c.setPlayMode(PlayMode.advanced);
+    expect(c.clickMode, ClickMode.untilRecording);
+    // Y si alguien lo pide, tampoco
+    c.setClickMode(ClickMode.countIn);
+    expect(c.clickMode, ClickMode.untilRecording);
+    await _close(tester, c);
   });
 }

@@ -1,4 +1,4 @@
-// Loopin — al grabar con el altavoz, lo que ya suena se calla (o baja)
+// Loopin — al grabar con el altavoz, lo que ya suena se calla (o sigue normal)
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -25,8 +25,6 @@ void main() {
     expect(c.recordDuck, RecordDuck.silent);
     expect(engine.calls.where((x) => x.startsWith('duck')).last, 'duck 0.0');
 
-    c.setRecordDuck(RecordDuck.low);
-    expect(engine.calls.last, 'duck 0.125');
     c.setRecordDuck(RecordDuck.normal);
     expect(engine.calls.last, 'duck 1.0');
     c.setRecordDuck(RecordDuck.silent);
@@ -52,9 +50,9 @@ void main() {
       fakeStatus(LoopState.overdubbing),
       mode: LoopMode.sync,
       startOnSound: false,
-      duck: RecordDuck.low,
+      duck: RecordDuck.silent,
     );
-    expect(dub.subtitle, '${tr.tapToFinish} · lo demás, más bajo');
+    expect(dub.subtitle, '${tr.tapToFinish} · lo demás, en silencio');
     final normal = pedalLook(
       fakeStatus(LoopState.recording),
       mode: LoopMode.sync,
@@ -75,9 +73,11 @@ void main() {
     );
     await tester.pump();
     expect(find.text(tr.recordDuckTitle), findsOneWidget);
-    await tester.tap(find.text(tr.recordDuckName(RecordDuck.low)));
+    // Dos opciones: silencio (de serie) y normal
+    expect(find.text(tr.recordDuckName(RecordDuck.silent)), findsOneWidget);
+    await tester.tap(find.text(tr.recordDuckName(RecordDuck.normal)));
     await tester.pump();
-    expect(c.recordDuck, RecordDuck.low);
+    expect(c.recordDuck, RecordDuck.normal);
     expect(tester.takeException(), isNull);
     c.dispose();
   });

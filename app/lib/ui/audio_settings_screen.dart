@@ -233,59 +233,86 @@ class _InputCard extends StatelessWidget {
   }
 }
 
-/// Los modos del micrófono, una línea cada uno. Se marca el que conviene en
-/// este móvil.
-class _MicModes extends StatelessWidget {
+/// Los modos del micrófono, una línea cada uno. Se ve el que conviene en este
+/// móvil (RECOMENDADO) y los demás van plegados en «Otros modos» (abiertos si
+/// el elegido es uno de ellos).
+class _MicModes extends StatefulWidget {
   const _MicModes({required this.controller});
 
   final EngineController controller;
 
   @override
+  State<_MicModes> createState() => _MicModesState();
+}
+
+class _MicModesState extends State<_MicModes> {
+  late bool _others = widget.controller.inputPreset != widget.controller.recommendedPreset;
+
+  @override
   Widget build(BuildContext context) {
-    final c = controller;
+    final c = widget.controller;
     final theme = Theme.of(context);
     final recommended = c.recommendedPreset;
+    final others = [
+      for (final p in InputPreset.values)
+        if (p != recommended) p,
+    ];
+
+    Widget tile(InputPreset p) => RadioListTile<InputPreset>(
+      key: ValueKey('preset-${p.name}'),
+      value: p,
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      visualDensity: VisualDensity.compact,
+      title: Row(
+        children: [
+          Flexible(child: Text(tr.presetName(p))),
+          if (p == recommended) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                tr.recommended,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+      subtitle: Text(
+        p == InputPreset.unprocessed && c.unprocessedSupported == false
+            ? tr.unprocessedUnsupported
+            : tr.presetLine(p),
+      ),
+    );
+
     return RadioGroup<InputPreset>(
       groupValue: c.inputPreset,
       onChanged: (p) {
         if (p != null) c.setInputPreset(p);
       },
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final p in InputPreset.values)
-            RadioListTile<InputPreset>(
-              key: ValueKey('preset-${p.name}'),
-              value: p,
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              visualDensity: VisualDensity.compact,
-              title: Row(
-                children: [
-                  Flexible(child: Text(tr.presetName(p))),
-                  if (p == recommended) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        tr.recommended,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onPrimaryContainer,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              subtitle: Text(
-                p == InputPreset.unprocessed && c.unprocessedSupported == false
-                    ? tr.unprocessedUnsupported
-                    : tr.presetLine(p),
-              ),
+          tile(recommended),
+          // Pulsar otra vez no lo pliega si el elegido está dentro
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const ValueKey('preset-others'),
+              style: TextButton.styleFrom(padding: EdgeInsets.zero),
+              onPressed: () => setState(() => _others = !_others || c.inputPreset != recommended),
+              icon: Icon(_others ? Icons.expand_less : Icons.expand_more),
+              label: Text(tr.micOtherModes(others.length)),
             ),
+          ),
+          if (_others) ...[for (final p in others) tile(p)],
         ],
       ),
     );

@@ -13,7 +13,7 @@ import 'view.dart';
 
 /// Tres filas: el tempo (con − / + y TAP), arrancar/parar y el entrenador con
 /// las luces de los tiempos, y compás, modo, compases, «empezar al tocar» y
-/// clic (en simple, con menos opciones y el clic de un toque).
+/// clic (en simple, con menos opciones).
 class TempoDisplay extends StatelessWidget {
   const TempoDisplay({super.key, required this.view, required this.compact});
 
@@ -24,7 +24,6 @@ class TempoDisplay extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = view.controller;
     final s = view.s;
-    final simple = c.simple;
     return Container(
       padding: EdgeInsets.fromLTRB(4, compact ? 4 : 8, 4, compact ? 6 : 10),
       decoration: BoxDecoration(
@@ -77,8 +76,8 @@ class TempoDisplay extends StatelessWidget {
                   const SizedBox(width: 6),
                   OnSoundToggle(view: view),
                   const SizedBox(width: 6),
-                  // En simple, un toque pasa de un modo del clic al siguiente
-                  simple ? SimpleClickToggle(view: view) : ClickMenu(view: view),
+                  // Un toque pasa de un modo del clic al siguiente
+                  ClickToggle(view: view),
                 ],
               ),
             ),

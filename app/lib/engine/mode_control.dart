@@ -35,10 +35,6 @@ extension PlayModeControl on EngineController {
       f.remember(SimpleForced.meter, timeSignature.label);
       setTimeSignature(kTimeSignatures.firstWhere((t) => t.label == kSimpleMeter));
     }
-    if (!kSimpleClickModes.contains(clickMode)) {
-      f.remember(SimpleForced.clickMode, clickMode.name);
-      setClickMode(kSimpleClick);
-    }
     // Sin batería ni canción (no se ven): se apagan, sin parar nada
     if (drumsOn) {
       f.remember(SimpleForced.drumsOn, '1');
@@ -79,11 +75,8 @@ extension PlayModeControl on EngineController {
     if (meter.isNotEmpty && timeSignature.label == kSimpleMeter && !tempoLocked) {
       setTimeSignature(meter.first);
     }
-    final click = parse(ClickMode.values, SimpleForced.clickMode);
-    // Si en simple no se ha tocado (de antes, el simple lo ponía en «siempre»)
-    if (click != null && (clickMode == kSimpleClick || clickMode == ClickMode.always)) {
-      setClickMode(click);
-    }
+    // (el clic apuntado por versiones de antes ya no se devuelve: es el mismo
+    // en los dos modos)
     // La batería y la canción vuelven encendidas, pero no arrancan nada:
     // suenan al darle a ▶ o al grabar, como siempre
     if (f[SimpleForced.drumsOn] == '1' && !drumsOn) {

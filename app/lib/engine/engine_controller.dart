@@ -63,13 +63,11 @@ part 'mode_control.dart';
 part 'session_control.dart';
 
 /// Qué hacen las pistas que ya suenan mientras se graba otra (o un overdub),
-/// con el altavoz y el micrófono del móvil.
+/// con el altavoz y el micrófono del móvil. (Hasta la 1.0 había un «más
+/// bajo», −18 dB: se seguía colando; quien lo tenía pasa a silencio.)
 enum RecordDuck {
   /// Suenan normal (y el micrófono las vuelve a grabar).
   normal(1.0),
-
-  /// Suenan más bajas (−18 dB).
-  low(0.125),
 
   /// Se callan mientras se graba.
   silent(0.0);
@@ -440,6 +438,7 @@ class EngineController extends ChangeNotifier {
   }
 
   void setClickMode(ClickMode mode) {
+    mode = clickModeOf(mode);
     clickMode = mode;
     _engine.setClickMode(mode);
     _prefs.set(Prefs.clickMode, mode.name);
@@ -1051,7 +1050,10 @@ class EngineController extends ChangeNotifier {
       orElse: () => kTimeSignatures.first,
     );
     final click = await _prefs.get(Prefs.clickMode);
-    clickMode = ClickMode.values.firstWhere((m) => m.name == click, orElse: () => clickMode);
+    // «Solo la cuenta» (de antes de la 1.0) pasa a «hasta grabar»
+    clickMode = clickModeOf(
+      ClickMode.values.firstWhere((m) => m.name == click, orElse: () => clickMode),
+    );
     final loop = await _prefs.get(Prefs.loopMode);
     loopMode = LoopMode.values.firstWhere((m) => m.name == loop, orElse: () => loopMode);
     final bars = int.tryParse(await _prefs.get(Prefs.syncBars) ?? '');

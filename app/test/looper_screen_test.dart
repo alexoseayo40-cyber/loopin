@@ -210,6 +210,14 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('Audio y latencia'), findsOneWidget);
+    // Medida, el aviso de arriba desaparece (la cifra está en «Audio y latencia»)
+    Navigator.of(tester.element(find.text('Audio y latencia'))).pop();
+    await tester.pump(const Duration(milliseconds: 500));
+    c.setLatencyManually(90);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(c.latencySource, LatencySource.measured);
+    expect(find.byKey(const ValueKey('latency-chip')), findsNothing);
+    expect(find.textContaining('LATENCIA'), findsNothing);
     c.stopAudio();
     c.dispose();
   });

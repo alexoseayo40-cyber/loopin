@@ -170,90 +170,48 @@ class OnSoundToggle extends StatelessWidget {
   }
 }
 
-/// Cuándo suena el clic: siempre, solo en la cuenta o nunca (solo visual).
-class ClickMenu extends StatelessWidget {
-  const ClickMenu({super.key, required this.view});
+/// El clic (los dos modos): cada toque pasa al siguiente modo (siempre →
+/// hasta grabar → apagado, solo las luces → siempre). En libre no suena.
+class ClickToggle extends StatelessWidget {
+  const ClickToggle({super.key, required this.view});
 
   final LooperView view;
 
   static IconData iconFor(ClickMode m) => switch (m) {
     ClickMode.always => Icons.volume_up,
-    ClickMode.countIn => Icons.timer_outlined,
-    ClickMode.silent => Icons.visibility_outlined,
     ClickMode.untilRecording => Icons.fiber_smart_record_outlined,
+    _ => Icons.volume_off,
   };
 
   @override
   Widget build(BuildContext context) {
     final c = view.controller;
     final free = c.loopMode == LoopMode.free;
-    return PopupMenuButton<ClickMode>(
-      tooltip: tr.click(c.clickMode),
-      initialValue: c.clickMode,
-      onSelected: c.setClickMode,
-      itemBuilder: (_) => [
-        for (final m in ClickMode.values)
-          PopupMenuItem(
-            value: m,
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(iconFor(m)),
-              title: Text(tr.click(m)),
-              subtitle: Text(tr.clickModeLine(m)),
-            ),
-          ),
-      ],
-      child: Container(
-        constraints: const BoxConstraints(minWidth: 44, minHeight: 36),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: LoopinPalette.display.withValues(alpha: 0.45)),
-        ),
-        child: Icon(
-          // En libre no hay clic
-          free ? Icons.visibility_outlined : iconFor(c.clickMode),
-          size: 20,
-          color: LoopinPalette.display,
-        ),
-      ),
-    );
-  }
-}
-
-/// El clic del modo simple: cada toque pasa al siguiente modo (siempre →
-/// hasta grabar → apagado, solo las luces → siempre).
-class SimpleClickToggle extends StatelessWidget {
-  const SimpleClickToggle({super.key, required this.view});
-
-  final LooperView view;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = view.controller;
-    final mode = c.clickMode;
-    final on = mode != ClickMode.silent;
+    final mode = clickModeOf(c.clickMode);
+    final on = mode != ClickMode.silent && !free;
     const color = LoopinPalette.display;
-    final i = kSimpleClickModes.indexOf(mode);
-    final next = kSimpleClickModes[(i + 1) % kSimpleClickModes.length];
+    final i = kClickModes.indexOf(mode);
+    final next = kClickModes[(i + 1) % kClickModes.length];
+    final label = free ? tr.clickFree : tr.clickLabel(mode);
     return Tooltip(
-      message: tr.simpleClick(mode),
+      message: label,
       child: Semantics(
         button: true,
         toggled: on,
-        label: tr.simpleClick(mode),
+        label: label,
         excludeSemantics: true,
         child: InkWell(
-          key: const ValueKey('simple-click'),
+          key: const ValueKey('click-toggle'),
           borderRadius: BorderRadius.circular(6),
           onTap: () {
-            c.setClickMode(next);
+            // En libre el clic no suena nunca: solo se explica
+            if (!free) c.setClickMode(next);
             ScaffoldMessenger.of(context)
               ..hideCurrentSnackBar()
               ..showSnackBar(
                 SnackBar(
                   duration: const Duration(seconds: 3),
-                  content: Text(tr.simpleClickSnack(next)),
+                  content: Text(free ? tr.clickFree : tr.clickSnack(next)),
                 ),
               );
           },
@@ -265,7 +223,7 @@ class SimpleClickToggle extends StatelessWidget {
               color: on ? color.withValues(alpha: 0.2) : null,
               border: Border.all(color: color.withValues(alpha: on ? 1 : 0.45)),
             ),
-            child: Icon(on ? ClickMenu.iconFor(mode) : Icons.volume_off, size: 20, color: color),
+            child: Icon(free ? Icons.visibility_outlined : iconFor(mode), size: 20, color: color),
           ),
         ),
       ),
