@@ -1,0 +1,49 @@
+name: Something doesn't work / Algo no funciona
+description: A bug, a crash, dropouts, latency problems… / Un fallo, un cierre, cortes, latencia…
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting it! You can write in English or Spanish.
+        ¡Gracias por avisar! Puedes escribir en español o en inglés.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened? / ¿Qué ha pasado?
+      description: What you did, what you expected and what happened instead. / Qué hiciste, qué esperabas y qué pasó.
+    validations:
+      required: true
+  - type: textarea
+    id: results
+    attributes:
+      label: Copy results / Copiar resultados
+      description: |
+        In Loopin: Settings › Audio & latency › **Copy results** (the icon at the top right), then paste it here. It tells us your phone, its audio setup, the latency and any dropouts.
+        En Loopin: Ajustes › Audio y latencia › **Copiar resultados** (el icono de arriba a la derecha) y pégalo aquí. Dice tu móvil, su audio, la latencia y los cortes.
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: input
+    attributes:
+      label: How is the guitar connected? / ¿Cómo va conectada la guitarra?
+      options:
+        - Phone microphone / Micrófono del móvil
+        - USB audio interface / Interfaz USB
+        - Jack to TRRS adapter / Adaptador de jack a TRRS
+        - Other / Otro
+  - type: dropdown
+    id: output
+    attributes:
+      label: How do you listen? / ¿Cómo escuchas?
+      options:
+        - Phone speaker / Altavoz del móvil
+        - Wired headphones / Cascos de cable
+        - USB headphones or interface / Cascos USB o interfaz
+        - Bluetooth
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else? / ¿Algo más?
+      description: Screenshots, a recording, how often it happens… / Capturas, una grabación, cada cuánto pasa…

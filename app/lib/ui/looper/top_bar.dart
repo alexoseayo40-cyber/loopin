@@ -16,84 +16,108 @@ class TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = view.palette;
     final latency = LatencyChip.shown(view);
-    return SizedBox(
-      height: 44,
-      child: Row(
-        children: [
-          // El nombre lleva a las sesiones: debajo, la que está abierta
-          Expanded(
-            flex: 5,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Semantics(
-                button: true,
-                label: tr.sessionsOpenSemantics(view.controller.sessionName),
-                excludeSemantics: true,
-                child: InkWell(
-                  key: const ValueKey('open-sessions'),
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: view.onSessions,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Si no cabe (letra grande), se encoge en vez de partirse
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            tr.appName.toUpperCase(),
-                            maxLines: 1,
-                            style: p.label(size: 18, spacing: 5),
-                          ),
-                        ),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                view.controller.sessionName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: p.label(size: 11, color: p.dim, spacing: 0.4),
-                              ),
+    // La fila mide 44: con la letra del sistema grande, el nombre y la sesión
+    // (dos líneas) no caben a más de 1,2×
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.2,
+      child: SizedBox(
+        height: 44,
+        child: Row(
+          children: [
+            // El nombre lleva a las sesiones: debajo, la que está abierta
+            Expanded(
+              flex: 5,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Semantics(
+                  button: true,
+                  label: view.controller.sessionSaveFailed
+                      ? '${tr.sessionsOpenSemantics(view.controller.sessionName)}. '
+                            '${tr.saveFailedSemantics}'
+                      : tr.sessionsOpenSemantics(view.controller.sessionName),
+                  excludeSemantics: true,
+                  child: InkWell(
+                    key: const ValueKey('open-sessions'),
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: view.onSessions,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Si no cabe (letra grande), se encoge en vez de partirse
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              tr.appName.toUpperCase(),
+                              maxLines: 1,
+                              style: p.label(size: 18, spacing: 5),
                             ),
-                            Icon(Icons.arrow_drop_down, size: 16, color: p.dim),
-                          ],
-                        ),
-                      ],
+                          ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Sin guardar (falta espacio): en ámbar, con aviso
+                              if (view.controller.sessionSaveFailed)
+                                const Padding(
+                                  padding: EdgeInsets.only(right: 3),
+                                  child: Icon(
+                                    Icons.warning_amber_rounded,
+                                    size: 13,
+                                    color: LoopinPalette.dub,
+                                  ),
+                                ),
+                              Flexible(
+                                child: Text(
+                                  view.controller.sessionName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: p.label(
+                                    size: 11,
+                                    color: view.controller.sessionSaveFailed
+                                        ? LoopinPalette.dub
+                                        : p.dim,
+                                    spacing: 0.4,
+                                  ),
+                                ),
+                              ),
+                              Icon(Icons.arrow_drop_down, size: 16, color: p.dim),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-          // Solo si falta medirla (medida, la cifra está en «Audio y
-          // latencia»); se encoge (con «…») si no cabe
-          if (latency) ...[
-            const SizedBox(width: 6),
-            Flexible(
-              flex: 6,
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: LatencyChip(view: view),
+            // Solo si falta medirla (medida, la cifra está en «Audio y
+            // latencia»); se encoge (con «…») si no cabe
+            if (latency) ...[
+              const SizedBox(width: 6),
+              Flexible(
+                flex: 6,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: LatencyChip(view: view),
+                ),
               ),
+            ],
+            IconButton(
+              key: const ValueKey('open-tuner'),
+              tooltip: tr.tunerOpen,
+              icon: CustomPaint(size: const Size(24, 24), painter: TuningForkPainter(p.ink)),
+              onPressed: view.onTuner,
+            ),
+            IconButton(
+              tooltip: tr.settings,
+              icon: Icon(Icons.tune, color: p.ink),
+              onPressed: view.onSettings,
             ),
           ],
-          IconButton(
-            key: const ValueKey('open-tuner'),
-            tooltip: tr.tunerOpen,
-            icon: CustomPaint(size: const Size(24, 24), painter: TuningForkPainter(p.ink)),
-            onPressed: view.onTuner,
-          ),
-          IconButton(
-            tooltip: tr.settings,
-            icon: Icon(Icons.tune, color: p.ink),
-            onPressed: view.onSettings,
-          ),
-        ],
+        ),
       ),
     );
   }

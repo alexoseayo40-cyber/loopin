@@ -1,89 +1,60 @@
 # Loopin
 
-Looper de guitarra libre para Android: varias pistas que cuadran al compás, metrónomo y backing tracks.
+**A free and open source guitar looper for Android.** Record a base, play over it and keep adding tracks that always stay in time. Practise and play anywhere, with the phone's microphone or a USB audio interface.
 
-> **Estado:** Etapa 6. Modo simple (lo justo para grabar, tocar y practicar: pulsador más grande, sin batería ni canciones) y avanzado (todo). Looper de 4 pistas con interfaz de pedal, metrónomo con 10 compases, batería con 10 estilos, tus propias canciones (WAV, MP3, FLAC) estiradas al tempo, modo libre, «empezar al tocar», controles externos y latencia compensada (medida sola, tocando al clic o a mano). Para el directo y la práctica: afinador, reverse y media velocidad por pista, silenciar y entrar en el 1, parar en el 1 o con fundido, y entrenador de tempo. Sesiones que se guardan solas (al abrir la app sigue la última), exportar a WAV la mezcla o cada pista y compartirlas, modo escenario y guía de la primera vez. Próximo: idiomas y publicación.
+[Leer en español](README.es.md)
 
-## Cómo se usa
+<p>
+  <img src="docs/screenshots/simple-sonando.png" width="200" alt="Simple mode: the big pedal-style button">
+  <img src="docs/screenshots/movil-bateria.png" width="200" alt="Advanced mode with 4 tracks and drums">
+  <img src="docs/screenshots/afinador.png" width="200" alt="Chromatic tuner">
+  <img src="docs/screenshots/escenario.png" width="200" alt="Stage mode: the whole screen is the button">
+</p>
 
-El botón grande hace de pedal (actúa al pulsar, no al soltar) sobre la pista elegida:
+> The app is in Spanish for now. English, French, German, Italian and Portuguese are coming in 1.0.
 
-- **Toque:** pista vacía → graba; pista con loop → graba encima (overdub, desde el siguiente compás). Con el avance automático, al cerrar una pista queda elegida la siguiente vacía.
-- **Mantener:** deshacer lo último (una capa o la pista recién grabada).
-- **Doble toque:** parar / arrancar todo.
+## What it does
 
-Modos de grabación: **sincronizado** (1, 2, 4 u 8 compases), **manual** (se cierra al pulsar, al compás más cercano) y **libre** (sin metrónomo: el tempo sale del primer loop). La primera pista lleva 1 compás de cuenta, o arranca con la primera nota si está encendido «empezar al tocar».
+- **4-track looper with one big pedal-style button:** tap to record or overdub, hold to undo, double tap to stop and start. It acts when you press, not when you let go. Tracks are 1, 2 or 4 times the length of the first and always stay in time.
+- **Metronome** from 40 to 240 BPM with tap tempo, 10 time signatures and a light on every beat. The click can go quiet once you start recording.
+- **Synced, manual or free recording** (in free mode the tempo comes from what you play), plus **start on play**: recording begins with your first note.
+- **Latency compensation:** measured on its own through the speaker, or by playing along to a click with headphones. What you record lands on the beat.
+- **Drums** with 10 styles, and **your own songs** (WAV, MP3, FLAC) at any tempo without changing the pitch.
+- Chromatic **tuner** with reference notes, and a **tempo trainer** that raises the BPM step by step.
+- **Sessions that save themselves**, **WAV export** (the mix, or every track for your DAW) and **stage mode**.
+- **Simple mode** (just the essentials, bigger button) and **advanced mode**. Light and dark themes, 4 colours, portrait, landscape and tablets.
+- **Hands-free:** volume buttons, the headset button or a Bluetooth pedal.
 
-**Batería:** la fila de debajo de la pista. Sigue el tempo y el compás; el estilo «Básico» sale de los acentos del compás y vale para los 10, y hay rock, pop, blues shuffle, funk, balada y reggae (4/4), vals (3/4), balada 6/8 y blues lento (12/8). Entra siempre en un 1; con ella encendida la cuenta de entrada suena con baquetas y el clic se calla mientras toca. Los sonidos son de [Virtuosity Drums](https://github.com/sfzinstruments/virtuosity_drums) (CC0).
+## Install
 
-**Canciones:** la misma fila, en la posición «CANCIÓN». Importas un audio tuyo, marcas su tempo y dónde cae un 1 (escuchándola, con un clic encima para comprobarlo; el tempo exacto sale de marcar otro 1 más adelante) y suena con los loops, estirada al tempo del metrónomo sin cambiar el tono ([SoundTouch](https://codeberg.org/soundtouch/soundtouch), LGPL). Entra siempre en un 1 y al acabar vuelve a empezar.
+Loopin needs **Android 8.0 or later**.
 
-**Directo y práctica:** el **afinador** (el diapasón de arriba) usa la entrada que tengas y también hace sonar cada cuerda y el La de referencia para afinar de oído. El clic **«hasta grabar»** (de serie) suena con el metrónomo y en la cuenta, y se calla al empezar a grabar. Con Ajustes › «Efectos de pista» (avanzado), cada pista puede ir al revés (**REV**) o a media velocidad (**½**); silenciarla, REV y ½ esperan al siguiente 1 para entrar a tiempo. **Al parar** (Ajustes) puede ser al momento, en el siguiente 1 o con un fundido de 4 s. El **entrenador de tempo** (la flecha junto al ▶) sube el tempo X BPM cada N compases hasta donde digas.
+- **GitHub:** download the APK from [Releases](https://github.com/alexoseayo40-cyber/loopin/releases). `arm64-v8a` fits almost every phone from the last few years; `armeabi-v7a` is for older 32-bit phones; the universal APK works on both but is bigger. To get updates, follow the repository with [Obtainium](https://github.com/ImranR98/Obtainium).
+- **IzzyOnDroid and F-Droid:** coming after 1.0.
 
-**Sesiones:** todo lo grabado se guarda solo, con su tempo, su compás y los ajustes de cada pista, la batería y la canción. El nombre de arriba abre la lista: sesión nueva, abrir una de antes, cambiar el nombre, duplicar o borrar. **Exportar** (en la sesión abierta) hace WAV de la mezcla y, si se quiere, de cada pista por separado (todas empiezan a la vez, para un DAW), y los comparte o los guarda en una carpeta. El **modo escenario** (el botón ⛶ de abajo) convierte toda la pantalla en el pulsador.
+**Pick one source and stay with it.** Builds from different sources may be signed with different keys, and switching means uninstalling, which deletes your sessions. Export them first (Sessions › Export).
 
-Mide la latencia una vez por cada combinación de entrada y salida (Ajustes › Audio y latencia): se guarda y se aplica sola.
+## Good to know
 
-Licencia: [GPLv3](LICENSE).
+- Through the phone speaker, the click, drums and song bleed into your recording (the other tracks go quiet while you record). **Wired headphones** work best. Bluetooth headphones have too much delay to monitor yourself live.
+- Measure the latency once for each input and output (Settings › Audio & latency). It is saved and applied on its own.
+- It works while the app is open and the screen is on.
+- Tracks up to 60 s. Songs up to 10 min, in mono.
 
-## Qué hay
+## Privacy
 
-```
-app/                        App Flutter (interfaz)
-  lib/engine/               Estado y órdenes al motor, latencia por ruta, teclas externas
-  lib/ui/                   Pantallas; ui/looper/ son las piezas de la del looper
-  lib/l10n/strings.dart     Todos los textos (preparado para traducir)
-  assets/drums/             Sonidos de la batería (CC0; tool/make_drums.py los genera)
-packages/loopin_engine/     Plugin FFI: puente Dart ↔ motor C++
-  src/                      Motor C++ (Oboe)
-  src/third_party/oboe/     Oboe 1.11.0 (submódulo de git)
-  src/third_party/          SoundTouch 2.4.1 y dr_libs (copiados; ver su README.md)
-engine_tests/               Tests del motor que se ejecutan en el PC
-app/test/                   Tests de la interfaz (flutter test)
-.github/workflows/          Compila y pasa los tests en cada push
-```
+No ads, no accounts, no tracking and **no internet**: the app doesn't even have permission to use it. It only asks for the microphone, to record you. Everything stays on your phone. See [PRIVACY.md](PRIVACY.md).
 
-## Compilar en Windows
+## Found a problem?
 
-Necesitas Git, Flutter y Android Studio (ver el plan del proyecto). Después:
+In the app, go to **Settings › Audio & latency** and tap **Copy results** (or Settings › About › Report a problem, which copies them for you). Then [open an issue](https://github.com/alexoseayo40-cyber/loopin/issues/new/choose) and paste them: they tell us your phone, its audio setup, the latency and any dropouts, which is what we need to fix problems on phones we don't have.
 
-```powershell
-# Ruta corta: Windows falla con rutas de más de 260 caracteres al compilar C++
-cd C:\dev
-git clone --recursive https://github.com/alexoseayo40-cyber/loopin.git
-cd loopin\app
-flutter run --release
-```
+## Building and contributing
 
-Si ya lo clonaste sin `--recursive`: `git submodule update --init --recursive`.
+See [docs/BUILDING.md](docs/BUILDING.md) for how to build the app and run the tests. Notes on how the audio engine works (in Spanish): [docs/MOTOR.md](docs/MOTOR.md).
 
-La primera compilación descarga el NDK y CMake de Android (más de 1 GB) y tarda un rato.
+## Licence
 
-### Tests del motor (opcional)
+Loopin is free software under the **GNU General Public License v3.0 or later** ([LICENSE](LICENSE)).
 
-Necesitan un compilador de C++ (Visual Studio Build Tools en Windows):
-
-```powershell
-cmake -S engine_tests -B build/engine_tests
-cmake --build build/engine_tests --config Release
-build\engine_tests\Release\loopin_engine_tests.exe
-```
-
-`drum_demo app/assets/drums <carpeta>` deja en la carpeta un WAV por estilo de batería, para oírlos sin móvil.
-
-## Cómo funciona el motor
-
-- Un stream full-duplex de Oboe: la entrada se lee dentro del callback de salida, así que las dos van a la par.
-- Dentro del callback no se reserva memoria, no hay bloqueos y no se lee ningún archivo. Las órdenes llegan por una cola SPSC y el estado sale por variables atómicas.
-- Todo se cuenta en muestras enteras: un tiempo dura exactamente `round(fs × 60 / BPM)` muestras, así que compases y loops son múltiplos exactos y no hay deriva.
-- La latencia se mide emitiendo un pulso y detectándolo en la entrada, con los índices absolutos de las muestras de salida y de entrada. Es el mismo valor que usa el looper para compensar la grabación.
-- En cada callback se lee **toda** la entrada que haya llegado (no un bloque fijo, como hace `oboe::FullDuplexStream`), así no se acumula retraso. Entrada y salida se cuentan por separado y no necesitan bloques iguales.
-- El looper decide todo (inicio, fin, overdub) en índices de salida, que es lo que oye el músico. La muestra de entrada *j* se tocó mientras sonaba la salida *j − latencia*, y se escribe en esa posición del loop: la escritura va con retraso, a medida que llega la entrada (un anillo de 6 s guarda lo último).
-- Las sesiones se leen y se cargan sin tocar el hilo de audio: el motor publica cuándo las pistas están «quietas» (no se graba, no queda entrada por capturar ni trabajo de fondo, y la cola de órdenes está vacía); solo entonces la interfaz las copia o escribe en ellas. Si la sesión se grabó a otra frecuencia, se pasa a la del móvil.
-- Exportar usa un segundo núcleo del motor, sin audio, que vuelve a tocar la sesión: lo exportado es exactamente lo que suena. Dos pasadas: la primera mide el pico (si pasa de 0 dB, todo baja lo mismo) y la segunda escribe WAV de 16 bits.
-- Cada overdub va a una capa aparte para poder deshacerlo. Al acabar el siguiente overdub, la capa anterior se suma al loop base poco a poco en segundo plano; como lo que suena es la suma de todo, no se nota.
-- La batería es un secuenciador de muestras: al empezar cada tiempo apunta los golpes de ese tiempo con su desfase en muestras y los dispara al llegar. Como el tiempo dura un número entero de muestras y el tempo solo cambia al empezar uno, cada golpe cae siempre en la misma muestra respecto al compás.
-- Las canciones importadas se decodifican (dr_libs) y se estiran (SoundTouch) **una vez**, en un hilo aparte, y se guardan en memoria en 16 bits, mono, con el 1 en un inicio de compás y compases enteros. El callback solo las lee. Si cambia el tempo, la canción se calla y se vuelve a preparar; entra en el siguiente 1 por donde iría. Los audios nuevos llegan al hilo de audio con un intercambio atómico y los viejos vuelven por una cola para borrarlos fuera de él.
-- Cada pista se lee en una posición contada en medias muestras que avanza +2 (normal), +1 (media velocidad), −2 (al revés) o −1 por muestra; al cambiar hay un fundido cruzado de 5 ms. Un overdub sobre una pista con efecto se escribe donde se oye.
-- El afinador copia la entrada en un anillo sin bloqueos y la analiza fuera del hilo de audio (YIN a ~24 kHz y el periodo afinado en la señal original: en los tests, menos de 1 cent de error de 41 a 1319 Hz).
-- La carga del callback (media y pico de cada segundo, en % del tiempo disponible) se ve en Audio y latencia › Detalles técnicos y en «Copiar resultados».
+It includes [Oboe](https://github.com/google/oboe) (Apache 2.0), [SoundTouch](https://codeberg.org/soundtouch/soundtouch) (LGPL 2.1), [dr_libs](https://github.com/mackron/dr_libs) (public domain / MIT-0), the Barlow Condensed and Share Tech Mono fonts (SIL Open Font License) and drum sounds from [Virtuosity Drums](https://github.com/sfzinstruments/virtuosity_drums) (CC0). Their licences are in the app (Settings › About › Third-party licences).

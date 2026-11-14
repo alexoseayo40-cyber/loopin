@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Loopin — copia de seguridad (Android 12 o superior)
+     SPDX-License-Identifier: GPL-3.0-or-later
+
+     A la nube de Google van solo los ajustes (y las latencias medidas): tiene un
+     tope de 25 MB por app, y las sesiones y las canciones pasan de ahí enseguida
+     (si se pasa, no se copia nada). Al pasar a un móvil nuevo (con cable o con la
+     transferencia de Android) va todo: ajustes, sesiones y canciones. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="sharedpref" path="loopin.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="sharedpref" path="." />
+        <include domain="file" path="." />
+    </device-transfer>
+</data-extraction-rules>

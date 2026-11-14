@@ -289,7 +289,11 @@ const _keys = MethodChannel('loopin/keys');
 
 /// Lo que respondería Android (permiso del micro, dispositivos, ajustes).
 /// Con [prefs], los ajustes se guardan ahí (si no, no se guarda nada).
+/// Las llamadas a Android de la app (método y argumentos), para comprobarlas.
+final List<MethodCall> platformCalls = [];
+
 void mockPlatform([Map<String, String>? prefs]) {
+  platformCalls.clear();
   // Sin esto la llamada no vuelve nunca dentro de un test
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
     _keys,
@@ -298,11 +302,14 @@ void mockPlatform([Map<String, String>? prefs]) {
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
     _channel,
     (call) async {
+      platformCalls.add(call);
       switch (call.method) {
         case 'requestMicrophone':
           return 'granted';
         case 'audioInfo':
           return {'model': 'Test', 'android': '16', 'unprocessed': false};
+        case 'appVersion':
+          return {'name': '1.0.0', 'code': 1};
         case 'audioDevices':
           return {
             'inputs': [

@@ -1,0 +1,11 @@
+name: Idea
+description: Something Loopin could do / Algo que Loopin podría hacer
+labels: [idea]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like? / ¿Qué te gustaría?
+      description: What you want to do while playing and how it would help. / Qué quieres hacer al tocar y en qué te ayudaría.
+    validations:
+      required: true

@@ -1,10 +1,11 @@
-// Loopin — ajustes: modo, apariencia, looper y controles externos
+// Loopin — ajustes: modo, apariencia, looper, controles externos y ayuda
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:flutter/material.dart';
 import 'package:loopin_engine/loopin_engine.dart' show StopMode;
 
 import '../engine/engine_controller.dart';
 import '../l10n/strings.dart';
+import 'about_screen.dart';
 import 'audio_settings_screen.dart';
 import 'help.dart';
 import 'tutorial_screen.dart';
@@ -99,6 +100,16 @@ class SettingsScreen extends StatelessWidget {
                           ),
                         ),
                       ),
+                    ),
+                    ListTile(
+                      key: const ValueKey('open-about'),
+                      leading: const Icon(Icons.info_outline),
+                      title: Text(tr.aboutOpen),
+                      subtitle: Text(tr.aboutOpenLine(c.appVersion)),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => Navigator.of(
+                        context,
+                      ).push(MaterialPageRoute<void>(builder: (_) => AboutScreen(controller: c))),
                     ),
                   ],
                 ),

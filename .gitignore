@@ -10,3 +10,8 @@ build/
 .vscode/
 *.iml
 .DS_Store
+
+# Clave de firma (nunca en el repositorio: ver docs/BUILDING.md)
+key.properties
+*.jks
+*.keystore

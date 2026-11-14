@@ -29,6 +29,11 @@ class _SessionState {
   /// La carga no ha salido (el motor no la ha aceptado).
   bool loadFailed = false;
 
+  /// Lo último no se ha podido guardar (y si es por falta de espacio). Se
+  /// reintenta cada 5 s mientras tanto.
+  bool saveFailed = false;
+  bool saveNoSpace = false;
+
   /// Lo último que se ha guardado.
   int savedRevision = -1;
   List<int?> savedHashes = List.filled(kTrackCount, null);
@@ -55,6 +60,11 @@ extension SessionControl on EngineController {
   /// Se está abriendo una sesión (el pulsador no hace nada).
   bool get sessionLoading => _ss.loading;
   bool get sessionLoadFailed => _ss.loadFailed;
+
+  /// Lo último no se ha podido guardar (sin sitio en el móvil, casi siempre):
+  /// la pantalla lo avisa hasta que se pueda.
+  bool get sessionSaveFailed => _ss.saveFailed;
+  bool get sessionSaveNoSpace => _ss.saveNoSpace;
 
   /// Se puede cambiar de sesión (no mientras se graba ni se abre otra).
   bool get canSwitchSession => !_ss.loading && !recordingNow;
@@ -107,7 +117,8 @@ extension SessionControl on EngineController {
         return;
       }
     }
-    if (++ss.ticks % 15 != 0) return;
+    // Cada medio segundo; si no se ha podido guardar, cada 5
+    if (++ss.ticks % (ss.saveFailed ? 150 : 15) != 0) return;
     _autosave();
   }
 
@@ -209,12 +220,24 @@ extension SessionControl on EngineController {
         ss.savedContent = content;
         ss.savedHashes = hashes;
         if (firstTime) unawaited(refreshSessions());
-      } on Object {
-        // No se ha podido (sin sitio…): se reintenta en el siguiente
+        _setSaveFailed(null);
+      } on Object catch (e) {
+        // No se ha podido (sin sitio…): se avisa y se reintenta
+        _setSaveFailed(e);
       } finally {
         ss.saving = false;
       }
     }());
+  }
+
+  void _setSaveFailed(Object? error) {
+    final ss = _ss;
+    final failed = error != null;
+    final noSpace = failed && isNoSpace(error);
+    if (failed == ss.saveFailed && noSpace == ss.saveNoSpace) return;
+    ss.saveFailed = failed;
+    ss.saveNoSpace = noSpace;
+    notifyListeners();
   }
 
   Future<void> _waitSaved() async {

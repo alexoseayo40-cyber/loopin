@@ -1,4 +1,4 @@
-// Loopin — «Copiar resultados»: resumen para pegar en el plan del proyecto
+// Loopin — «Copiar resultados»: resumen para pegar en una incidencia o en el plan
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:loopin_engine/loopin_engine.dart';
 
@@ -24,7 +24,7 @@ extension EngineReport on EngineController {
     String mode(bool exclusive) => exclusive ? tr.exclusiveMode : tr.sharedMode;
     String low(bool on) => on ? tr.lowLatency : r.normalLatency;
     return [
-      tr.reportTitle,
+      tr.reportTitle(appVersion),
       r.phone(
         '${deviceInfo['model'] ?? '—'}',
         '${deviceInfo['android'] ?? '—'}',

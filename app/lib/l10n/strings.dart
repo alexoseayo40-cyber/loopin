@@ -510,6 +510,9 @@ class Strings {
 
   String get pedal => 'Botón principal';
   String pedalSemantics(String title, String subtitle) => 'Botón principal. $title. $subtitle';
+  String get pedalTapHint => 'pulsar';
+  String get pedalHoldHint => 'deshacer lo último';
+  String get pedalDoubleAction => 'Parar o arrancar (doble toque)';
 
   String get ready => 'LISTO';
   String readyOnSound(int track) =>
@@ -601,6 +604,23 @@ class Strings {
   }
 
   String sessionsOpenSemantics(String name) => 'Sesiones. Abierta: $name';
+
+  /// No se ha podido guardar la sesión (casi siempre, el móvil está lleno).
+  String saveFailedLine(bool noSpace) =>
+      noSpace ? 'No se puede guardar: falta espacio en el móvil' : 'No se puede guardar la sesión';
+  String get saveFailedSemantics => 'Sin guardar';
+  String saveFailedBody(bool noSpace) => noSpace
+      ? 'El móvil está lleno y lo último que has grabado no se ha guardado. Loopin lo '
+            'vuelve a intentar solo. Libera espacio (fotos, vídeos, otras apps) o exporta '
+            'la mezcla para no perderla.'
+      : 'Lo último que has grabado no se ha guardado. Loopin lo vuelve a intentar solo. '
+            'Mientras tanto, exporta la mezcla para no perderla.';
+  String get saveFailedExitTitle => 'Sin guardar';
+  String get saveFailedExitBody =>
+      'Lo último no se ha podido guardar (falta espacio). Si sales, se perderá. '
+      'Libera espacio o exporta antes.';
+  String get saveFailedExit => 'Salir igualmente';
+  String get saveFailedStay => 'Seguir';
   String get sessionsTitle => 'Sesiones';
   String get sessionsHow => 'Se guardan solas';
   String get sessionsHelp =>
@@ -710,6 +730,35 @@ class Strings {
   // ---------------------------------------------------------------- guía de la primera vez
 
   String get helpSection => 'Ayuda';
+
+  // ---------------------------------------------------------------- acerca de
+
+  String get aboutOpen => 'Acerca de Loopin';
+  String aboutOpenLine(String version) =>
+      version.isEmpty ? 'Licencia, código y privacidad' : 'Versión $version · licencia y código';
+  String get aboutTitle => 'Acerca de';
+  String get aboutTagline => 'Looper de guitarra libre para Android';
+  String aboutVersion(String version) => 'Versión $version';
+  String get aboutLicenseTitle => 'Software libre';
+  String get aboutLicenseLine =>
+      'GPL-3.0 o posterior: puedes usarlo, estudiarlo, compartirlo y mejorarlo.';
+  String get aboutPrivacyTitle => 'Privacidad';
+  String get aboutPrivacyLine =>
+      'Sin anuncios, sin cuentas y sin internet: la app no tiene permiso para usarlo. '
+      'Solo pide el micrófono, para grabarte, y todo se queda en el móvil.';
+  String get aboutSource => 'Ver el código';
+  String get aboutSourceLine => 'En GitHub';
+  String get aboutReport => 'Informar de un problema';
+  String get aboutReportLine =>
+      'Abre GitHub. Pega lo de «Copiar resultados» (Audio y latencia): dice qué móvil y '
+      'qué audio tienes.';
+  String get aboutReportCopy => 'Copiar resultados y abrir';
+  String get aboutReportCopied => 'Resultados copiados: pégalos en la incidencia';
+  String get aboutLicenses => 'Licencias de terceros';
+  String get aboutLicensesLine =>
+      'Oboe, SoundTouch, dr_libs, las tipografías, los sonidos de la batería y Flutter';
+  String get aboutNoBrowser => 'No se ha podido abrir el navegador';
+  String get aboutLegalese => '© 2026 Alex y colaboradores · GPL-3.0 o posterior';
   String get tutorialOpen => 'Ver la guía';
   String get tutorialOpenLine => 'El pulsador, el tempo, la latencia y las sesiones';
   String get tutorialSkip => 'Saltar';
@@ -1014,7 +1063,8 @@ class Strings {
 
   // ---------------------------------------------------------------- informe («Copiar resultados»)
 
-  String get reportTitle => 'Loopin · Etapa 6';
+  /// «Loopin 1.0.0 (1)»
+  String reportTitle(String version) => version.isEmpty ? 'Loopin' : 'Loopin $version';
   ReportStrings get report => const ReportStrings();
   String loopStateName(LoopState st) => switch (st) {
     LoopState.empty => 'vacío',

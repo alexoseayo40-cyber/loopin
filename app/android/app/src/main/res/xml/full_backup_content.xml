@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Loopin — copia de seguridad (Android 8 a 11)
+     SPDX-License-Identifier: GPL-3.0-or-later
+
+     Hasta Android 11 las mismas reglas valen para la nube y para pasar a otro
+     móvil, y la nube tiene un tope de 25 MB: solo los ajustes (y las latencias
+     medidas). Las sesiones se pasan exportándolas. -->
+<full-backup-content>
+    <include domain="sharedpref" path="loopin.xml" />
+</full-backup-content>

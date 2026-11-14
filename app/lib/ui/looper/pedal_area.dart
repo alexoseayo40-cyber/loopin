@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:loopin_engine/loopin_engine.dart';
 
-import '../../engine/engine_controller.dart' show RecordDuck;
+import '../../engine/engine_controller.dart';
 import '../../l10n/strings.dart';
 import '../pedal_widgets.dart';
 import '../theme.dart';
@@ -205,13 +205,28 @@ class PedalArea extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 2),
-            Text(
-              look.subtitle,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 14, height: 1.25, color: p.dim),
-            ),
+            // Si no se ha podido guardar (falta espacio), lo dice aquí cuando
+            // no se graba; tocarlo lleva a Sesiones (con Exportar)
+            if (c.sessionSaveFailed && !c.recordingNow)
+              InkWell(
+                key: const ValueKey('pedal-save-failed'),
+                onTap: view.onSessions,
+                child: Text(
+                  '⚠ ${tr.saveFailedLine(c.sessionSaveNoSpace)}',
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 14, height: 1.25, color: LoopinPalette.dub),
+                ),
+              )
+            else
+              Text(
+                look.subtitle,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 14, height: 1.25, color: p.dim),
+              ),
           ],
         );
       },

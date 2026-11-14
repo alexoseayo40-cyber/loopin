@@ -115,6 +115,44 @@ class _SessionsScreenState extends State<SessionsScreen> {
                 padding: const EdgeInsets.only(bottom: 24),
                 children: [
                   if (c.sessionLoading) const LinearProgressIndicator(),
+                  if (c.sessionSaveFailed)
+                    Card(
+                      key: const ValueKey('save-failed'),
+                      margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                      color: theme.colorScheme.errorContainer,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.warning_amber_rounded,
+                                  color: theme.colorScheme.onErrorContainer,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    tr.saveFailedLine(c.sessionSaveNoSpace),
+                                    style: theme.textTheme.titleSmall?.copyWith(
+                                      color: theme.colorScheme.onErrorContainer,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              tr.saveFailedBody(c.sessionSaveNoSpace),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onErrorContainer,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   SectionTitle(
                     tr.sessionsHow,
                     help: tr.sessionsHelp,

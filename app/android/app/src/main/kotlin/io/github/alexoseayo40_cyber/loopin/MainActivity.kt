@@ -60,6 +60,11 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "requestMicrophone" -> requestMicrophone(result)
                     "audioInfo" -> result.success(audioInfo())
+                    // La versión de la app («1.0.0» y 1), para «Acerca de» y el informe
+                    "appVersion" -> result.success(appVersion())
+                    // Abrir el código o una incidencia en el navegador (la app no
+                    // tiene permiso de internet: lo abre el navegador)
+                    "openUrl" -> result.success(openUrl(call.argument<String>("url") ?: ""))
                     "audioDevices" -> result.success(audioDevices())
                     // Audio importado: carpeta de las canciones y elegir una
                     "songsDir" -> result.success(songsDir().absolutePath)
@@ -307,6 +312,32 @@ class MainActivity : FlutterActivity() {
             "lowLatency" to packageManager.hasSystemFeature(PackageManager.FEATURE_AUDIO_LOW_LATENCY),
             "proAudio" to packageManager.hasSystemFeature(PackageManager.FEATURE_AUDIO_PRO),
         )
+    }
+
+    private fun openUrl(url: String): Boolean {
+        if (!url.startsWith("https://")) return false
+        return try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            true
+        } catch (e: Exception) {
+            false // sin navegador
+        }
+    }
+
+    private fun appVersion(): Map<String, Any> {
+        val info = if (Build.VERSION.SDK_INT >= 33) {
+            packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(packageName, 0)
+        }
+        val code = if (Build.VERSION.SDK_INT >= 28) {
+            info.longVersionCode
+        } else {
+            @Suppress("DEPRECATION")
+            info.versionCode.toLong()
+        }
+        return mapOf("name" to (info.versionName ?: ""), "code" to code)
     }
 
     // Entradas y salidas de audio conectadas. El id es el que usa Oboe.

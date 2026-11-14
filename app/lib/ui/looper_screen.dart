@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../engine/engine_controller.dart';
+import '../l10n/strings.dart';
 import 'audio_settings_screen.dart';
 import 'looper/bottom_bar.dart';
 import 'looper/accompaniment_row.dart';
@@ -84,6 +85,36 @@ class _LooperScreenState extends State<LooperScreen> {
         .push(MaterialPageRoute<void>(builder: (_) => TunerScreen(controller: widget.controller)));
   }
 
+  /// «Atrás» con lo último sin guardar (falta espacio): se pregunta antes de
+  /// salir de la app.
+  Future<void> _confirmExit() async {
+    final exit = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(tr.saveFailedExitTitle),
+        content: Text(tr.saveFailedExitBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(tr.saveFailedExit),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(false);
+              _openSessions();
+            },
+            child: Text(tr.exportButton),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(tr.saveFailedStay),
+          ),
+        ],
+      ),
+    );
+    if (exit == true) await SystemNavigator.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = widget.controller;
@@ -95,57 +126,72 @@ class _LooperScreenState extends State<LooperScreen> {
         statusBarColor: Colors.transparent,
         systemNavigationBarColor: palette.chassis,
       ),
-      child: Scaffold(
-        backgroundColor: palette.chassis,
-        body: SafeArea(
-          child: ListenableBuilder(
-            listenable: c,
-            builder: (context, _) {
-              return LayoutBuilder(
-                builder: (context, box) {
-                  final view = LooperView(
-                    controller: c,
-                    palette: palette,
-                    onSettings: _openSettings,
-                    onLatency: _openLatency,
-                    onTuner: _openTuner,
-                    onSessions: _openSessions,
-                    onStage: _openStage,
-                  );
-                  // Apaisado (móvil tumbado o tablet): dos columnas
-                  final wide = box.maxWidth >= 520 && box.maxWidth > box.maxHeight * 1.15;
-                  // Con sitio de sobra (tablet) se ven los controles de las 4 pistas
-                  final roomy = math.min(box.maxWidth, box.maxHeight) >= 560;
-                  if (wide) return _WideLayout(view: view, box: box, mixer: roomy);
-                  // Tablet en vertical: la pantalla del móvil, más grande (letra
-                  // y piezas). Con los controles de una pista, como en el móvil:
-                  // con los de las 4 el pulsador se quedaría pequeño
-                  final scale = tabletScale(box);
-                  if (scale > 1) {
-                    final virtual = BoxConstraints.tight(
-                      Size(box.maxWidth / scale, box.maxHeight / scale),
+      child: ListenableBuilder(
+        listenable: c,
+        builder: (context, child) => PopScope(
+          canPop: !c.sessionSaveFailed,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop) _confirmExit();
+          },
+          // La cara del pedal no se desplaza: con la letra del sistema muy
+          // grande se desbordaría. Hasta 1,3× (las demás pantallas desplazan)
+          child: MediaQuery.withClampedTextScaling(
+            maxScaleFactor: kPedalMaxTextScale,
+            child: child!,
+          ),
+        ),
+        child: Scaffold(
+          backgroundColor: palette.chassis,
+          body: SafeArea(
+            child: ListenableBuilder(
+              listenable: c,
+              builder: (context, _) {
+                return LayoutBuilder(
+                  builder: (context, box) {
+                    final view = LooperView(
+                      controller: c,
+                      palette: palette,
+                      onSettings: _openSettings,
+                      onLatency: _openLatency,
+                      onTuner: _openTuner,
+                      onSessions: _openSessions,
+                      onStage: _openStage,
                     );
-                    return SizedBox(
-                      width: box.maxWidth,
-                      height: box.maxHeight,
-                      child: FittedBox(
-                        fit: BoxFit.contain,
-                        alignment: Alignment.topCenter,
-                        child: SizedBox(
-                          width: virtual.maxWidth,
-                          height: virtual.maxHeight,
-                          child: MediaQuery(
-                            data: MediaQuery.of(context).copyWith(size: virtual.biggest),
-                            child: _TallLayout(view: view, box: virtual, mixer: false),
+                    // Apaisado (móvil tumbado o tablet): dos columnas
+                    final wide = box.maxWidth >= 520 && box.maxWidth > box.maxHeight * 1.15;
+                    // Con sitio de sobra (tablet) se ven los controles de las 4 pistas
+                    final roomy = math.min(box.maxWidth, box.maxHeight) >= 560;
+                    if (wide) return _WideLayout(view: view, box: box, mixer: roomy);
+                    // Tablet en vertical: la pantalla del móvil, más grande (letra
+                    // y piezas). Con los controles de una pista, como en el móvil:
+                    // con los de las 4 el pulsador se quedaría pequeño
+                    final scale = tabletScale(box);
+                    if (scale > 1) {
+                      final virtual = BoxConstraints.tight(
+                        Size(box.maxWidth / scale, box.maxHeight / scale),
+                      );
+                      return SizedBox(
+                        width: box.maxWidth,
+                        height: box.maxHeight,
+                        child: FittedBox(
+                          fit: BoxFit.contain,
+                          alignment: Alignment.topCenter,
+                          child: SizedBox(
+                            width: virtual.maxWidth,
+                            height: virtual.maxHeight,
+                            child: MediaQuery(
+                              data: MediaQuery.of(context).copyWith(size: virtual.biggest),
+                              child: _TallLayout(view: view, box: virtual, mixer: false),
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  }
-                  return _TallLayout(view: view, box: box, mixer: roomy);
-                },
-              );
-            },
+                      );
+                    }
+                    return _TallLayout(view: view, box: box, mixer: roomy);
+                  },
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -155,6 +201,10 @@ class _LooperScreenState extends State<LooperScreen> {
 
 // ---------------------------------------------------------------------------
 // Disposición
+
+/// Tope del tamaño de letra del sistema en la cara del pedal y en el modo
+/// escenario (no se desplazan).
+const double kPedalMaxTextScale = 1.3;
 
 /// En una tablet en vertical, cuánto se agranda todo: la pantalla del móvil
 /// (una columna de unos 640 × 1000) estirada hasta llenarla. 1 = nada.

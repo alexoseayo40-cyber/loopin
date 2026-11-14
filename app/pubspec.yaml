@@ -56,9 +56,13 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # Sonidos de la batería (CC0, ver assets/drums/LICENSE.md)
+  # Sonidos de la batería (CC0, ver assets/drums/LICENSE.md) y licencias de
+  # lo que va dentro de la app (Ajustes › Ayuda › Acerca de)
   assets:
     - assets/drums/
+    - assets/licenses/
+    - assets/fonts/OFL-barlowcondensed.txt
+    - assets/fonts/OFL-sharetechmono.txt
 
   # Tipografías libres (SIL Open Font License, ver assets/fonts/OFL-*.txt)
   fonts:

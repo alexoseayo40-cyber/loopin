@@ -384,7 +384,9 @@ void main() {
     expect(engine.calls, contains('meter 7 20'));
     expect(find.text('7/8 2+2+3'), findsOneWidget);
 
-    await pick('Clic: hasta grabar', find.text('Clic: solo visual'));
+    // El clic: un toque pasa al siguiente (hasta grabar → apagado → siempre)
+    await tester.tap(find.byTooltip('Clic: hasta grabar'));
+    await tester.pump();
     expect(c.clickMode, ClickMode.silent);
     expect(engine.calls, contains('click silent'));
 
@@ -398,6 +400,7 @@ void main() {
     // Empezar al tocar: botón aparte, un toque
     await tester.tap(find.byKey(const ValueKey('on-sound-toggle')));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500)); // se va el aviso del clic
     expect(c.startOnSound, isTrue);
     expect(engine.calls, contains('onSound true'));
     expect(find.textContaining('Toca y empieza a tocar'), findsOneWidget);
@@ -408,6 +411,12 @@ void main() {
     expect(find.byTooltip('Compases que graba'), findsNothing);
     expect(find.text('LIBRE: EL TEMPO SALDRÁ DEL LOOP'), findsOneWidget);
     expect(find.text('TAP · TOCA AL RITMO'), findsNothing);
+    // En libre el clic no suena: el botón lo explica y no cambia nada
+    await tester.tap(find.byKey(const ValueKey('click-toggle')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(c.clickMode, ClickMode.silent);
+    expect(find.text('En libre no suena el clic: el tempo saldrá del loop'), findsWidgets);
 
     // Esperando a que suene la guitarra
     engine.next = fakeStatus(LoopState.armed, playing: false, waiting: true);

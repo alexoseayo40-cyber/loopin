@@ -220,6 +220,13 @@ class Session {
   };
 }
 
+/// El error es por falta de espacio en el móvil (ENOSPC, 28 en Linux y
+/// Android).
+bool isNoSpace(Object error) =>
+    error is FileSystemException &&
+    (error.osError?.errorCode == 28 ||
+        (error.osError?.message.toLowerCase().contains('no space') ?? false));
+
 /// Las sesiones guardadas: una carpeta por sesión dentro de [dir].
 class SessionLibrary {
   SessionLibrary({Future<String?> Function()? folder}) : _folder = folder ?? _androidFolder;

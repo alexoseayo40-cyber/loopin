@@ -1,11 +1,14 @@
 // Loopin — piezas del pedal: anillos de luz, pulsador y LEDs
 // SPDX-License-Identifier: GPL-3.0-or-later
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/semantics.dart';
 
-import '../engine/engine_controller.dart' show BeatNow;
+import '../engine/engine_controller.dart' show BeatNow, EngineController;
+import '../l10n/strings.dart';
 import 'theme.dart';
 
 /// Redibuja lo que hay dentro en cada fotograma mientras [active] (el
@@ -166,6 +169,53 @@ class RingPainter extends CustomPainter {
       old.outline != outline;
 }
 
+/// Lo que dice y hace el pulsador con TalkBack, que no da toques sueltos:
+/// tocar dos veces = un toque del pulsador; mantener (tocar dos veces y
+/// mantener) = deshacer; y en las acciones, «Parar o arrancar» = doble toque.
+/// Cada una hace lo mismo que con el dedo (pulsar y soltar).
+class PedalSemantics extends StatelessWidget {
+  const PedalSemantics({
+    super.key,
+    required this.label,
+    required this.onDown,
+    required this.onUp,
+    required this.child,
+  });
+
+  final String label;
+  final VoidCallback onDown;
+  final VoidCallback onUp;
+  final Widget child;
+
+  void _tap() {
+    onDown();
+    onUp();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      onTap: _tap,
+      onTapHint: tr.pedalTapHint,
+      onLongPress: () {
+        onDown();
+        // Se suelta cuando el controlador ya lo ha contado como «mantener»
+        Timer(EngineController.holdDelay + const Duration(milliseconds: 50), onUp);
+      },
+      onLongPressHint: tr.pedalHoldHint,
+      customSemanticsActions: {
+        CustomSemanticsAction(label: tr.pedalDoubleAction): () {
+          _tap();
+          _tap();
+        },
+      },
+      child: child,
+    );
+  }
+}
+
 /// El pulsador grande con su anillo de luz. Actúa al pulsar, no al soltar.
 class Footswitch extends StatefulWidget {
   const Footswitch({
@@ -216,9 +266,10 @@ class _FootswitchState extends State<Footswitch> {
   Widget build(BuildContext context) {
     final palette = LoopinPalette.of(context);
     final size = widget.size;
-    return Semantics(
-      button: true,
+    return PedalSemantics(
       label: widget.semanticLabel,
+      onDown: widget.onDown,
+      onUp: widget.onUp,
       child: Listener(
         onPointerDown: (_) {
           _set(true);

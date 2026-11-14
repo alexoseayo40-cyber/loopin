@@ -580,4 +580,78 @@ void main() {
     expect(tabletTitle, greaterThan(phoneTitle * 1.2));
     expect(tabletPedal, greaterThan(380));
   });
+
+  testWidgets('sin sitio: se avisa (pulsador, cabecera, Sesiones y al salir) y se reintenta', (
+    tester,
+  ) async {
+    setScreen(tester, const Size(393, 873));
+    mockPlatform({'playMode': 'advanced'});
+    final lib = _FullLibrary();
+    final engine = FakeEngine()
+      ..next = fakeStatus(LoopState.playing, revision: 2)
+      ..trackData = [_signal(4 * _bar, 1), _signal(4 * _bar, 2), _signal(8 * _bar, 3), null];
+    final c = EngineController(engine: engine, sessions: lib);
+    await c.startAudio();
+    await tester.pumpWidget(_app(LooperScreen(controller: c)));
+    await tester.pump(const Duration(milliseconds: 800));
+    expect(lib.tries, greaterThan(0));
+    expect(c.sessionSaveFailed, isTrue);
+    expect(c.sessionSaveNoSpace, isTrue);
+    final line = tr.saveFailedLine(true);
+    expect(find.text('⚠ $line'), findsOneWidget);
+    expect(find.byIcon(Icons.warning_amber_rounded), findsWidgets); // en la cabecera
+    // Se reintenta cada 5 s (no cada medio segundo)
+    final tries = lib.tries;
+    await tester.pump(const Duration(seconds: 2));
+    expect(lib.tries, tries);
+
+    // «Atrás» pregunta antes de salir
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(find.text(tr.saveFailedExitBody), findsOneWidget);
+    await tester.tap(find.text(tr.saveFailedStay));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // Tocar el aviso lleva a Sesiones, con la explicación
+    await tester.tap(find.byKey(const ValueKey('pedal-save-failed')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byKey(const ValueKey('save-failed')), findsOneWidget);
+    expect(find.text(tr.saveFailedBody(true)), findsOneWidget);
+
+    // Con sitio otra vez, se guarda solo y el aviso se va
+    lib.full = false;
+    await tester.pump(const Duration(seconds: 6));
+    expect(c.sessionSaveFailed, isFalse);
+    expect(find.byKey(const ValueKey('save-failed')), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    c.stopAudio();
+    await tester.pump(const Duration(milliseconds: 400));
+    c.dispose();
+  });
+}
+
+/// Una biblioteca con el móvil lleno: escribir falla (sin tocar el disco).
+class _FullLibrary extends SessionLibrary {
+  _FullLibrary() : super(folder: () async => null);
+
+  bool full = true;
+  int tries = 0;
+
+  static const _error = FileSystemException(
+    'Cannot write',
+    'pista1.wav',
+    OSError('No space left on device', 28),
+  );
+
+  @override
+  Future<void> writeTrack(String id, int track, Float32List samples, int sampleRate) async {
+    tries++;
+    if (full) throw _error;
+  }
+
+  @override
+  Future<void> writeJson(Session s) async {
+    if (full) throw _error;
+  }
 }

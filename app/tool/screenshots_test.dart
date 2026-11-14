@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:loopin/engine/engine_controller.dart';
+import 'package:loopin/ui/about_screen.dart';
 import 'package:loopin/ui/audio_settings_screen.dart';
 import 'package:loopin/ui/looper_screen.dart';
 import 'package:loopin/engine/songs.dart';
@@ -121,6 +122,8 @@ void main() {
     int stopping = 0,
     TunerReading? tuner,
     Future<void> Function(WidgetTester t, EngineController c)? after,
+    // Con la latencia medida no sale el aviso de arriba (como lo verá casi todo el mundo)
+    bool measured = true,
   }) async {
     setScreen(tester, size, pixelRatio: 2);
     final engine = FakeEngine()
@@ -149,6 +152,13 @@ void main() {
       ),
     );
     await c.startAudio();
+    if (measured) {
+      final st = engine.next;
+      engine.next = fakeStatus(LoopState.empty);
+      await tester.pump(const Duration(milliseconds: 50));
+      c.setLatencyManually(86);
+      engine.next = st;
+    }
     if (song) {
       await tester.pump(const Duration(milliseconds: 50));
       c.selectSong(_songs.first);
@@ -266,7 +276,7 @@ void main() {
   );
   testWidgets(
     'vertical vacío',
-    (t) => shot(t, 'movil-oscuro-vacio', phone, state: LoopState.empty),
+    (t) => shot(t, 'movil-oscuro-vacio', phone, state: LoopState.empty, measured: false),
   );
   testWidgets(
     'vertical claro',
@@ -423,6 +433,17 @@ void main() {
     ),
   );
   testWidgets('audio', (t) => shot(t, 'audio-y-latencia', const Size(393, 1700), audio: true));
+  // Etapa 7a
+  testWidgets(
+    'acerca de',
+    (t) => shot(
+      t,
+      'acerca-de',
+      phone,
+      state: LoopState.playing,
+      home: (c) => AboutScreen(controller: c),
+    ),
+  );
   // Etapa 6
   testWidgets(
     'sesiones',

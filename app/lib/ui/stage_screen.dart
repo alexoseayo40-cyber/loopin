@@ -13,6 +13,7 @@ import 'looper/pedal_area.dart';
 import 'looper/tempo_display.dart';
 import 'looper/tracks.dart';
 import 'looper/view.dart';
+import 'looper_screen.dart' show kPedalMaxTextScale;
 import 'pedal_widgets.dart';
 import 'theme.dart';
 
@@ -67,144 +68,155 @@ class _StageScreenState extends State<StageScreen> {
       onLatency: () {},
       onTuner: () {},
     );
-    return Scaffold(
-      backgroundColor: LoopinPalette.well,
-      body: ListenableBuilder(
-        listenable: Listenable.merge([c, c.live]),
-        builder: (context, _) {
-          final s = c.status;
-          final look = pedalLook(
-            s,
-            mode: c.loopMode,
-            startOnSound: c.startOnSound,
-            duck: c.speakerRoute ? c.recordDuck : RecordDuck.normal,
-          );
-          final color = look.color ?? LoopinPalette.ledOff;
-          return SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Arriba, fuera del pulsador: salir (manteniendo), tempo y pistas
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                  child: Row(
-                    children: [
-                      _ExitButton(onExit: () => Navigator.of(context).maybePop()),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                            tr.stageTempo(tr.bpmNumber(s.bpm), c.timeSignature.label),
-                            style: palette.label(size: 20, color: LoopinPalette.display),
+    // No se desplaza: la letra del sistema, como mucho 1,3× (como el looper)
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: kPedalMaxTextScale,
+      child: Scaffold(
+        backgroundColor: LoopinPalette.well,
+        body: ListenableBuilder(
+          listenable: Listenable.merge([c, c.live]),
+          builder: (context, _) {
+            final s = c.status;
+            final look = pedalLook(
+              s,
+              mode: c.loopMode,
+              startOnSound: c.startOnSound,
+              duck: c.speakerRoute ? c.recordDuck : RecordDuck.normal,
+            );
+            final color = look.color ?? LoopinPalette.ledOff;
+            return SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Arriba, fuera del pulsador: salir (manteniendo), tempo y pistas
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                    child: Row(
+                      children: [
+                        // Con letra grande se encoge (no se parte ni se corta)
+                        Flexible(
+                          child: _ExitButton(onExit: () => Navigator.of(context).maybePop()),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              tr.stageTempo(tr.bpmNumber(s.bpm), c.timeSignature.label),
+                              style: palette.label(size: 20, color: LoopinPalette.display),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: TrackRings(view: view, maxSize: 64),
-                ),
-                Expanded(
-                  child: Listener(
-                    key: const ValueKey('stage-pedal'),
-                    behavior: HitTestBehavior.opaque,
-                    onPointerDown: _down,
-                    onPointerUp: _up,
-                    onPointerCancel: _up,
-                    child: BeatBuilder(
-                      active: s.playing,
-                      beatNow: c.beatNow,
-                      builder: (context, now) {
-                        final flash = now == null ? 0.0 : (1 - now.phase / 0.3).clamp(0.0, 1.0);
-                        final pulse = now != null && now.beat == 0
-                            ? LoopinPalette.rec
-                            : LoopinPalette.display;
-                        return Semantics(
-                          button: true,
-                          label: tr.pedalSemantics(look.title, look.subtitle),
-                          child: Container(
-                            margin: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Color.lerp(LoopinPalette.groove, color, 0.28),
-                              borderRadius: BorderRadius.circular(28),
-                              border: Border.all(
-                                color: Color.lerp(color, pulse, flash * 0.9)!,
-                                width: 6 + 10 * flash,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: TrackRings(view: view, maxSize: 64),
+                  ),
+                  Expanded(
+                    child: Listener(
+                      key: const ValueKey('stage-pedal'),
+                      behavior: HitTestBehavior.opaque,
+                      onPointerDown: _down,
+                      onPointerUp: _up,
+                      onPointerCancel: _up,
+                      child: BeatBuilder(
+                        active: s.playing,
+                        beatNow: c.beatNow,
+                        builder: (context, now) {
+                          final flash = now == null ? 0.0 : (1 - now.phase / 0.3).clamp(0.0, 1.0);
+                          final pulse = now != null && now.beat == 0
+                              ? LoopinPalette.rec
+                              : LoopinPalette.display;
+                          return PedalSemantics(
+                            label: tr.pedalSemantics(look.title, look.subtitle),
+                            onDown: c.pedalDown,
+                            onUp: c.pedalUp,
+                            child: Container(
+                              margin: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Color.lerp(LoopinPalette.groove, color, 0.28),
+                                borderRadius: BorderRadius.circular(28),
+                                border: Border.all(
+                                  color: Color.lerp(color, pulse, flash * 0.9)!,
+                                  width: 6 + 10 * flash,
+                                ),
                               ),
-                            ),
-                            padding: const EdgeInsets.all(16),
-                            // Si no cabe (apaisado, móvil pequeño), todo se
-                            // encoge a la vez
-                            child: LayoutBuilder(
-                              builder: (context, box) => FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: SizedBox(
-                                  width: box.maxWidth,
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        child: Text(
-                                          look.text ?? look.title,
-                                          maxLines: 1,
-                                          key: const ValueKey('stage-title'),
-                                          textAlign: TextAlign.center,
-                                          style: palette.label(
-                                            size: look.text != null ? 160 : 64,
-                                            color: color == LoopinPalette.ledOff
-                                                ? LoopinPalette.count
-                                                : color,
-                                            spacing: 3,
+                              padding: const EdgeInsets.all(16),
+                              // Si no cabe (apaisado, móvil pequeño), todo se
+                              // encoge a la vez
+                              child: LayoutBuilder(
+                                builder: (context, box) => FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: SizedBox(
+                                    width: box.maxWidth,
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          child: Text(
+                                            look.text ?? look.title,
+                                            maxLines: 1,
+                                            key: const ValueKey('stage-title'),
+                                            textAlign: TextAlign.center,
+                                            style: palette.label(
+                                              size: look.text != null ? 160 : 64,
+                                              color: color == LoopinPalette.ledOff
+                                                  ? LoopinPalette.count
+                                                  : color,
+                                              spacing: 3,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        look.subtitle,
-                                        textAlign: TextAlign.center,
-                                        maxLines: 2,
-                                        style: const TextStyle(
-                                          fontSize: 22,
-                                          height: 1.25,
-                                          color: Colors.white70,
+                                        const SizedBox(height: 12),
+                                        Text(
+                                          look.subtitle,
+                                          textAlign: TextAlign.center,
+                                          maxLines: 2,
+                                          style: const TextStyle(
+                                            fontSize: 22,
+                                            height: 1.25,
+                                            color: Colors.white70,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 24),
-                                      SizedBox(
-                                        width: 320,
-                                        child: BeatBar(
-                                          signature: c.timeSignature,
-                                          beats: s.beatsPerBar,
-                                          now: now,
-                                          height: 22,
+                                        const SizedBox(height: 24),
+                                        SizedBox(
+                                          width: 320,
+                                          child: BeatBar(
+                                            signature: c.timeSignature,
+                                            beats: s.beatsPerBar,
+                                            now: now,
+                                            height: 22,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 18),
-                                      Text(
-                                        tr.stageGestures,
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(fontSize: 14, color: Colors.white54),
-                                      ),
-                                    ],
+                                        const SizedBox(height: 18),
+                                        Text(
+                                          tr.stageGestures,
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.white54,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                        );
-                      },
+                          );
+                        },
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-          );
-        },
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -257,9 +269,13 @@ class _ExitButtonState extends State<_ExitButton> with SingleTickerProviderState
                 stops: [0, _hold.value, _hold.value, 1],
               ),
             ),
-            child: Text(
-              tr.stageExitHold,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                tr.stageExitHold,
+                maxLines: 1,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+              ),
             ),
           ),
         ),
