@@ -349,7 +349,7 @@ extension SessionControl on EngineController {
       trackVolumes[i] = t?.volume ?? 1.0;
       _engine.setTrackVolume(i, trackVolumes[i]);
       _engine.setTrackMuted(i, t?.muted ?? false);
-      if (t != null && !simple) {
+      if (t != null && trackFxShown) {
         // Con todo parado se aplican al momento
         if (t.reverse) _engine.setTrackReverse(i, true);
         if (t.half) _engine.setTrackHalf(i, true);

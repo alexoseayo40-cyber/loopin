@@ -135,6 +135,7 @@ void main() {
     if (song || home != null) engine.next = _songStatus(engine.next, playing: song);
     final c = EngineController(engine: engine, songs: SongLibrary.memory(_songs))
       ..setPlayMode(mode);
+    if (fx) c.setTrackFx(true);
     final base = buildLoopinTheme(chassis, brightness);
     await tester.pumpWidget(
       MaterialApp(

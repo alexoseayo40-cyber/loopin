@@ -13,10 +13,24 @@ extension LiveControl on EngineController {
 
   // ---------- Pistas ----------
 
-  /// Reverse y media velocidad: solo en avanzado, en pistas con loop y no en
-  /// la que se está grabando.
+  /// Ajustes › «Efectos de pista» (REV y ½), apagado de serie.
+  bool get trackFx => _ls.trackFx;
+
+  /// Se ven los botones REV y ½: en avanzado y con el ajuste encendido.
+  bool get trackFxShown => !simple && _ls.trackFx;
+
+  /// Al apagarlo se quitan los que hubiera puestos (si no, sonarían sin verse).
+  void setTrackFx(bool on) {
+    _ls.trackFx = on;
+    _prefs.setBool(Prefs.trackFx, on);
+    if (!on) _clearTrackFx();
+    notifyListeners();
+  }
+
+  /// Reverse y media velocidad: solo si se ven, en pistas con loop y no en la
+  /// que se está grabando.
   bool trackFxAvailable(int track) {
-    if (simple || track < 0 || track >= kTrackCount) return false;
+    if (!trackFxShown || track < 0 || track >= kTrackCount) return false;
     final t = status.tracks[track];
     return t.hasLoop && !(recordingNow && status.activeTrack == track);
   }
@@ -33,8 +47,8 @@ extension LiveControl on EngineController {
     HapticFeedback.selectionClick();
   }
 
-  /// Quita reverse y media velocidad de todas las pistas (al pasar a simple,
-  /// donde no se ven).
+  /// Quita reverse y media velocidad de todas las pistas (al pasar a simple o
+  /// al apagar «Efectos de pista»: donde no se ven).
   void _clearTrackFx() {
     for (var i = 0; i < kTrackCount; i++) {
       final t = status.tracks[i];

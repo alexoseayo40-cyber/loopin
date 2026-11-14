@@ -817,6 +817,17 @@ class Strings {
     StopMode.fade => 'Fundido',
   };
 
+  String get trackFxTitle => 'Efectos de pista (REV y ½)';
+  String get trackFxLine => 'Botones para tocar una pista al revés o a media velocidad';
+  String get trackFxHelp =>
+      'Encendido, cada pista tiene dos botones más:\n\n'
+      '• REV: la pista suena al revés (las notas entran creciendo). Para ambientes '
+      'o un solo «hacia atrás».\n'
+      '• ½: suena a media velocidad, una octava más grave. Con un riff en las '
+      'cuerdas graves, hace de bajo.\n\n'
+      'Truco: graba encima con ½ puesto y luego quítalo: lo que tocaste suena el '
+      'doble de rápido y una octava más agudo.\n\n'
+      'Al apagarlo, se quitan de las pistas que los tengan.';
   String get quantizeTitle => 'Cambios de pista en el 1';
   String get quantizeLine => 'Silenciar, REV y ½ esperan al siguiente 1';
   String get quantizeLineSimple => 'Silenciar una pista espera al siguiente 1';

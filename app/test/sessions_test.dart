@@ -261,7 +261,7 @@ void main() {
     await lib.writeTrack(s.id, 0, _signal(2 * 7 * 22050, 1), 44100);
     await lib.writeTrack(s.id, 1, _signal(4 * 7 * 22050, 2), 44100);
 
-    final prefs = <String, String>{'playMode': 'advanced', 'sessionId': 'ultima'};
+    final prefs = <String, String>{'playMode': 'advanced', 'sessionId': 'ultima', 'trackFx': '1'};
     mockPlatform(prefs);
     final engine = FakeEngine()..next = fakeStatus(LoopState.empty, playing: false);
     // El motor la acepta y enseña sus pistas

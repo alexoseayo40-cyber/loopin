@@ -182,7 +182,7 @@ void main() {
   ) async {
     setScreen(tester, const Size(393, 873));
     final engine = FakeEngine()..next = fakeStatus(LoopState.playing, fx: true);
-    final c = await _open(tester, engine, {});
+    final c = await _open(tester, engine, {'trackFx': '1'});
     await tester.pumpWidget(_app(LooperScreen(controller: c)));
     await tester.pump(const Duration(milliseconds: 100));
     // La pista 2 (elegida) va al revés (esperando al 1) y a media velocidad
@@ -208,6 +208,33 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     engine.calls.clear();
     c.setPlayMode(PlayMode.simple);
+    await tester.pump();
+    expect(engine.calls, containsAll(['reverse 0 false', 'reverse 1 false', 'half 1 false']));
+    expect(find.byKey(const ValueKey('reverse-1')), findsNothing);
+    expect(tester.takeException(), isNull);
+    await _close(tester, c);
+  });
+
+  testWidgets('efectos de pista: apagados de serie; al apagarlos se quitan', (tester) async {
+    setScreen(tester, const Size(393, 873));
+    final engine = FakeEngine()..next = fakeStatus(LoopState.playing, fx: true);
+    final prefs = <String, String>{};
+    final c = await _open(tester, engine, prefs);
+    await tester.pumpWidget(_app(LooperScreen(controller: c)));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(c.trackFx, isFalse);
+    expect(find.byKey(const ValueKey('reverse-1')), findsNothing);
+    expect(c.trackFxAvailable(1), isFalse);
+    c.toggleTrackReverse(1);
+    expect(engine.calls, isNot(contains('reverse 1 false')));
+    // Se encienden en Ajustes
+    c.setTrackFx(true);
+    await tester.pump();
+    expect(prefs['trackFx'], '1');
+    expect(find.byKey(const ValueKey('reverse-1')), findsOneWidget);
+    // Al apagarlos, se quitan de las pistas que los tienen
+    engine.calls.clear();
+    c.setTrackFx(false);
     await tester.pump();
     expect(engine.calls, containsAll(['reverse 0 false', 'reverse 1 false', 'half 1 false']));
     expect(find.byKey(const ValueKey('reverse-1')), findsNothing);

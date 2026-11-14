@@ -12,6 +12,10 @@ class LiveSettings {
   /// Silenciar, reverse y media velocidad esperan al siguiente 1.
   bool quantize = true;
 
+  /// Los botones REV y ½ de cada pista se ven (avanzado). Apagado de serie:
+  /// son efectos para jugar con el sonido, no para tocar (Alex, 14/11).
+  bool trackFx = false;
+
   /// Cómo paran el botón de parar y el doble toque.
   StopMode stopMode = StopMode.now;
 
@@ -32,6 +36,7 @@ class LiveSettings {
 
   Future<void> load(Prefs prefs) async {
     quantize = await prefs.getBool(Prefs.quantize) ?? quantize;
+    trackFx = await prefs.getBool(Prefs.trackFx) ?? trackFx;
     final stop = await prefs.get(Prefs.stopMode);
     stopMode = StopMode.values.firstWhere((m) => m.name == stop, orElse: () => stopMode);
     final step = double.tryParse(await prefs.get(Prefs.trainerStep) ?? '');

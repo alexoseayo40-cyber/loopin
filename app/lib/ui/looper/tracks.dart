@@ -195,8 +195,8 @@ class _TrackStrip extends StatelessWidget {
               ),
             ),
           ),
-          // Reverse y media velocidad (solo en avanzado)
-          if (!c.simple) ...[
+          // Reverse y media velocidad (avanzado, con «Efectos de pista»)
+          if (c.trackFxShown) ...[
             _FxToggle(
               key: ValueKey('reverse-$index'),
               text: tr.reverseShort,
