@@ -183,4 +183,41 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     c.dispose();
   });
+
+  testWidgets('el móvil no vibra: ni el pulsador, ni el secundario, ni las pistas', (tester) async {
+    final calls = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (
+      call,
+    ) async {
+      calls.add(call.method);
+      return null;
+    });
+    final engine = FakeEngine()..next = fakeStatus(LoopState.playing, fx: true);
+    final c = EngineController(engine: engine)..setPlayMode(PlayMode.advanced);
+    c.setTrackFx(true);
+    await c.startAudio();
+    await tester.pump(const Duration(milliseconds: 100));
+    // Toque, mantener (deshacer) y doble toque
+    c.pedalDown();
+    c.pedalUp();
+    c.pedalDown();
+    c.pedalUp();
+    c.pedalDown();
+    await tester.pump(const Duration(seconds: 1));
+    c.pedalUp();
+    // El botón secundario (toque y mantener), elegir pista, REV y ½
+    c.secondaryDown();
+    c.secondaryUp();
+    c.secondaryDown();
+    await tester.pump(const Duration(seconds: 1));
+    c.secondaryUp();
+    c.selectTrack(1);
+    c.toggleTrackReverse(0);
+    c.toggleTrackHalf(0);
+    expect(engine.calls, containsAll(['press', 'double', 'hold']));
+    expect(calls.where((m) => m.startsWith('HapticFeedback')), isEmpty);
+    c.stopAudio();
+    await tester.pump(const Duration(milliseconds: 400));
+    c.dispose();
+  });
 }

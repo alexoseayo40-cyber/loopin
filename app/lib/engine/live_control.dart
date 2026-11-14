@@ -38,13 +38,11 @@ extension LiveControl on EngineController {
   void toggleTrackReverse(int track) {
     if (!trackFxAvailable(track)) return;
     _engine.setTrackReverse(track, !status.tracks[track].reverse);
-    HapticFeedback.selectionClick();
   }
 
   void toggleTrackHalf(int track) {
     if (!trackFxAvailable(track)) return;
     _engine.setTrackHalf(track, !status.tracks[track].half);
-    HapticFeedback.selectionClick();
   }
 
   /// Quita reverse y media velocidad de todas las pistas (al pasar a simple o

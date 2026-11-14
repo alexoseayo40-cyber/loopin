@@ -509,7 +509,8 @@ class EngineController extends ChangeNotifier {
   /// El botón principal se ha pulsado. Actúa en el momento de pulsar (no al
   /// soltar) para que la grabación empiece y acabe justo donde toca. Si
   /// luego resulta ser un doble toque o se mantiene, el motor corrige lo que
-  /// hizo este toque.
+  /// hizo este toque. Sin vibración: el micro del móvil la grabaría (al
+  /// cerrar un loop se sigue grabando lo que tarda en volver el sonido).
   void pedalDown() {
     if (!status.running || _sessions.loading) return;
     final now = DateTime.now();
@@ -518,16 +519,13 @@ class EngineController extends ChangeNotifier {
     if (last != null && now.difference(last) < doubleTapWindow) {
       _lastPedalDown = null;
       _engine.loopDoubleTap();
-      HapticFeedback.heavyImpact();
       return;
     }
     _lastPedalDown = now;
     _engine.loopPress();
-    HapticFeedback.lightImpact();
     _holdTimer = Timer(holdDelay, () {
       _engine.loopHold();
       _lastPedalDown = null;
-      HapticFeedback.heavyImpact();
     });
   }
 
@@ -546,7 +544,6 @@ class EngineController extends ChangeNotifier {
     _secondaryTimer = Timer(holdDelay, () {
       _secondaryTimer = null;
       _engine.loopUndo();
-      HapticFeedback.heavyImpact();
     });
   }
 
@@ -556,7 +553,6 @@ class EngineController extends ChangeNotifier {
     timer.cancel();
     _secondaryTimer = null;
     _engine.selectNextTrack();
-    HapticFeedback.selectionClick();
   }
 
   void undo() => _engine.loopUndo();
@@ -568,7 +564,6 @@ class EngineController extends ChangeNotifier {
 
   void selectTrack(int track) {
     _engine.selectTrack(track);
-    HapticFeedback.selectionClick();
   }
 
   void setTrackVolume(int track, double v) {
